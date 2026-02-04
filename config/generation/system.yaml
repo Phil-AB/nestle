@@ -1,0 +1,58 @@
+# ==============================================================================
+# GENERATION SYSTEM CONFIGURATION
+# ==============================================================================
+
+# Active components
+active_renderer: docx
+active_data_provider: postgres
+active_mapper: field
+
+# System settings
+system:
+  # Concurrency
+  max_concurrent_jobs: 100
+  worker_pool_size: 10
+  
+  # Timeouts (seconds)
+  generation_timeout: 60
+  data_fetch_timeout: 30
+  template_load_timeout: 10
+  
+  # Storage
+  output_storage:
+    type: local
+    base_path: ./generated_documents/
+    retention_days: 30
+  
+  # Caching
+  cache:
+    enabled: true
+    backend: memory
+    ttl_seconds: 3600
+    cache_templates: true
+    cache_data: false
+
+# Performance
+performance:
+  enable_async: true
+  batch_processing: true
+  max_batch_size: 50
+  
+# Monitoring
+monitoring:
+  enable_metrics: true
+  enable_logging: true
+  log_level: INFO
+  track_generation_time: true
+  track_errors: true
+
+# Security
+security:
+  sanitize_data: true
+  validate_templates: true
+  max_template_size_mb: 50
+  allowed_template_formats:
+    - docx
+    - pdf
+    - xlsx
+    - html

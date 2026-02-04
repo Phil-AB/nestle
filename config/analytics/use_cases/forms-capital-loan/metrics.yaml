@@ -1,0 +1,147 @@
+# Forms Capital Loan - Analytics Metrics Configuration
+# Defines all metrics tracked for this use case
+# Version: 1.0.0
+
+use_case_id: "forms-capital-loan"
+version: "1.0.0"
+
+# ==============================================================================
+# OVERVIEW METRICS
+# ==============================================================================
+# These appear on the main dashboard overview
+
+overview_metrics:
+  # Average risk score across all applications
+  average_risk_score:
+    name: "Average Risk Score"
+    description: "Mean risk score across all completed applications"
+    aggregation: "average"
+    source:
+      type: "metadata"
+      field: "risk_score"
+    decimals: 1
+    default: 0
+
+  # Eligibility rate (percentage meeting minimum criteria)
+  eligibility_rate:
+    name: "Eligibility Rate"
+    description: "Percentage of applications meeting eligibility criteria"
+    aggregation: "percentage"
+    condition:
+      source:
+        type: "metadata"
+        field: "risk_score"
+      operator: "gte"
+      value: 50
+    decimals: 1
+    default: 0
+
+  # Auto-approval rate
+  auto_approval_rate:
+    name: "Auto-Approval Rate"
+    description: "Percentage of applications eligible for auto-approval"
+    aggregation: "percentage"
+    condition:
+      source:
+        type: "metadata"
+        field: "risk_score"
+      operator: "gte"
+      value: 60
+    decimals: 1
+    default: 0
+
+  # High risk count
+  high_risk_count:
+    name: "High Risk Applications"
+    description: "Number of high-risk applications"
+    aggregation: "count_where"
+    condition:
+      source:
+        type: "metadata"
+        field: "risk_score"
+      operator: "lt"
+      value: 35
+    default: 0
+
+# ==============================================================================
+# TREND METRICS
+# ==============================================================================
+# Metrics tracked over time
+
+trends:
+  period: "monthly"
+  default_periods: 12
+
+  metrics:
+    average_risk_score:
+      name: "Avg Risk Score Trend"
+      aggregation: "average"
+      source:
+        type: "metadata"
+        field: "risk_score"
+
+    application_count:
+      name: "Application Volume"
+      aggregation: "count"
+
+# ==============================================================================
+# PRODUCT ELIGIBILITY METRICS
+# ==============================================================================
+# Track eligibility for each product
+
+products:
+  personal_loan:
+    name: "Personal Loan"
+    eligibility_conditions:
+      - source:
+          type: "metadata"
+          field: "risk_score"
+        operator: "gte"
+        value: 40
+
+  business_loan:
+    name: "Business Loan"
+    eligibility_conditions:
+      - source:
+          type: "metadata"
+          field: "risk_score"
+        operator: "gte"
+        value: 50
+
+  quick_cash:
+    name: "Quick Cash"
+    eligibility_conditions:
+      - source:
+          type: "metadata"
+          field: "risk_score"
+        operator: "gte"
+        value: 35
+
+# ==============================================================================
+# COMPARISON METRICS
+# ==============================================================================
+# Metrics used for percentile comparisons
+
+comparison_metrics:
+  risk_score:
+    name: "Risk Score Percentile"
+    source:
+      type: "metadata"
+      field: "risk_score"
+    higher_is_better: true
+
+  monthly_income:
+    name: "Income Percentile"
+    source:
+      type: "field"
+      field: "monthly_income"
+    higher_is_better: true
+
+# ==============================================================================
+# METADATA
+# ==============================================================================
+
+metadata:
+  currency: "GHS"
+  country: "Ghana"
+  last_updated: "2026-02-03"

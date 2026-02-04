@@ -1,0 +1,260 @@
+# Field Mapping for Banking Customer Insights Report
+# Maps database fields to template variables
+
+mapping_id: banking_customer_insights_report_v1
+mapping_name: Banking Customer Insights Report Mapping
+description: Maps extracted bank account form fields and generated insights to template variables
+version: "1.0"
+
+# Field mappings
+field_mappings:
+  # Customer Profile Section
+  customer_name:
+    source: insights.customer_profile.customer_name
+    type: string
+    required: true
+
+  customer_id:
+    source: insights.customer_profile.customer_id
+    type: string
+    default: "N/A"
+
+  age:
+    source: insights.customer_profile.age
+    type: integer
+    default: "N/A"
+
+  gender:
+    source: insights.customer_profile.gender
+    type: string
+    default: "Not Specified"
+
+  marital_status:
+    source: insights.customer_profile.marital_status
+    type: string
+    default: "Not Specified"
+
+  nationality:
+    source: insights.customer_profile.nationality
+    type: string
+    default: "Not Specified"
+
+  employment_status:
+    source: insights.customer_profile.employment_status
+    type: string
+    default: "Not Specified"
+
+  occupation:
+    source: insights.customer_profile.occupation
+    type: string
+    default: "Not Specified"
+
+  employer:
+    source: insights.customer_profile.employer
+    type: string
+    default: "Not Specified"
+
+  education_level:
+    source: insights.customer_profile.education
+    type: string
+    default: "Not Specified"
+
+  income_range:
+    source: insights.customer_profile.income_range
+    type: string
+    default: "Not Specified"
+
+  estimated_monthly_income:
+    source: insights.customer_profile.estimated_monthly_income
+    type: currency
+    default: 0
+
+  account_number:
+    source: insights.customer_profile.account_number
+    type: string
+    default: "N/A"
+
+  postal_address:
+    source: fields.postal_address.value
+    type: string
+    default: ""
+
+  email:
+    source: fields.address.value
+    type: string
+    default: ""
+
+  phone:
+    source: fields.mobile_no.value
+    type: string
+    default: ""
+
+  # Risk Assessment Section
+  risk_score:
+    source: insights.risk_assessment.risk_score
+    type: integer
+
+  risk_level:
+    source: insights.risk_assessment.risk_level
+    type: string
+
+  creditworthiness:
+    source: insights.risk_assessment.creditworthiness
+    type: string
+
+  positive_factors:
+    source: insights.risk_assessment.factors.positive
+    type: list
+
+  concerns:
+    source: insights.risk_assessment.factors.concerns
+    type: list
+
+  # Product Eligibility
+  extra_cash_eligible:
+    source: insights.product_eligibility.extra_cash.eligible
+    type: boolean
+
+  extra_cash_max_amount:
+    source: insights.product_eligibility.extra_cash.max_amount
+    type: currency
+
+  extra_cash_recommended_amount:
+    source: insights.product_eligibility.extra_cash.recommended_amount
+    type: currency
+
+  extra_cash_interest_rate:
+    source: insights.product_eligibility.extra_cash.interest_rate
+    type: percentage
+
+  extra_cash_confidence:
+    source: insights.product_eligibility.extra_cash.confidence
+    type: percentage
+
+  extra_balance_eligible:
+    source: insights.product_eligibility.extra_balance.eligible
+    type: boolean
+
+  extra_balance_limit:
+    source: insights.product_eligibility.extra_balance.overdraft_limit
+    type: currency
+
+  extra_balance_monthly_fee:
+    source: insights.product_eligibility.extra_balance.monthly_fee
+    type: currency
+
+  credit_card_eligible:
+    source: insights.product_eligibility.credit_card.eligible
+    type: boolean
+
+  credit_card_limit:
+    source: insights.product_eligibility.credit_card.credit_limit
+    type: currency
+
+  premium_account_eligible:
+    source: insights.product_eligibility.premium_account.eligible
+    type: boolean
+
+  premium_account_benefits:
+    source: insights.product_eligibility.premium_account.benefits
+    type: list
+
+  # Recommendations
+  account_upgrades:
+    source: insights.recommendations.account_upgrades
+    type: list
+
+  cross_sell_products:
+    source: insights.recommendations.cross_sell_products
+    type: list
+
+  next_steps:
+    source: insights.recommendations.next_steps
+    type: list
+
+  # Benchmarks
+  income_percentile:
+    source: insights.benchmarks.income_percentile
+    type: integer
+
+  income_comparison:
+    source: insights.benchmarks.income_comparison
+    type: string
+
+  age_group_avg_income:
+    source: insights.benchmarks.age_group_avg_income
+    type: currency
+
+  similar_profile_count:
+    source: insights.benchmarks.similar_profile_count
+    type: integer
+
+  approval_likelihood:
+    source: insights.benchmarks.approval_likelihood
+    type: string
+
+  # Automated Decisions
+  account_approval:
+    source: insights.automated_decisions.account_approval
+    type: string
+
+  credit_pre_qualification:
+    source: insights.automated_decisions.credit_pre_qualification
+    type: string
+
+  tier_assignment:
+    source: insights.automated_decisions.tier_assignment
+    type: string
+
+  relationship_manager_needed:
+    source: insights.automated_decisions.relationship_manager_needed
+    type: boolean
+
+  priority_level:
+    source: insights.automated_decisions.priority_level
+    type: string
+
+  # Report Metadata
+  report_date:
+    source: current_date
+    type: date
+    format: "%B %d, %Y"
+
+  report_time:
+    source: current_time
+    type: time
+    format: "%I:%M %p"
+
+# Calculated/derived fields
+calculated_fields:
+  full_address:
+    type: derived
+    expression: "postal_address + ', ' + (country if country else 'Ghana')"
+
+  income_status:
+    type: derived
+    expression: "'Above Average' if estimated_monthly_income > 3000 else 'Average' if estimated_monthly_income > 1000 else 'Below Average'"
+
+  risk_color:
+    type: derived
+    expression: "'green' if risk_score >= 70 else 'yellow' if risk_score >= 50 else 'red'"
+
+# Template functions
+template_functions:
+  format_currency:
+    function: currency
+    symbol: "GHS"
+    decimals: 2
+
+  format_percentage:
+    function: percentage
+    decimals: 1
+
+  status_badge:
+    function: conditional
+    conditions:
+      - if: risk_level == "Low"
+        then: "success"
+      - if: risk_level == "Medium"
+        then: "warning"
+      - else: "danger"

@@ -1,0 +1,323 @@
+# ==============================================================================
+# DATA PROVISION CONFIGURATION
+# ==============================================================================
+# Defines how to fetch data for document generation
+
+# Database Configuration
+database:
+  type: postgresql
+  connection_string_env: DATABASE_URL  # Will be constructed from .env
+  host_env: DB_HOST
+  port_env: DB_PORT
+  user_env: DB_USER
+  password_env: DB_PASSWORD
+  database_env: DB_NAME
+  
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# ==============================================================================
+# PROVIDER CONFIGURATIONS
+# ==============================================================================
+
+providers:
+  # PostgreSQL Provider - Primary data source
+  postgres:
+    enabled: true
+    
+    # Connection settings
+    connection:
+      use_env: true  # Use environment variables
+      timeout: 30
+      
+    # Query types supported
+    query_types:
+      - document_id
+      - document_type_filter
+      - custom_query
+      - batch_query
+    
+    # Predefined queries
+    queries:
+      # Get single document by ID
+      get_document_by_id:
+        description: "Fetch document by document_id"
+        sql: |
+          SELECT 
+            id,
+            document_id,
+            document_type,
+            document_number,
+            filename,
+            file_path,
+            extraction_status,
+            extraction_mode,
+            fields,
+            items,
+            blocks,
+            doc_metadata as metadata,
+            items_count,
+            fields_count,
+            extraction_confidence,
+            created_at,
+            updated_at,
+            parsed_at
+          FROM api_documents
+          WHERE document_id = :document_id
+        parameters:
+          - document_id
+        returns: single
+      
+      # Get document by UUID
+      get_document_by_uuid:
+        description: "Fetch document by UUID"
+        sql: |
+          SELECT 
+            id,
+            document_id,
+            document_type,
+            fields,
+            items,
+            blocks,
+            doc_metadata as metadata,
+            extraction_status
+          FROM api_documents
+          WHERE id = :id
+        parameters:
+          - id
+        returns: single
+      
+      # Get documents by type
+      get_documents_by_type:
+        description: "Fetch all documents of a specific type"
+        sql: |
+          SELECT 
+            id,
+            document_id,
+            document_type,
+            fields,
+            items,
+            extraction_status,
+            created_at
+          FROM api_documents
+          WHERE document_type = :document_type
+          AND extraction_status = 'complete'
+          ORDER BY created_at DESC
+          LIMIT :limit
+        parameters:
+          - document_type
+          - limit
+        returns: multiple
+      
+      # Get recent documents
+      get_recent_documents:
+        description: "Fetch most recent successfully extracted documents"
+        sql: |
+          SELECT 
+            id,
+            document_id,
+            document_type,
+            fields,
+            items,
+            extraction_status,
+            created_at
+          FROM api_documents
+          WHERE extraction_status = 'complete'
+          ORDER BY created_at DESC
+          LIMIT :limit
+        parameters:
+          - limit
+        returns: multiple
+      
+      # Get documents by shipment
+      get_documents_by_shipment:
+        description: "Fetch all documents for a shipment"
+        sql: |
+          SELECT 
+            id,
+            document_id,
+            document_type,
+            fields,
+            items,
+            shipment_id
+          FROM api_documents
+          WHERE shipment_id = :shipment_id
+          AND extraction_status = 'complete'
+        parameters:
+          - shipment_id
+        returns: multiple
+  
+  # Static Provider - For testing
+  static:
+    enabled: true
+    
+    query_types:
+      - data_key
+      - inline_data
+    
+    # Predefined test data sets
+    data_sets:
+      # Test invoice data
+      test_invoice:
+        fields:
+          invoice_number: "INV-TEST-2025-001"
+          invoice_date: "2025-01-15"
+          currency: "USD"
+          consignee_name: "Acme Corporation"
+          shipper_name: "Nestle Inc."
+          consignee_address: "123 Main St, New York, NY 10001"
+          shipper_address: "456 Commerce Ave, Chicago, IL 60601"
+          total_invoice_value: 15750.00
+          incoterm: "FOB"
+          payment_terms: "Net 30"
+        items:
+          - line_number: 1
+            product_description: "Premium Coffee Beans (Arabica)"
+            hs_code: "090111"
+            quantity: 100
+            unit_of_measure: "KG"
+            unit_price: 75.00
+            total_value: 7500.00
+          - line_number: 2
+            product_description: "Dark Chocolate Bars (70% Cacao)"
+            hs_code: "180632"
+            quantity: 250
+            unit_of_measure: "KG"
+            unit_price: 33.00
+            total_value: 8250.00
+        metadata:
+          source: "static_test_data"
+          test: true
+      
+      # Test BOE data
+      test_boe:
+        fields:
+          declaration_number: "BOE-2025-001234"
+          declaration_date: "2025-01-20"
+          currency: "USD"
+          consignee_name: "Import Trading Co."
+          fob_value: 15000.00
+          freight_value: 500.00
+          insurance_value: 250.00
+          cif_value: 15750.00
+          duty_value: 1575.00
+        items:
+          - line_number: 1
+            product_description: "Coffee Beans"
+            hs_code: "090111"
+            quantity: 100
+            unit_value: 75.00
+            total_value: 7500.00
+        metadata:
+          source: "static_test_data"
+          test: true
+
+# ==============================================================================
+# DATA TRANSFORMATION RULES
+# ==============================================================================
+
+transformation:
+  # How to extract values from nested field structure
+  field_extraction:
+    # Fields come as: {"field_name": {"value": "...", "bbox": {...}, "confidence": "..."}}
+    # We need to extract just the "value"
+    extract_value_key: "value"  # Extract field.value from each field object
+    
+    # Keep metadata if needed
+    keep_metadata: false
+    metadata_keys:
+      - confidence
+      - bbox
+      - block_type
+  
+  # Standard field mappings from database to template
+  field_mappings:
+    # Map database JSONB field names to template field names
+    # Format: "source_field_name": "target_field_name"
+    default:
+      "invoice_number": "invoice_number"
+      "invoice_date": "invoice_date"
+      "currency": "currency"
+      "consignee_name": "buyer_name"
+      "shipper_name": "seller_name"
+      "consignee_address": "buyer_address"
+      "shipper_address": "seller_address"
+      "total_invoice_value": "total_amount"
+      "fob_value": "fob_value"
+      "freight_value": "freight_value"
+      "insurance_value": "insurance_value"
+      "cif_value": "cif_value"
+  
+  # Date format transformations
+  date_formats:
+    input_formats:
+      - "%Y-%m-%d"
+      - "%d/%m/%Y"
+      - "%m/%d/%Y"
+      - "%Y%m%d"
+    output_format: "%B %d, %Y"  # "January 15, 2025"
+  
+  # Number formatting
+  number_formats:
+    currency:
+      decimal_places: 2
+      thousand_separator: ","
+      decimal_separator: "."
+    
+    quantity:
+      decimal_places: 2
+      thousand_separator: ","
+
+# ==============================================================================
+# CACHING CONFIGURATION
+# ==============================================================================
+
+caching:
+  enabled: false  # Disabled for sensitive data
+  ttl_seconds: 300
+  cache_backend: memory
+  
+  # What to cache
+  cache_queries: false  # Don't cache database queries
+  cache_static_data: true  # OK to cache static test data
+
+# ==============================================================================
+# ERROR HANDLING
+# ==============================================================================
+
+error_handling:
+  # Retry configuration
+  retry_on_failure: true
+  max_retries: 3
+  retry_delay_seconds: 1
+  exponential_backoff: true
+  
+  # Fallback behavior
+  fallback_to_static: false  # Don't fallback to test data in production
+  return_partial_data: true  # Return partial data if some fields missing
+  
+  # Logging
+  log_queries: true
+  log_errors: true
+  log_performance: true
+
+# ==============================================================================
+# SECURITY
+# ==============================================================================
+
+security:
+  # Data sanitization
+  sanitize_output: true
+  remove_sensitive_fields:
+    - password
+    - api_key
+    - secret
+    - token
+  
+  # Query restrictions
+  allow_custom_sql: false  # Disable custom SQL for security
+  max_query_time_seconds: 30
+  max_result_rows: 1000

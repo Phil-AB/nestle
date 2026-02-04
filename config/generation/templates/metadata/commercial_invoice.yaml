@@ -1,0 +1,45 @@
+template_id: commercial_invoice
+template_name: Commercial Invoice
+template_format: docx
+description: Professional commercial invoice with line items table for import/export
+version: "1.0"
+template_path: config/generation/templates/files/commercial_invoice.docx
+
+# Required fields
+required_fields:
+  - invoice_number
+  - invoice_date
+  - seller_name
+  - buyer_name
+  - currency
+  - total_cif
+
+# Optional fields
+optional_fields:
+  - payment_terms
+  - seller_address
+  - seller_tax_no
+  - buyer_address
+  - buyer_tax_no
+  - subtotal
+  - freight
+  - insurance
+  - incoterm
+  - country_of_origin
+  - remarks
+
+# Table support
+supports_tables: true
+supports_images: false
+
+# Table definitions
+tables:
+  - table_id: line_items
+    description: Invoice line items
+    columns:
+      - item_number
+      - description
+      - hs_code
+      - quantity
+      - unit_price
+      - total

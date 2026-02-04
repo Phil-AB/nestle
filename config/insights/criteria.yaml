@@ -1,0 +1,444 @@
+# Banking Insights Criteria Configuration
+# Centralized business rules, thresholds, and scoring criteria for insights generation
+#
+# This configuration drives all automated decision-making, risk scoring, and product eligibility
+# Changes to these values affect LLM prompts and automated calculations
+#
+# Version: 1.0.0
+# Last Updated: 2026-01-29
+
+# ==============================================================================
+# RISK ASSESSMENT CONFIGURATION
+# ==============================================================================
+
+risk_assessment:
+  # Weights for risk scoring factors (must sum to 1.0)
+  weights:
+    employment_stability: 0.30  # 30% weight
+    income_level: 0.25          # 25% weight
+    age_factor: 0.15            # 15% weight
+    education_level: 0.10       # 10% weight
+    source_of_funds: 0.10       # 10% weight
+    other_factors: 0.10         # 10% weight (marital status, nationality, etc.)
+
+  # Risk score ranges and classifications
+  score_ranges:
+    low_risk:
+      min_score: 70
+      max_score: 100
+      level: "Low"
+      creditworthiness: "Excellent"
+      description: "Minimal credit risk, strong repayment capacity"
+
+    low_medium_risk:
+      min_score: 55
+      max_score: 69
+      level: "Low-Medium"
+      creditworthiness: "Good"
+      description: "Low credit risk, good repayment capacity"
+
+    medium_risk:
+      min_score: 40
+      max_score: 54
+      level: "Medium"
+      creditworthiness: "Fair"
+      description: "Moderate credit risk, acceptable repayment capacity"
+
+    medium_high_risk:
+      min_score: 25
+      max_score: 39
+      level: "Medium-High"
+      creditworthiness: "Limited"
+      description: "Elevated credit risk, limited repayment capacity"
+
+    high_risk:
+      min_score: 0
+      max_score: 24
+      level: "High"
+      creditworthiness: "Poor"
+      description: "High credit risk, poor repayment capacity"
+
+  # Employment status scoring
+  employment_scoring:
+    employed:
+      base_score: 30
+      description: "Strong indicator of regular income"
+    self_employed:
+      base_score: 25
+      description: "Variable but shows entrepreneurial capability"
+    retired:
+      base_score: 20
+      description: "Fixed income, potentially lower risk"
+    unemployed:
+      base_score: 10
+      description: "No regular income, higher risk"
+    student:
+      base_score: 15
+      description: "Limited current income, future potential"
+
+  # Income level scoring (GHS per month)
+  income_scoring:
+    high:
+      min_income: 5000
+      score: 25
+      description: "High income capacity"
+    good:
+      min_income: 3000
+      max_income: 4999
+      score: 20
+      description: "Good income capacity"
+    moderate:
+      min_income: 1000
+      max_income: 2999
+      score: 15
+      description: "Moderate income capacity"
+    limited:
+      min_income: 0
+      max_income: 999
+      score: 8
+      description: "Limited income capacity"
+
+  # Age factor scoring
+  age_scoring:
+    prime_working:
+      min_age: 25
+      max_age: 55
+      score: 15
+      description: "Prime working age, optimal earning years"
+    acceptable:
+      ranges:
+        - { min: 18, max: 24, score: 12, description: "Young adult, early career" }
+        - { min: 56, max: 65, score: 12, description: "Senior, nearing retirement" }
+    higher_risk:
+      ranges:
+        - { min: 0, max: 17, score: 5, description: "Minor, legal restrictions" }
+        - { min: 66, max: 120, score: 8, description: "Elderly, retirement age" }
+
+  # Education level scoring
+  education_scoring:
+    postgraduate:
+      score: 10
+      keywords: ["postgraduate", "masters", "phd", "doctorate", "mba"]
+      description: "Advanced degree, high earning potential"
+    university:
+      score: 8
+      keywords: ["university", "degree", "bachelor", "undergraduate"]
+      description: "University degree, good earning potential"
+    secondary:
+      score: 6
+      keywords: ["secondary", "high school", "shs", "o-level", "a-level"]
+      description: "Secondary education, moderate potential"
+    primary:
+      score: 4
+      keywords: ["primary", "basic", "elementary", "jhs"]
+      description: "Basic education, limited formal credentials"
+    none:
+      score: 2
+      keywords: ["none", "no formal", "illiterate"]
+      description: "No formal education"
+
+  # Source of funds scoring
+  source_of_funds_scoring:
+    salary:
+      score: 10
+      keywords: ["salary", "wages", "employment income"]
+      description: "Regular, predictable income"
+    business:
+      score: 8
+      keywords: ["business", "self-employment", "entrepreneurship"]
+      description: "Variable but shows business capability"
+    investment:
+      score: 9
+      keywords: ["investment", "dividends", "rental income"]
+      description: "Passive income, financial sophistication"
+    remittances:
+      score: 6
+      keywords: ["remittances", "family support", "gifts"]
+      description: "External support, less predictable"
+    pension:
+      score: 7
+      keywords: ["pension", "retirement", "social security"]
+      description: "Fixed income, stable but limited"
+
+# ==============================================================================
+# PRODUCT ELIGIBILITY CONFIGURATION
+# ==============================================================================
+
+product_eligibility:
+  # Extra Cash (Personal Loan) - Unsecured loan facility
+  extra_cash:
+    min_risk_score: 50
+    min_monthly_income: 1000
+    max_amount_multiplier: 6.0        # Up to 6x monthly income
+    max_absolute_amount: 50000        # Maximum GHS 50,000
+    interest_rate:
+      min: 25.0                       # 25% for excellent risk
+      max: 30.0                       # 30% for acceptable risk
+      adjustment_by_risk:
+        70-100: 25.0                  # Low risk: 25%
+        55-69: 26.5                   # Low-medium risk: 26.5%
+        50-54: 28.0                   # Medium risk: 28%
+        40-49: 30.0                   # Higher risk: 30%
+    term_months:
+      min: 12
+      max: 36
+      default: 24
+    confidence_threshold: 0.7         # Minimum confidence for recommendation
+    description: "Unsecured personal loan facility for various needs"
+
+  # Extra Balance (Overdraft Protection)
+  extra_balance:
+    min_risk_score: 60
+    min_monthly_income: 1000
+    max_limit_multiplier: 1.5         # Up to 1.5x monthly income
+    max_absolute_limit: 10000         # Maximum GHS 10,000
+    monthly_fee:
+      min: 20
+      max: 30
+      by_limit:
+        0-2000: 20
+        2001-5000: 25
+        5001-10000: 30
+    interest_rate: 28.0               # Interest on overdrawn amounts
+    confidence_threshold: 0.7
+    description: "Overdraft protection facility on current account"
+
+  # Credit Card - Revolving credit facility
+  credit_card:
+    min_risk_score: 60
+    min_monthly_income: 2000
+    max_limit_multiplier: 2.0         # Up to 2x monthly income
+    max_absolute_limit: 20000         # Maximum GHS 20,000
+    annual_fee:
+      min: 150
+      max: 250
+      by_tier:
+        standard: 150
+        gold: 200
+        platinum: 250
+    interest_rate: 30.0               # APR on revolving balance
+    grace_period_days: 25             # Interest-free period
+    confidence_threshold: 0.75        # Higher threshold for credit cards
+    description: "Revolving credit card facility with rewards"
+
+  # Premium Account - Upgraded account tier
+  premium_account:
+    min_risk_score: 60
+    min_monthly_income: 3000
+    monthly_fee: 50
+    minimum_balance: 1000
+    benefits:
+      - "Free ATM withdrawals nationwide"
+      - "Higher interest rates on savings"
+      - "Priority customer service"
+      - "Free local transfers"
+      - "Dedicated relationship manager"
+      - "Quarterly financial reviews"
+      - "Preferential loan rates"
+    confidence_threshold: 0.8
+    description: "Premium banking tier with enhanced benefits"
+
+# ==============================================================================
+# AUTOMATED DECISIONS CONFIGURATION
+# ==============================================================================
+
+automated_decisions:
+  # Account opening decisions
+  account_opening:
+    auto_approve:
+      min_risk_score: 50
+      decision: "AUTO_APPROVE"
+      description: "Standard account can be opened automatically"
+      notification: "Account approved - proceed with onboarding"
+
+    manual_review:
+      min_risk_score: 35
+      max_risk_score: 49
+      decision: "MANUAL_REVIEW"
+      description: "Requires human review before approval"
+      notification: "Application requires manual review"
+
+    refer_to_manager:
+      max_risk_score: 34
+      decision: "REFER_TO_MANAGER"
+      description: "High risk - manager approval required"
+      notification: "Application requires senior management approval"
+
+  # Credit pre-qualification
+  credit_pre_qualification:
+    approved:
+      min_risk_score: 60
+      status: "APPROVED"
+      description: "Pre-approved for credit products"
+
+    pending:
+      min_risk_score: 50
+      max_risk_score: 59
+      status: "PENDING"
+      description: "May qualify with additional review"
+
+    declined:
+      max_risk_score: 49
+      status: "DECLINED"
+      description: "Not currently eligible for credit"
+
+  # Account tier assignment
+  tier_assignment:
+    premium:
+      min_risk_score: 70
+      min_monthly_income: 5000
+      tier: "Premium"
+      description: "Premium tier for high-value customers"
+
+    gold:
+      min_risk_score: 60
+      min_monthly_income: 3000
+      tier: "Gold"
+      description: "Gold tier for good customers"
+
+    standard:
+      min_risk_score: 50
+      min_monthly_income: 1000
+      tier: "Standard"
+      description: "Standard tier for regular customers"
+
+    basic:
+      max_risk_score: 49
+      tier: "Basic"
+      description: "Basic tier with limited features"
+
+  # Relationship manager assignment
+  relationship_manager:
+    required_if:
+      min_monthly_income: 5000        # High income customers
+      min_risk_score: 70              # OR low risk customers
+    logic: "OR"                       # Either condition triggers assignment
+    description: "Assign dedicated relationship manager for high-value/low-risk customers"
+
+  # Customer priority level
+  priority_level:
+    high_priority:
+      conditions:
+        - min_monthly_income: 5000
+        - min_risk_score: 70
+      logic: "OR"
+      priority: "High"
+      description: "High priority service for valuable customers"
+
+    standard_priority:
+      priority: "Standard"
+      description: "Standard service level"
+
+  # Branch assignment (based on geographic or other factors)
+  branch_assignment:
+    auto_assign: true
+    fallback_branch: "Head Office"
+    description: "Automated branch assignment based on customer location"
+
+# ==============================================================================
+# INCOME RANGE MAPPINGS
+# ==============================================================================
+
+income_ranges:
+  # Mapping from form checkbox values to estimated monthly income (GHS)
+  "less than 1,000": 800
+  "1,000 - 2,000": 1500
+  "2,001 - 3,000": 2500
+  "3,001 - 4,000": 3500
+  "4,001 - 5,000": 4500
+  "above 5,000": 7000
+
+# ==============================================================================
+# BENCHMARKING CONFIGURATION
+# ==============================================================================
+
+benchmarking:
+  # Income percentile calculation
+  income_percentiles:
+    very_high:
+      min_income: 7000
+      percentile: 85
+    high:
+      min_income: 5000
+      max_income: 6999
+      percentile: 70
+    above_average:
+      min_income: 3000
+      max_income: 4999
+      percentile: 55
+    average:
+      min_income: 1500
+      max_income: 2999
+      percentile: 40
+    below_average:
+      max_income: 1499
+      percentile: 25
+
+  # Approval likelihood calculation
+  approval_likelihood:
+    base_rate: 50                     # Base approval rate (%)
+    age_factor: 1.0                   # Multiplier per year of age
+    max_likelihood: 95                # Maximum approval likelihood (%)
+    min_likelihood: 10                # Minimum approval likelihood (%)
+
+# ==============================================================================
+# VALIDATION AND CONSTRAINTS
+# ==============================================================================
+
+validation:
+  # Minimum data requirements for insights generation
+  required_fields:
+    - "full_name"
+    - "age"
+    - "employment_status"
+    - "estimated_income"
+
+  # Data quality thresholds
+  minimum_confidence: 0.5             # Minimum confidence for using LLM insights
+
+  # Safety limits
+  max_loan_to_income_ratio: 6.0       # Maximum loan as multiple of monthly income
+  max_credit_to_income_ratio: 2.0     # Maximum credit limit as multiple of income
+  min_debt_service_ratio: 0.3         # Minimum % of income available after obligations
+
+# ==============================================================================
+# REGULATORY COMPLIANCE
+# ==============================================================================
+
+compliance:
+  # Know Your Customer (KYC) requirements
+  kyc_requirements:
+    standard_account:
+      min_age: 18
+      required_documents: ["id", "proof_of_address"]
+
+    premium_account:
+      min_age: 21
+      min_income: 3000
+      required_documents: ["id", "proof_of_address", "income_verification"]
+
+  # Anti-Money Laundering (AML) flags
+  aml_monitoring:
+    high_risk_threshold: 10000        # Transaction monitoring threshold (GHS)
+    enhanced_due_diligence_income: 10000  # Income level triggering enhanced DD
+
+  # Credit Bureau Integration
+  credit_bureau:
+    check_required_for:
+      - "extra_cash"
+      - "credit_card"
+      - "extra_balance"
+    min_credit_score: 300             # Minimum acceptable credit bureau score
+
+# ==============================================================================
+# METADATA
+# ==============================================================================
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-01-29"
+  currency: "GHS"
+  country: "Ghana"
+  regulatory_framework: "Bank of Ghana Guidelines"
+  review_frequency: "quarterly"
+  owner: "Credit Risk Department"

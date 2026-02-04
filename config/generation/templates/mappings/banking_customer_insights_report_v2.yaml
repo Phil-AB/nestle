@@ -1,0 +1,140 @@
+# Field Mapping for Banking Customer Insights Report V2
+# Matches the UI layout from the insights page
+
+mapping_id: banking_customer_insights_report_v2
+mapping_name: Banking Customer Insights Report V2 Mapping
+description: Maps insights data to template variables matching the UI layout
+version: "2.0"
+
+# Field mappings
+field_mappings:
+  # Customer Profile Section
+  customer_name:
+    source: insights.customer_profile.customer_name
+    type: string
+    required: true
+
+  age:
+    source: insights.customer_profile.age
+    type: string
+    default: "N/A"
+
+  employment_status:
+    source: insights.customer_profile.employment_status
+    type: string
+    default: "Not Specified"
+
+  occupation:
+    source: insights.customer_profile.occupation
+    type: string
+    default: "Not Specified"
+
+  employer:
+    source: insights.customer_profile.employer
+    type: string
+    default: "Not Specified"
+
+  estimated_monthly_income:
+    source: insights.customer_profile.estimated_monthly_income
+    type: integer
+    default: 0
+
+  # Risk Assessment Section
+  risk_score:
+    source: insights.risk_assessment.risk_score
+    type: integer
+
+  risk_level:
+    source: insights.risk_assessment.risk_level
+    type: string
+
+  creditworthiness:
+    source: insights.risk_assessment.creditworthiness
+    type: string
+
+  positive_factors:
+    source: insights.risk_assessment.factors.positive
+    type: list
+
+  concerns:
+    source: insights.risk_assessment.factors.concerns
+    type: list
+
+  reasoning:
+    source: insights.risk_assessment.reasoning
+    type: string
+
+  calculation_summary:
+    source: insights.risk_assessment.calculation_summary
+    type: string
+
+  scoring_breakdown:
+    source: insights.risk_assessment.scoring_breakdown
+    type: list
+
+  # Product Eligibility
+  extra_cash_eligible:
+    source: insights.product_eligibility.extra_cash.eligible
+    type: boolean
+
+  extra_cash_max_amount:
+    source: insights.product_eligibility.extra_cash.max_amount
+    type: integer
+
+  extra_cash_interest_rate:
+    source: insights.product_eligibility.extra_cash.interest_rate
+    type: float
+
+  extra_balance_eligible:
+    source: insights.product_eligibility.extra_balance.eligible
+    type: boolean
+
+  extra_balance_limit:
+    source: insights.product_eligibility.extra_balance.overdraft_limit
+    type: integer
+
+  extra_balance_monthly_fee:
+    source: insights.product_eligibility.extra_balance.monthly_fee
+    type: float
+
+  credit_card_eligible:
+    source: insights.product_eligibility.credit_card.eligible
+    type: boolean
+
+  credit_card_limit:
+    source: insights.product_eligibility.credit_card.credit_limit
+    type: integer
+
+  premium_account_eligible:
+    source: insights.product_eligibility.premium_account.eligible
+    type: boolean
+
+  # Recommendations
+  account_upgrades:
+    source: insights.recommendations.account_upgrades
+    type: list
+
+  cross_sell_products:
+    source: insights.recommendations.cross_sell_products
+    type: list
+
+  next_steps:
+    source: insights.recommendations.next_steps
+    type: list
+
+  # Automated Decisions
+  account_approval:
+    source: insights.automated_decisions.account_approval
+    type: string
+
+  credit_pre_qualification:
+    source: insights.automated_decisions.credit_pre_qualification
+    type: string
+
+  tier_assignment:
+    source: insights.automated_decisions.tier_assignment
+    type: string
+
+  priority_level:
+    source: insights.automated_decisions.priority_level
+    type: string

@@ -1,0 +1,174 @@
+# Forms Capital Loan - Analytics Dimensions Configuration
+# Defines all dimensions for data breakdowns
+# Version: 1.0.0
+
+# Note: Dimensions query the insights table (insights_forms_capital_loan)
+# Available columns: age, employment_status, risk_level, risk_score, monthly_income,
+#                       auto_approval_status, max_loan_amount, occupation, full_name
+
+use_case_id: "forms-capital-loan"
+version: "1.0.0"
+
+# ==============================================================================
+# DIMENSIONS
+# ==============================================================================
+# Dimensions define how data can be broken down/segmented
+
+dimensions:
+  # Employment status breakdown (uses employment_status column from insights)
+  employment_status:
+    name: "Employment Status"
+    description: "Distribution by employment type"
+    source:
+      type: "metadata"
+      field: "employment_status"
+    aggregation: "count_by_value"
+    display_order: 1
+
+  # Risk level breakdown (uses risk_level column from insights)
+  risk_level:
+    name: "Risk Level"
+    description: "Distribution by risk classification"
+    source:
+      type: "metadata"
+      field: "risk_level"
+    aggregation: "count_by_value"
+    display_order: 2
+
+  # Age distribution (uses age column from insights)
+  age_distribution:
+    name: "Age Distribution"
+    description: "Distribution by age ranges"
+    source:
+      type: "metadata"
+      field: "age"
+    aggregation: "distribution"
+    ranges:
+      - label: "18-25"
+        min: 18
+        max: 26
+      - label: "26-35"
+        min: 26
+        max: 36
+      - label: "36-45"
+        min: 36
+        max: 46
+      - label: "46-55"
+        min: 46
+        max: 56
+      - label: "56+"
+        min: 56
+        max: 120
+    display_order: 3
+
+  # Income distribution (uses monthly_income column from insights)
+  income_distribution:
+    name: "Income Distribution"
+    description: "Distribution by monthly income ranges"
+    source:
+      type: "metadata"
+      field: "monthly_income"
+    aggregation: "distribution"
+    ranges:
+      - label: "< GHS 1,000"
+        min: 0
+        max: 1000
+      - label: "GHS 1,000 - 2,000"
+        min: 1000
+        max: 2000
+      - label: "GHS 2,001 - 3,000"
+        min: 2000
+        max: 3000
+      - label: "GHS 3,001 - 4,000"
+        min: 3000
+        max: 4000
+      - label: "GHS 4,001 - 5,000"
+        min: 4000
+        max: 5000
+      - label: "> GHS 5,000"
+        min: 5000
+        max: 1000000
+    display_order: 4
+
+  # Risk score distribution (uses risk_score column from insights)
+  risk_score_distribution:
+    name: "Risk Score Distribution"
+    description: "Distribution by risk score ranges"
+    source:
+      type: "metadata"
+      field: "risk_score"
+    aggregation: "distribution"
+    ranges:
+      - label: "0-34 (High Risk)"
+        min: 0
+        max: 35
+      - label: "35-49 (Medium-High)"
+        min: 35
+        max: 50
+      - label: "50-69 (Medium)"
+        min: 50
+        max: 70
+      - label: "70-100 (Low Risk)"
+        min: 70
+        max: 101
+    display_order: 5
+
+  # Auto-approval status breakdown
+  auto_approval_status:
+    name: "Auto-Approval Status"
+    description: "Distribution by auto-approval decision"
+    source:
+      type: "metadata"
+      field: "auto_approval_status"
+    aggregation: "count_by_value"
+    display_order: 6
+
+# ==============================================================================
+# DIMENSION GROUPS
+# ==============================================================================
+# Group related dimensions for UI organization
+
+dimension_groups:
+  demographics:
+    name: "Demographics"
+    dimensions:
+      - age_distribution
+
+  financial:
+    name: "Financial Profile"
+    dimensions:
+      - employment_status
+      - income_distribution
+
+  risk:
+    name: "Risk Analysis"
+    dimensions:
+      - risk_level
+      - risk_score_distribution
+
+  operational:
+    name: "Operational"
+    dimensions:
+      - auto_approval_status
+
+# ==============================================================================
+# CROSS-TABULATIONS
+# ==============================================================================
+# Define which dimensions can be cross-tabulated
+
+cross_tabulations:
+  - dimensions: ["employment_status", "risk_level"]
+    name: "Employment vs Risk"
+
+  - dimensions: ["income_distribution", "risk_level"]
+    name: "Income vs Risk"
+
+  - dimensions: ["age_distribution", "employment_status"]
+    name: "Age vs Employment"
+
+# ==============================================================================
+# METADATA
+# ==============================================================================
+
+metadata:
+  last_updated: "2026-02-03"

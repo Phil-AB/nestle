@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bill of Entry - Ghana Customs</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+        }
+
+        .document {
+            max-width: 100%;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #1e40af;
+        }
+
+        .header h1 {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #1e40af;
+            margin-bottom: 5px;
+        }
+
+        .header .subtitle {
+            font-size: 12pt;
+            color: #64748b;
+            margin-bottom: 3px;
+        }
+
+        .header .regime {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #dc2626;
+            margin-top: 8px;
+        }
+
+        /* Metadata Bar */
+        .metadata-bar {
+            background: #f1f5f9;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .metadata-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metadata-label {
+            font-size: 8pt;
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metadata-value {
+            font-size: 10pt;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        /* Section Headers */
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .section-header {
+            background: #1e40af;
+            color: white;
+            padding: 8px 12px;
+            font-size: 11pt;
+            font-weight: 600;
+            margin-bottom: 12px;
+            border-radius: 3px;
+        }
+
+        /* Field Groups */
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px 20px;
+            margin-bottom: 15px;
+        }
+
+        .field-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px 15px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .field-label {
+            font-size: 8pt;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .field-value {
+            font-size: 10pt;
+            color: #0f172a;
+            padding: 6px 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 3px;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+        }
+
+        .field-value.highlight {
+            background: #fef3c7;
+            border-color: #fbbf24;
+            font-weight: 600;
+        }
+
+        /* Party Information Cards */
+        .party-card {
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
+            border-radius: 5px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .party-card h3 {
+            font-size: 10pt;
+            color: #1e40af;
+            font-weight: 600;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 5px;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            background: white;
+        }
+
+        thead {
+            background: #1e40af;
+            color: white;
+        }
+
+        th {
+            padding: 8px 6px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .numeric {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Financial Summary */
+        .financial-summary {
+            background: #fef3c7;
+            border: 2px solid #fbbf24;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .financial-summary h3 {
+            font-size: 11pt;
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .summary-item {
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .summary-label {
+            font-size: 8pt;
+            color: #78350f;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .summary-value {
+            font-size: 12pt;
+            color: #92400e;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Totals */
+        .totals {
+            background: #dbeafe;
+            padding: 12px;
+            border-radius: 5px;
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .total-item {
+            text-align: center;
+        }
+
+        .total-label {
+            font-size: 8pt;
+            color: #1e40af;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .total-value {
+            font-size: 14pt;
+            color: #1e3a8a;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid #cbd5e1;
+            font-size: 9pt;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signature-section {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+        }
+
+        .signature-box {
+            border-top: 1px solid #000;
+            padding-top: 8px;
+        }
+
+        .signature-label {
+            font-size: 9pt;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 8pt;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-verified {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* Page Breaks */
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="document">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>BILL OF ENTRY</h1>
+            <div class="subtitle">Ghana Revenue Authority (GRA) - Customs Division</div>
+            <div class="subtitle">{{ office_code or 'TMA1' }} - {{ entry_office or 'Tema Port' }}</div>
+            <div class="regime">Regime: {{ regime or '40' }} {% if regime == '40' %}(Import){% elif regime == '10' %}(Export){% endif %}</div>
+        </div>
+
+        <!-- METADATA BAR -->
+        <div class="metadata-bar">
+            <div class="metadata-item">
+                <span class="metadata-label">Declaration No.</span>
+                <span class="metadata-value">{{ declaration_number or '[DECL_NO]' }}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Declaration Date</span>
+                <span class="metadata-value">{{ declaration_date or '[DD/MM/YYYY]' }}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Reference No.</span>
+                <span class="metadata-value">{{ reference_number or '[REF_NO]' }}</span>
+            </div>
+            <div class="metadata-item">
+                <span class="metadata-label">Status</span>
+                <span class="status-badge status-verified">{{ doc_status or 'Verified' }}</span>
+            </div>
+        </div>
+
+        <!-- SHIPMENT INFORMATION -->
+        <div class="section">
+            <div class="section-header">Shipment Information</div>
+            <div class="field-grid-3">
+                <div class="field">
+                    <span class="field-label">Manifest Number</span>
+                    <span class="field-value">{{ manifest_number or '[MANIFEST_NO]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">BL/AWB Number</span>
+                    <span class="field-value highlight">{{ bl_awb_number or '[BL/AWB_NO]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Transport Mode</span>
+                    <span class="field-value">
+                        {% if transport_mode == '10' %}Sea
+                        {% elif transport_mode == '40' %}Air
+                        {% elif transport_mode == '30' %}Road
+                        {% elif transport_mode == '20' %}Rail
+                        {% else %}{{ transport_mode or 'Sea' }}
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Vessel/Flight Name</span>
+                    <span class="field-value">{{ vessel_name or '[VESSEL_NAME]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Port of Loading</span>
+                    <span class="field-value">{{ port_of_loading_name or '[PORT_OF_LOADING]' }} ({{ port_of_loading_code or '[CODE]' }})</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Place of Shipment</span>
+                    <span class="field-value">{{ place_of_shipment or '[PLACE_OF_SHIPMENT]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Gross Mass (kg)</span>
+                    <span class="field-value numeric highlight">{{ gross_mass_kg or '0.00' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Total Packages</span>
+                    <span class="field-value numeric">{{ total_packages or '0' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Total Items</span>
+                    <span class="field-value numeric">{{ total_items or '0' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- PARTY INFORMATION -->
+        <div class="section">
+            <div class="section-header">Party Information</div>
+
+            <div class="party-card">
+                <h3>Exporter</h3>
+                <div class="field-grid">
+                    <div class="field">
+                        <span class="field-label">Name</span>
+                        <span class="field-value">{{ exporter_name or '[EXPORTER_NAME]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Address</span>
+                        <span class="field-value">{{ exporter_address or '[EXPORTER_ADDRESS]' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="party-card">
+                <h3>Importer</h3>
+                <div class="field-grid">
+                    <div class="field">
+                        <span class="field-label">Importer Number</span>
+                        <span class="field-value">{{ importer_number or '[IMP_NO]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Name</span>
+                        <span class="field-value">{{ importer_name or '[IMPORTER_NAME]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Address</span>
+                        <span class="field-value">{{ importer_address or '[IMPORTER_ADDRESS]' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="party-card">
+                <h3>Consignee</h3>
+                <div class="field-grid">
+                    <div class="field">
+                        <span class="field-label">Consignee Number</span>
+                        <span class="field-value">{{ consignee_number or '[CONS_NO]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Name</span>
+                        <span class="field-value">{{ consignee_name or '[CONSIGNEE_NAME]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Address</span>
+                        <span class="field-value">{{ consignee_address or '[CONSIGNEE_ADDRESS]' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="party-card">
+                <h3>Declarant/Customs Broker</h3>
+                <div class="field-grid">
+                    <div class="field">
+                        <span class="field-label">Declarant Number</span>
+                        <span class="field-value">{{ declarant_number or '[DECL_NO]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Name</span>
+                        <span class="field-value">{{ declarant_name or '[DECLARANT_NAME]' }}</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-label">Address</span>
+                        <span class="field-value">{{ declarant_address or '[DECLARANT_ADDRESS]' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FINANCIAL DETAILS -->
+        <div class="financial-summary">
+            <h3>Financial Summary</h3>
+            <div class="field-grid">
+                <div class="field">
+                    <span class="field-label">Delivery Terms</span>
+                    <span class="field-value">{{ delivery_terms or 'CFR' }} - {{ delivery_place or 'TEMA' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Invoice Currency</span>
+                    <span class="field-value">{{ invoice_currency or 'USD' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Exchange Rate</span>
+                    <span class="field-value numeric">{{ exchange_rate or '5.671' }}</span>
+                </div>
+            </div>
+            <div class="summary-grid" style="margin-top: 15px;">
+                <div class="summary-item">
+                    <div class="summary-label">Invoice Total ({{ invoice_currency or 'USD' }})</div>
+                    <div class="summary-value">{{ total_invoice_fcy or '0.00' }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">FOB Value ({{ currency_code or 'USD' }})</div>
+                    <div class="summary-value">{{ total_fob_fcy or '0.00' }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">FOB Local (GHS)</div>
+                    <div class="summary-value">{{ fob_local_currency or '0.00' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE ITEMS -->
+        {% if items and items|length > 0 %}
+        <div class="section">
+            <div class="section-header">Line Items ({{ items|length }} items)</div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item #</th>
+                            <th>HS Code</th>
+                            <th>Description</th>
+                            <th>Qty</th>
+                            <th>Unit</th>
+                            <th>Origin</th>
+                            <th class="numeric">Gross Wt (kg)</th>
+                            <th class="numeric">FOB ({{ currency_code or 'USD' }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.item_number or loop.index }}</td>
+                            <td>{{ item.hs_code or '[HS_CODE]' }}</td>
+                            <td>{{ item.description or '[ITEM_DESCRIPTION]' }}</td>
+                            <td class="numeric">{{ item.quantity or '0' }}</td>
+                            <td>{{ item.unit or 'PE' }}</td>
+                            <td>{{ item.country_of_origin or 'CN' }}</td>
+                            <td class="numeric">{{ item.gross_weight or '0.00' }}</td>
+                            <td class="numeric">{{ item.fob_fcy or '0.00' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- CUSTOMS VALUATION -->
+        <div class="section">
+            <div class="section-header">Customs Valuation & Duties</div>
+            <div class="field-grid-3">
+                <div class="field">
+                    <span class="field-label">Valuation Method</span>
+                    <span class="field-value">{{ valuation_method or 'Other' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">CRMS Level</span>
+                    <span class="field-value {% if crms_level == 'Red' %}highlight{% endif %}">{{ crms_level or 'Red' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Customs Value (GHS)</span>
+                    <span class="field-value numeric highlight">{{ customs_value or '0.00' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Tax Base (GHS)</span>
+                    <span class="field-value numeric">{{ tax_base or '0.00' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Import Duty</span>
+                    <span class="field-value numeric">{{ import_duty_amount or '0.00' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Country of Origin</span>
+                    <span class="field-value">{{ country_name or 'China' }} ({{ country_code or 'CN' }})</span>
+                </div>
+            </div>
+
+            <div class="totals">
+                <div class="total-item">
+                    <div class="total-label">Customs Value</div>
+                    <div class="total-value">GHS {{ customs_value or '0.00' }}</div>
+                </div>
+                <div class="total-item">
+                    <div class="total-label">Total Taxes Payable</div>
+                    <div class="total-value">GHS {{ total_taxes_payable or '0.00' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DOCUMENTS & ADDITIONAL INFO -->
+        <div class="section">
+            <div class="section-header">Attached Documents & Additional Information</div>
+            <div class="field-grid">
+                <div class="field">
+                    <span class="field-label">Attached Documents</span>
+                    <span class="field-value">{{ attached_documents or 'BLA, ECOM, GSA, IDF, ITC, INV, PKL' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Container Numbers</span>
+                    <span class="field-value">{{ container_numbers or '[CONTAINER_NOS]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Marks & Numbers</span>
+                    <span class="field-value">{{ marks_and_numbers or '[MARKS_AND_NUMBERS]' }}</span>
+                </div>
+                <div class="field">
+                    <span class="field-label">Warehouse ID</span>
+                    <span class="field-value">{{ warehouse_id or 'CEPS TEMA' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIGNATURE SECTION -->
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-label">Declarant Signature</div>
+                <div style="margin-top: 5px; font-size: 9pt;">{{ declarant_full_name or '[DECLARANT_NAME]' }}</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-label">Customs Officer</div>
+                <div style="margin-top: 5px; font-size: 9pt;">Date: {{ declaration_date or '[DD/MM/YYYY]' }}</div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div>Page {{ page_number or 'A-1' }} | User Ref: {{ user_reference or '-' }}</div>
+            <div>Generated: {{ _generated_at or '' }} | Multi-Source: {% if _field_sources %}Yes{% else %}No{% endif %}</div>
+        </div>
+    </div>
+</body>
+</html>

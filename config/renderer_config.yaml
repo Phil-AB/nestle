@@ -1,0 +1,148 @@
+# Renderer Configuration
+# Controls how document output is displayed in the UI
+
+# General display settings
+display:
+  # Default render mode: "full", "compact", "table_only", "fields_only"
+  default_mode: "full"
+
+  # Show section headers
+  show_headers: true
+
+  # Use expanders for collapsible sections
+  use_expanders: true
+
+  # Default expanded state for expanders
+  default_expanded: true
+
+# Table renderer settings
+table:
+  # Enable table rendering
+  enabled: true
+
+  # Show column metadata (indexes, headers, bbox)
+  show_column_metadata: false
+
+  # Show cell-level metadata in tooltips
+  show_cell_metadata: false
+
+  # Maximum rows to display before pagination
+  max_rows_display: 100
+
+  # Highlight missing/empty cells
+  highlight_empty_cells: true
+
+  # Table style
+  style:
+    header_color: "#f0f2f6"
+    border: "1px solid #e0e0e0"
+    stripe_rows: true
+
+# Fields renderer settings
+fields:
+  # Enable fields rendering
+  enabled: true
+
+  # Display format: "cards", "table", "list"
+  display_format: "cards"
+
+  # Show field metadata (bbox, confidence, page, block type)
+  show_metadata: true
+
+  # Group fields by block type
+  group_by_block_type: false
+
+  # Show empty/null fields
+  show_empty_fields: false
+
+  # Fields to exclude from display
+  exclude_fields: []
+
+  # Field name formatting: "snake_case", "title_case", "as_is"
+  field_name_format: "title_case"
+
+# Layout renderer settings
+layout:
+  # Enable layout/structure rendering
+  enabled: true
+
+  # Show page-by-page breakdown
+  show_pages: true
+
+  # Show block details
+  show_blocks: true
+
+  # Show bounding box coordinates
+  show_bounding_boxes: true
+
+  # Visualize block types with colors
+  colorize_block_types: true
+
+  # Block type colors
+  block_colors:
+    Text: "#4CAF50"
+    Table: "#2196F3"
+    Figure: "#FF9800"
+    Header: "#9C27B0"
+    Footer: "#607D8B"
+    KeyValue: "#00BCD4"
+    FormField: "#FFC107"
+    Title: "#E91E63"
+
+  # Maximum blocks to display per page
+  max_blocks_per_page: 50
+
+# Metadata renderer settings
+metadata:
+  # Enable metadata rendering
+  enabled: true
+
+  # Show extraction metadata
+  show_extraction_meta: true
+
+  # Show document statistics
+  show_statistics: true
+
+  # Show provider information
+  show_provider_info: true
+
+  # Show timing information
+  show_timing: true
+
+  # Show confidence scores
+  show_confidence: true
+
+  # Metrics to display
+  metrics:
+    - total_fields
+    - total_items
+    - total_pages
+    - extraction_duration
+    - confidence_score
+
+# Export settings
+export:
+  # Enable export functionality
+  enabled: true
+
+  # Available export formats
+  formats:
+    - json
+    - csv  # For tables only
+
+  # Include metadata in exports
+  include_metadata: true
+
+  # Pretty print JSON exports
+  json_indent: 2
+
+# Advanced settings
+advanced:
+  # Cache rendered components
+  enable_caching: true
+
+  # Log rendering operations
+  enable_logging: true
+
+  # Performance mode (disables some features for speed)
+  performance_mode: false

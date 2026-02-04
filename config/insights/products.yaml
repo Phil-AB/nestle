@@ -1,0 +1,493 @@
+# Banking Products Configuration
+# Detailed product definitions for eligibility assessment and recommendations
+#
+# This configuration defines all banking products available for cross-selling
+# and their specific requirements, features, and benefits
+#
+# Version: 1.0.0
+# Last Updated: 2026-01-29
+
+# ==============================================================================
+# CREDIT PRODUCTS
+# ==============================================================================
+
+credit_products:
+  # Extra Cash - Personal Loan
+  extra_cash:
+    product_id: "PROD_EXTRA_CASH"
+    product_name: "Extra Cash Personal Loan"
+    category: "unsecured_loan"
+    description: "Unsecured personal loan facility for various financial needs"
+
+    features:
+      - "No collateral required"
+      - "Flexible repayment terms (12-36 months)"
+      - "Quick approval process"
+      - "Competitive interest rates"
+      - "Early repayment allowed"
+
+    use_cases:
+      - "Emergency expenses"
+      - "Home improvements"
+      - "Education expenses"
+      - "Debt consolidation"
+      - "Business capital"
+
+    requirements:
+      min_age: 18
+      max_age: 65
+      min_monthly_income: 1000
+      min_risk_score: 50
+      employment_required: true
+      bank_account_age_months: 3
+      credit_bureau_check: true
+
+    terms:
+      min_amount: 500
+      max_amount: 50000
+      amount_calculation: "min(monthly_income * 6, 50000)"
+      min_term_months: 12
+      max_term_months: 36
+      interest_rate_range: [25.0, 30.0]
+      processing_fee_percent: 2.0
+      insurance_required: true
+      insurance_rate_percent: 1.5
+
+    repayment:
+      frequency: "monthly"
+      payment_method: ["direct_debit", "standing_order", "manual"]
+      early_repayment_penalty: 0
+      grace_period_days: 5
+      late_payment_fee: 50
+
+    documentation:
+      required_documents:
+        - "completed_application_form"
+        - "valid_id"
+        - "proof_of_income"
+        - "bank_statements_3_months"
+        - "proof_of_address"
+
+      additional_for_self_employed:
+        - "business_registration"
+        - "business_bank_statements_6_months"
+        - "tax_returns"
+
+  # Extra Balance - Overdraft Facility
+  extra_balance:
+    product_id: "PROD_EXTRA_BALANCE"
+    product_name: "Extra Balance Overdraft"
+    category: "overdraft"
+    description: "Overdraft protection facility for current account holders"
+
+    features:
+      - "Automatic overdraft protection"
+      - "Flexible withdrawal up to limit"
+      - "Interest charged only on amount used"
+      - "No fixed repayment schedule"
+      - "Instant access to funds"
+
+    use_cases:
+      - "Cash flow management"
+      - "Emergency expenses"
+      - "Bridge short-term gaps"
+      - "Avoid bounced checks"
+
+    requirements:
+      min_age: 18
+      max_age: 65
+      min_monthly_income: 1000
+      min_risk_score: 60
+      account_type_required: "current_account"
+      account_age_months: 6
+      credit_bureau_check: true
+
+    terms:
+      min_limit: 500
+      max_limit: 10000
+      limit_calculation: "min(monthly_income * 1.5, 10000)"
+      interest_rate: 28.0
+      monthly_fee_range: [20, 30]
+      setup_fee: 100
+      annual_review: true
+
+    usage:
+      interest_calculation: "daily_balance"
+      interest_charged: "monthly"
+      repayment: "flexible"
+      minimum_payment_percent: 10
+      grace_period_days: 0
+
+  # Credit Card
+  credit_card:
+    product_id: "PROD_CREDIT_CARD"
+    product_name: "GCB Credit Card"
+    category: "revolving_credit"
+    description: "Revolving credit card facility with rewards program"
+
+    tiers:
+      standard:
+        tier_name: "Standard"
+        min_income: 2000
+        min_risk_score: 60
+        max_limit: 10000
+        annual_fee: 150
+        benefits:
+          - "1% cashback on all purchases"
+          - "Purchase protection"
+          - "25-day interest-free period"
+          - "Online shopping security"
+
+      gold:
+        tier_name: "Gold"
+        min_income: 4000
+        min_risk_score: 65
+        max_limit: 20000
+        annual_fee: 200
+        benefits:
+          - "2% cashback on all purchases"
+          - "Extended purchase protection"
+          - "25-day interest-free period"
+          - "Travel insurance"
+          - "Airport lounge access (2 per year)"
+          - "Concierge service"
+
+      platinum:
+        tier_name: "Platinum"
+        min_income: 8000
+        min_risk_score: 70
+        max_limit: 50000
+        annual_fee: 250
+        benefits:
+          - "3% cashback on all purchases"
+          - "Extended warranty on purchases"
+          - "25-day interest-free period"
+          - "Comprehensive travel insurance"
+          - "Unlimited airport lounge access"
+          - "24/7 concierge service"
+          - "Priority customer service"
+
+    features:
+      - "Contactless payment"
+      - "Mobile app integration"
+      - "SMS transaction alerts"
+      - "Online statement access"
+      - "Reward points program"
+
+    requirements:
+      min_age: 21
+      max_age: 65
+      min_monthly_income: 2000
+      min_risk_score: 60
+      employment_required: true
+      account_age_months: 6
+      credit_bureau_check: true
+
+    terms:
+      credit_limit_calculation: "min(monthly_income * 2, tier_max_limit)"
+      interest_rate: 30.0
+      grace_period_days: 25
+      minimum_payment_percent: 5
+      over_limit_fee: 100
+      late_payment_fee: 75
+      foreign_transaction_fee_percent: 3.0
+      cash_advance_fee_percent: 5.0
+      cash_advance_interest_rate: 35.0
+
+# ==============================================================================
+# ACCOUNT PRODUCTS
+# ==============================================================================
+
+account_products:
+  # Premium Current Account
+  premium_account:
+    product_id: "PROD_PREMIUM_CURRENT"
+    product_name: "Premium Current Account"
+    category: "current_account"
+    description: "Premium banking tier with enhanced benefits and services"
+
+    features:
+      - "Dedicated relationship manager"
+      - "Higher interest rates on balances"
+      - "Free ATM withdrawals nationwide"
+      - "Unlimited free transfers"
+      - "Priority customer service"
+      - "Quarterly financial reviews"
+      - "Preferential loan rates"
+      - "Free checkbook"
+      - "Premium debit card"
+
+    requirements:
+      min_age: 21
+      min_monthly_income: 3000
+      min_risk_score: 60
+      minimum_opening_balance: 1000
+      minimum_monthly_balance: 1000
+
+    pricing:
+      monthly_fee: 50
+      fee_waiver_conditions:
+        - "monthly_balance >= 5000"
+        - "monthly_deposits >= 10000"
+      transaction_fees:
+        local_transfer: 0
+        international_transfer: 50
+        atm_withdrawal: 0
+        pos_transaction: 0
+        check_book: 0
+
+    benefits:
+      interest_rate_on_balance: 3.5
+      overdraft_facility_eligible: true
+      loan_rate_discount_percent: 1.0
+      priority_support: true
+      financial_advisory: true
+
+  # Gold Savings Account
+  gold_savings:
+    product_id: "PROD_GOLD_SAVINGS"
+    product_name: "Gold Savings Account"
+    category: "savings_account"
+    description: "High-interest savings account for wealth accumulation"
+
+    features:
+      - "Competitive interest rates"
+      - "No monthly fees"
+      - "Free mobile banking"
+      - "Automatic savings plans"
+      - "Goal-based savings"
+
+    requirements:
+      min_age: 18
+      min_monthly_income: 1000
+      minimum_opening_balance: 100
+      minimum_balance: 100
+
+    pricing:
+      monthly_fee: 0
+      transaction_fees:
+        withdrawal: 5
+        transfer: 10
+        monthly_free_withdrawals: 4
+
+    interest_rates:
+      tier_1:
+        min_balance: 0
+        max_balance: 5000
+        rate: 5.0
+      tier_2:
+        min_balance: 5001
+        max_balance: 20000
+        rate: 6.0
+      tier_3:
+        min_balance: 20001
+        max_balance: null
+        rate: 7.0
+
+# ==============================================================================
+# INVESTMENT PRODUCTS
+# ==============================================================================
+
+investment_products:
+  # Fixed Deposit
+  fixed_deposit:
+    product_id: "PROD_FIXED_DEPOSIT"
+    product_name: "Fixed Deposit Account"
+    category: "term_deposit"
+    description: "Fixed-term deposit with guaranteed returns"
+
+    features:
+      - "Guaranteed interest rate"
+      - "Flexible tenure options"
+      - "Automatic rollover option"
+      - "Loan collateral facility"
+      - "Early withdrawal allowed (with penalty)"
+
+    requirements:
+      min_age: 18
+      min_deposit: 1000
+      min_risk_score: 40
+
+    terms:
+      tenure_options: [3, 6, 9, 12, 18, 24, 36]  # months
+      min_amount: 1000
+      max_amount: null  # No maximum
+
+      interest_rates:
+        3_months: 8.0
+        6_months: 9.0
+        9_months: 9.5
+        12_months: 10.0
+        18_months: 10.5
+        24_months: 11.0
+        36_months: 12.0
+
+      early_withdrawal_penalty_percent: 2.0
+      automatic_rollover: true
+      partial_withdrawal: false
+
+  # Investment Portfolio
+  investment_portfolio:
+    product_id: "PROD_INVESTMENT_PORTFOLIO"
+    product_name: "Managed Investment Portfolio"
+    category: "investment"
+    description: "Professionally managed investment portfolio"
+
+    features:
+      - "Professional fund management"
+      - "Diversified portfolio"
+      - "Quarterly performance reports"
+      - "Flexible contribution plans"
+      - "Tax-efficient investing"
+
+    requirements:
+      min_age: 21
+      min_monthly_income: 5000
+      min_risk_score: 65
+      minimum_investment: 10000
+
+    portfolio_types:
+      conservative:
+        risk_level: "low"
+        expected_return: "8-10%"
+        asset_allocation:
+          fixed_income: 70
+          equities: 20
+          cash: 10
+
+      balanced:
+        risk_level: "medium"
+        expected_return: "10-15%"
+        asset_allocation:
+          fixed_income: 50
+          equities: 40
+          cash: 10
+
+      growth:
+        risk_level: "high"
+        expected_return: "15-20%"
+        asset_allocation:
+          fixed_income: 20
+          equities: 70
+          cash: 10
+
+    fees:
+      management_fee_percent: 1.5
+      performance_fee_percent: 10  # Of returns above benchmark
+
+# ==============================================================================
+# SPECIALIZED PRODUCTS
+# ==============================================================================
+
+specialized_products:
+  # Student Account
+  student_account:
+    product_id: "PROD_STUDENT"
+    product_name: "Student Banking Package"
+    category: "current_account"
+    description: "Banking package designed for students"
+
+    features:
+      - "No monthly fees"
+      - "Free debit card"
+      - "Free mobile banking"
+      - "Student loan facility"
+      - "Financial literacy training"
+
+    requirements:
+      min_age: 16
+      max_age: 28
+      student_verification: true
+      guardian_consent_if_minor: true
+
+    benefits:
+      monthly_fee: 0
+      overdraft_limit: 500
+      interest_rate_on_savings: 4.0
+
+  # Salary Advance
+  salary_advance:
+    product_id: "PROD_SALARY_ADVANCE"
+    product_name: "Salary Advance Facility"
+    category: "short_term_loan"
+    description: "Short-term advance against monthly salary"
+
+    features:
+      - "Instant approval for eligible customers"
+      - "Repaid from next salary"
+      - "No collateral required"
+      - "Low processing fee"
+
+    requirements:
+      min_age: 18
+      employment_status: "employed"
+      salary_domiciliation: true
+      account_age_months: 6
+      min_monthly_income: 1000
+      min_risk_score: 55
+
+    terms:
+      max_amount_percent_of_salary: 50
+      max_absolute_amount: 10000
+      repayment_period_days: 30
+      interest_rate: 0  # No interest, only flat fee
+      processing_fee_percent: 5.0
+      max_advances_per_year: 6
+
+# ==============================================================================
+# PRODUCT BUNDLES
+# ==============================================================================
+
+product_bundles:
+  # Starter Package
+  starter_package:
+    bundle_name: "Banking Starter Package"
+    description: "Basic banking bundle for new customers"
+    included_products:
+      - "basic_current_account"
+      - "debit_card"
+      - "mobile_banking"
+    discount_percent: 0
+    requirements:
+      min_age: 18
+      min_monthly_income: 800
+
+  # Professional Package
+  professional_package:
+    bundle_name: "Professional Banking Package"
+    description: "Comprehensive package for working professionals"
+    included_products:
+      - "premium_account"
+      - "credit_card_gold"
+      - "fixed_deposit"
+    discount_percent: 10
+    requirements:
+      min_age: 21
+      min_monthly_income: 5000
+      min_risk_score: 65
+
+  # Business Package
+  business_package:
+    bundle_name: "Business Banking Package"
+    description: "Bundle for business owners and entrepreneurs"
+    included_products:
+      - "business_current_account"
+      - "credit_card_platinum"
+      - "business_loan_facility"
+    discount_percent: 15
+    requirements:
+      employment_status: "self_employed"
+      min_monthly_income: 10000
+      min_risk_score: 70
+
+# ==============================================================================
+# METADATA
+# ==============================================================================
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-01-29"
+  currency: "GHS"
+  country: "Ghana"
+  regulatory_compliance: "Bank of Ghana"
+  product_review_cycle: "quarterly"

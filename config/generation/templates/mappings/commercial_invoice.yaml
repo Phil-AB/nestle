@@ -1,0 +1,201 @@
+template_id: commercial_invoice
+mapping_version: "1.0"
+description: Map extracted data to commercial invoice template
+
+# Data source
+data_source:
+  provider: postgres
+  query: by_document_id
+
+# Direct field mappings
+field_mappings:
+  # Invoice header
+  invoice_number:
+    source: fields.item_no  # Using item_no as invoice ref for now
+    default: "INV-XXXXX"
+  
+  invoice_date:
+    source: created_at
+    transformation: format_date
+    transformation_params:
+      format: "%d %B %Y"
+    default: "TBD"
+  
+  payment_terms:
+    source: fields.applicant_remarks
+    default: "Net 30 Days"
+  
+  # Seller info
+  seller_name:
+    source: fields.shipper_name
+    default: "Nestle Trading Ltd."
+  
+  seller_address:
+    source: fields.shipper_address
+    default: "Avenue Nestle, Vevey, Switzerland"
+  
+  seller_tax_no:
+    source: fields.shipper_tax_no
+    default: "CHE-123.456.789"
+  
+  # Buyer info
+  buyer_name:
+    source: fields.consignee_name
+    default: "To Be Determined"
+  
+  buyer_address:
+    source: fields.consignee_address
+    default: "-"
+  
+  buyer_tax_no:
+    source: fields.consignee_tax_no
+    default: "-"
+  
+  # Financials
+  subtotal:
+    source: fields.total_price_fcy
+    default: "0.00"
+  
+  freight:
+    source: fields.freight_value
+    default: "0.00"
+  
+  insurance:
+    source: fields.insurance_value
+    default: "0.00"
+  
+  total_cif:
+    source: fields.total_price_fcy
+    default: "0.00"
+  
+  currency:
+    source: fields.foreign_currency_code
+    default: "USD"
+  
+  # Additional info
+  incoterm:
+    source: fields.incoterm
+    default: "CIF"
+  
+  country_of_origin:
+    source: fields.country_of_origin
+    default: "Switzerland"
+  
+  remarks:
+    source: fields.applicant_remarks
+    default: "N/A"
+  
+  # Line items (since items array is empty, create from fields)
+  item_1_number:
+    source: fields.item_no
+    default: "1"
+  
+  item_1_description:
+    source: fields.item_description
+    default: "-"
+  
+  item_1_hs_code:
+    source: fields.item_hs_code
+    default: "-"
+  
+  item_1_quantity:
+    source: fields.quantity
+    default: "1"
+  
+  item_1_unit_price:
+    source: fields.unit_price_fcy
+    default: "0.00"
+  
+  item_1_total:
+    source: fields.total_price_fcy
+    default: "0.00"
+  
+  # Empty placeholders for item 2 and 3
+  item_2_number:
+    default: ""
+  item_2_description:
+    default: ""
+  item_2_hs_code:
+    default: ""
+  item_2_quantity:
+    default: ""
+  item_2_unit_price:
+    default: ""
+  item_2_total:
+    default: ""
+  
+  item_3_number:
+    default: ""
+  item_3_description:
+    default: ""
+  item_3_hs_code:
+    default: ""
+  item_3_quantity:
+    default: ""
+  item_3_unit_price:
+    default: ""
+  item_3_total:
+    default: ""
+
+# Table mappings (for line items)
+tables:
+  line_items:
+    source: items  # If items array exists
+    fallback: single_item  # Otherwise use fields as single item
+    columns:
+      item_number:
+        source: item_no
+        default: "1"
+      
+      description:
+        source: item_description
+        default: "Product Description"
+      
+      hs_code:
+        source: item_hs_code
+        default: "-"
+      
+      quantity:
+        source: quantity
+        default: "1"
+      
+      unit_price:
+        source: unit_price_fcy
+        default: "0.00"
+      
+      total:
+        source: total_price_fcy
+        default: "0.00"
+    
+    # Fallback: Create single item from fields
+    fallback_mapping:
+      item_number:
+        source: fields.item_no
+        default: "1"
+      description:
+        source: fields.item_description
+        default: fields.hs_code_description
+      hs_code:
+        source: fields.item_hs_code
+        default: "-"
+      quantity:
+        source: fields.quantity
+        default: "1"
+      unit_price:
+        source: fields.unit_price_fcy
+        default: "0.00"
+      total:
+        source: fields.total_price_fcy
+        default: "0.00"
+
+# Calculated fields
+calculated_fields:
+  # Calculate total from quantity * unit_price if not provided
+  - name: item_total
+    formula: "quantity * unit_price"
+    applies_to: table_rows
+  
+  # Calculate CIF if not provided
+  - name: total_cif
+    formula: "subtotal + freight + insurance"
+    applies_to: document

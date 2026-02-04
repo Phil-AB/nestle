@@ -1,0 +1,59 @@
+# Form Generator Module Configuration
+
+# Gemini Vision Provider
+gemini:
+  api_key_env: "GEMINI_API_KEY"  # Environment variable for API key
+  model: "gemini-1.5-flash"  # Options: gemini-1.5-flash, gemini-1.5-pro
+  max_retries: 3
+
+# Detection Settings
+detection:
+  strategy: "hybrid"  # Options: vision, structure, hybrid
+  min_confidence: 0.7  # Minimum confidence threshold (0.0 to 1.0)
+  dpi: 300  # Resolution for PDF to image conversion
+
+# Field Detection Options
+field_detection:
+  detect_underlines: true
+  detect_boxes: true
+  detect_checkboxes: true
+  detect_whitespace: true
+
+  # Position matching tolerance (in PDF points)
+  position_tolerance: 20.0
+
+  # Minimum field dimensions (in PDF points)
+  min_field_width: 10.0
+  min_field_height: 5.0
+
+# Form Building Options
+form_building:
+  default_font: "Helvetica"
+  default_font_size: 10
+  default_border_width: 1
+
+  # Field appearance
+  text_field_border: true
+  checkbox_border: true
+
+  # Styling preservation
+  preserve_fonts: true
+  preserve_colors: true
+  preserve_borders: true
+
+# Output Settings
+output:
+  directory: "output/generated_forms"
+  filename_suffix: "_fillable"
+  overwrite_existing: false
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_field_detection: true
+  log_analysis_results: true
+
+# Performance
+performance:
+  parallel_page_analysis: true
+  max_workers: 4

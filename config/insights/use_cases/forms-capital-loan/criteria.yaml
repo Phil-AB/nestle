@@ -1,0 +1,513 @@
+# Forms Capital Loan Application - Criteria & Scoring Rules
+# Defines risk assessment, product eligibility, and automated decisions
+# Version: 1.0.0
+
+use_case_id: "forms-capital-loan"
+criteria_type: "loan_assessment"
+version: "1.0.0"
+
+# ==============================================================================
+# RISK ASSESSMENT CONFIGURATION
+# ==============================================================================
+
+risk_assessment:
+  scoring_model: "weighted_factors"
+  score_range: [0, 100]  # Higher score = better creditworthiness
+
+  # Factor weights (must sum to 1.0)
+  weights:
+    employment_stability: 0.30
+    income_level: 0.25
+    age_factor: 0.15
+    debt_to_income_ratio: 0.15
+    marital_status: 0.05
+    occupation_type: 0.10
+
+  # Employment stability scoring
+  employment_stability:
+    rules:
+      - name: "permanent_employment"
+        score: 30
+        conditions:
+          - field: "employment_status"
+            operator: "equals"
+            value: "employed"
+
+      - name: "self_employed"
+        score: 25
+        conditions:
+          - field: "employment_status"
+            operator: "equals"
+            value: "self_employed"
+
+      - name: "unemployed"
+        score: 10
+        conditions:
+          - field: "employment_status"
+            operator: "equals"
+            value: "unemployed"
+
+      - name: "default"
+        score: 15
+        conditions: []  # Fallback
+
+  # Income level scoring (GHS per month)
+  income_level:
+    rules:
+      - name: "high_income"
+        score: 25
+        conditions:
+          - field: "monthly_income"
+            operator: "gte"
+            value: 5000
+
+      - name: "good_income"
+        score: 20
+        conditions:
+          - field: "monthly_income"
+            operator: "gte"
+            value: 3000
+          - field: "monthly_income"
+            operator: "lt"
+            value: 5000
+
+      - name: "moderate_income"
+        score: 15
+        conditions:
+          - field: "monthly_income"
+            operator: "gte"
+            value: 1000
+          - field: "monthly_income"
+            operator: "lt"
+            value: 3000
+
+      - name: "limited_income"
+        score: 8
+        conditions:
+          - field: "monthly_income"
+            operator: "lt"
+            value: 1000
+
+  # Age factor scoring
+  age_factor:
+    rules:
+      - name: "prime_working_age"
+        score: 15
+        conditions:
+          - field: "age"
+            operator: "gte"
+            value: 25
+          - field: "age"
+            operator: "lte"
+            value: 55
+
+      - name: "young_adult"
+        score: 12
+        conditions:
+          - field: "age"
+            operator: "gte"
+            value: 18
+          - field: "age"
+            operator: "lt"
+            value: 25
+
+      - name: "senior"
+        score: 12
+        conditions:
+          - field: "age"
+            operator: "gt"
+            value: 55
+          - field: "age"
+            operator: "lte"
+            value: 65
+
+      - name: "elderly"
+        score: 8
+        conditions:
+          - field: "age"
+            operator: "gt"
+            value: 65
+
+  # Debt-to-income ratio scoring
+  debt_to_income_ratio:
+    rules:
+      - name: "low_debt"
+        score: 15
+        conditions:
+          - field: "_computed_dti_ratio"
+            operator: "lte"
+            value: 0.30
+
+      - name: "moderate_debt"
+        score: 10
+        conditions:
+          - field: "_computed_dti_ratio"
+            operator: "gt"
+            value: 0.30
+          - field: "_computed_dti_ratio"
+            operator: "lte"
+            value: 0.50
+
+      - name: "high_debt"
+        score: 5
+        conditions:
+          - field: "_computed_dti_ratio"
+            operator: "gt"
+            value: 0.50
+
+      - name: "no_data"
+        score: 10
+        conditions:
+          - field: "_computed_dti_ratio"
+            operator: "is_null"
+
+    # Computed field definition
+    computed_fields:
+      _computed_dti_ratio:
+        formula: "total_monthly_commitment / monthly_income"
+        fallback: null
+
+  # Marital status scoring
+  marital_status:
+    rules:
+      - name: "married"
+        score: 5
+        conditions:
+          - field: "marital_status"
+            operator: "equals"
+            value: "married"
+
+      - name: "single"
+        score: 4
+        conditions:
+          - field: "marital_status"
+            operator: "equals"
+            value: "single"
+
+      - name: "divorced_widowed"
+        score: 3
+        conditions:
+          - field: "marital_status"
+            operator: "in"
+            value: ["divorced", "widowed"]
+
+      - name: "default"
+        score: 3
+        conditions: []
+
+  # Occupation type scoring
+  occupation_type:
+    rules:
+      - name: "professional"
+        score: 10
+        conditions:
+          - field: "occupation"
+            operator: "contains_any"
+            value: ["Manager", "Director", "Engineer", "Doctor", "Accountant", "Lawyer"]
+
+      - name: "skilled"
+        score: 8
+        conditions:
+          - field: "occupation"
+            operator: "contains_any"
+            value: ["Supervisor", "Technician", "Teacher", "Nurse", "Administrator"]
+
+      - name: "semi_skilled"
+        score: 6
+        conditions:
+          - field: "occupation"
+            operator: "contains_any"
+            value: ["Clerk", "Assistant", "Driver", "Operator"]
+
+      - name: "default"
+        score: 5
+        conditions: []
+
+  # Risk classification based on total score
+  risk_levels:
+    - name: "low_risk"
+      min_score: 70
+      max_score: 100
+      label: "low"
+      creditworthiness: "Excellent"
+      description: "Strong repayment capacity, minimal risk"
+
+    - name: "medium_risk"
+      min_score: 50
+      max_score: 69
+      label: "medium"
+      creditworthiness: "Good"
+      description: "Acceptable repayment capacity, moderate risk"
+
+    - name: "medium_high_risk"
+      min_score: 35
+      max_score: 49
+      label: "medium"
+      creditworthiness: "Fair"
+      description: "Limited repayment capacity, elevated risk"
+
+    - name: "high_risk"
+      min_score: 0
+      max_score: 34
+      label: "high"
+      creditworthiness: "Poor"
+      description: "Weak repayment capacity, high risk"
+
+# ==============================================================================
+# PRODUCT ELIGIBILITY CONFIGURATION
+# ==============================================================================
+
+product_eligibility:
+  # Personal Loan
+  personal_loan:
+    product_name: "Personal Loan"
+    product_code: "PL001"
+
+    eligibility_rules:
+      - field: "risk_score"
+        operator: "gte"
+        value: 40
+      - field: "age"
+        operator: "gte"
+        value: 18
+      - field: "age"
+        operator: "lte"
+        value: 65
+      - field: "monthly_income"
+        operator: "gte"
+        value: 1000
+      - field: "employment_status"
+        operator: "in"
+        value: ["employed", "self_employed"]
+
+    loan_amount:
+      formula: "monthly_income * 6"
+      min_amount: 1000
+      max_amount: 50000
+
+    interest_rate:
+      risk_based: true
+      rates:
+        - risk_score_min: 70
+          risk_score_max: 100
+          rate: 24.0
+        - risk_score_min: 50
+          risk_score_max: 69
+          rate: 27.0
+        - risk_score_min: 40
+          risk_score_max: 49
+          rate: 30.0
+
+    tenor:
+      min_months: 6
+      max_months: 36
+      default_months: 24
+
+  # Business Loan
+  business_loan:
+    product_name: "Business Loan"
+    product_code: "BL001"
+
+    eligibility_rules:
+      - field: "risk_score"
+        operator: "gte"
+        value: 50
+      - field: "monthly_income"
+        operator: "gte"
+        value: 3000
+      - field: "loan_purpose"
+        operator: "contains_any"
+        value: ["business", "expansion", "capital", "inventory"]
+
+    loan_amount:
+      formula: "monthly_income * 12"
+      min_amount: 5000
+      max_amount: 100000
+
+    interest_rate:
+      risk_based: true
+      rates:
+        - risk_score_min: 70
+          risk_score_max: 100
+          rate: 22.0
+        - risk_score_min: 50
+          risk_score_max: 69
+          rate: 25.0
+
+    tenor:
+      min_months: 12
+      max_months: 48
+      default_months: 36
+
+  # Quick Cash
+  quick_cash:
+    product_name: "Quick Cash"
+    product_code: "QC001"
+
+    eligibility_rules:
+      - field: "risk_score"
+        operator: "gte"
+        value: 35
+      - field: "monthly_income"
+        operator: "gte"
+        value: 800
+
+    loan_amount:
+      formula: "monthly_income * 2"
+      min_amount: 500
+      max_amount: 5000
+
+    interest_rate:
+      fixed: true
+      rate: 32.0
+
+    tenor:
+      min_months: 3
+      max_months: 12
+      default_months: 6
+
+# ==============================================================================
+# AUTOMATED DECISIONS CONFIGURATION
+# ==============================================================================
+
+automated_decisions:
+  # Loan approval decision
+  loan_approval:
+    decision_type: "approval_status"
+
+    rules:
+      - name: "auto_approve"
+        decision: "AUTO_APPROVE"
+        conditions:
+          - field: "risk_score"
+            operator: "gte"
+            value: 60
+          - field: "monthly_income"
+            operator: "gte"
+            value: 2000
+          - field: "_computed_loan_to_income"
+            operator: "lte"
+            value: 6
+        message: "Application meets auto-approval criteria"
+
+      - name: "manual_review"
+        decision: "MANUAL_REVIEW"
+        conditions:
+          - field: "risk_score"
+            operator: "gte"
+            value: 40
+          - field: "risk_score"
+            operator: "lt"
+            value: 60
+        message: "Application requires manual review"
+
+      - name: "refer_to_manager"
+        decision: "REFER_TO_MANAGER"
+        conditions:
+          - field: "risk_score"
+            operator: "gte"
+            value: 35
+          - field: "risk_score"
+            operator: "lt"
+            value: 40
+        message: "Application requires senior management approval"
+
+      - name: "decline"
+        decision: "DECLINE"
+        conditions:
+          - field: "risk_score"
+            operator: "lt"
+            value: 35
+        message: "Application does not meet minimum criteria"
+
+    computed_fields:
+      _computed_loan_to_income:
+        formula: "loan_amount_requested / monthly_income"
+        fallback: 0
+
+  # Recommended loan amount
+  loan_amount_recommendation:
+    decision_type: "recommended_amount"
+
+    rules:
+      - name: "conservative"
+        formula: "monthly_income * 6"
+        conditions:
+          - field: "risk_score"
+            operator: "gte"
+            value: 70
+
+      - name: "moderate"
+        formula: "monthly_income * 4"
+        conditions:
+          - field: "risk_score"
+            operator: "gte"
+            value: 50
+          - field: "risk_score"
+            operator: "lt"
+            value: 70
+
+      - name: "cautious"
+        formula: "monthly_income * 2"
+        conditions:
+          - field: "risk_score"
+            operator: "lt"
+            value: 50
+
+  # Priority level
+  priority_level:
+    decision_type: "service_priority"
+
+    rules:
+      - name: "high_priority"
+        decision: "HIGH"
+        conditions:
+          - field: "monthly_income"
+            operator: "gte"
+            value: 5000
+
+      - name: "standard_priority"
+        decision: "STANDARD"
+        conditions: []
+
+# ==============================================================================
+# DOCUMENT LIST DISPLAY CONFIGURATION
+# ==============================================================================
+
+# Defines how documents appear in the UI list (left panel)
+document_list_summary:
+  # Fields to display in the document summary card
+  display_fields:
+    - label: "Phone"
+      source_fields: ["contact_number", "phone", "mobile_number", "telephone"]
+      type: "text"
+      unique_identifier: true  # This field serves as unique ID
+
+# ==============================================================================
+# VALIDATION & CONSTRAINTS
+# ==============================================================================
+
+validation:
+  required_fields:
+    - "full_name"
+    - "age"
+    - "employment_status"
+    - "monthly_income"
+
+  constraints:
+    max_loan_to_income_ratio: 10.0
+    max_debt_to_income_ratio: 0.60
+    min_age: 18
+    max_age: 70
+
+# ==============================================================================
+# METADATA
+# ==============================================================================
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-02-02"
+  currency: "GHS"
+  country: "Ghana"
+  organization: "Forms Capital Limited"
+  regulatory_framework: "Bank of Ghana Guidelines"

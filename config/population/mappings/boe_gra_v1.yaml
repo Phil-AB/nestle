@@ -1,0 +1,395 @@
+# ==============================================================================
+# BILL OF ENTRY (BOE) - GHANA REVENUE AUTHORITY
+# PDF Form Field Mapping Configuration
+# ==============================================================================
+
+form_id: boe_gra_v1
+form_name: "Bill of Entry - Ghana Revenue Authority"
+description: "Ghana Customs BOE form for import/export declarations"
+template_path: "config/population/forms/boe_gra_v1.pdf"
+merge_strategy: prioritized
+
+# Form metadata (for list forms API)
+required_document_types:
+  - invoice
+  - bill_of_lading
+  - packing_list
+
+created_at: "2025-12-30T00:00:00Z"
+updated_at: "2025-12-30T00:00:00Z"
+
+# ==============================================================================
+# FIELD MAPPINGS - Maps Database Fields → PDF Form Fields
+# ==============================================================================
+
+field_mappings:
+  # ============================================================================
+  # EXPORTER/SHIPPER INFORMATION
+  # ============================================================================
+
+  exporter_no:
+    source: "fields.exporter_no"
+    fallback: ["fields.shipper_no", "fields.exporter_code"]
+
+  exporter_address:
+    source: "fields.exporter_shipper"
+    fallback: ["fields.shipper_address", "fields.exporter"]
+
+  # ============================================================================
+  # IMPORTER/CONSIGNEE INFORMATION
+  # ============================================================================
+
+  importer_no:
+    source: "fields.importer_no"
+    fallback: ["fields.consignee_no"]
+
+  consignee_no:
+    source: "fields.consignee_no"
+    fallback: ["fields.importer_no"]
+
+  importer_address:
+    source: "fields.consignee_importer"
+    fallback: ["fields.importer_address", "fields.consignee"]
+
+  consignee:
+    source: "fields.consignee_importer"
+    fallback: ["fields.consignee_name"]
+
+  # ============================================================================
+  # CUSTOMS/DECLARATION INFORMATION
+  # ============================================================================
+
+  regime:
+    source: "fields.regime"
+    default: "40"
+
+  cl_plan:
+    source: "fields.cl_plan"
+    default: "A"
+
+  office_code:
+    source: "fields.office_code"
+    default: "TMA1"
+
+  boe_no:
+    source: "fields.boe_no"
+    fallback: ["fields.declaration_number"]
+
+  date:
+    source: "fields.invoice_date"
+    fallback: ["fields.date", "fields.date_of_issue"]
+    date_format: "%d/%m/%Y"
+
+  entry_office:
+    source: "fields.entry_office"
+    fallback: ["fields.office_code"]
+    default: "TMA1"
+
+  # ============================================================================
+  # TRANSPORT/SHIPMENT INFORMATION
+  # ============================================================================
+
+  manifest_no:
+    source: "fields.manifest_no"
+    fallback: ["fields.manifest_number"]
+
+  bl_awb:
+    source: "fields.b_l_no"
+    fallback: ["fields.bl_number", "fields.awb_number", "fields.bill_of_lading"]
+
+  reference_number:
+    source: "fields.invoice_no"
+    fallback: ["fields.ref_no", "fields.reference_number"]
+
+  trans_details:
+    source: "fields.vessel"
+    fallback: ["fields.vessel_name", "fields.flight_number"]
+    uppercase: true
+
+  port_loading:
+    source: "fields.port_of_loading"
+    fallback: ["fields.loading_port", "fields.pol"]
+    uppercase: true
+
+  place_ship:
+    source: "fields.port_of_discharge"
+    fallback: ["fields.discharge_port", "fields.pod", "fields.place_of_delivery"]
+    uppercase: true
+
+  country_consign:
+    source: "fields.country_of_origin"
+    fallback: ["fields.origin_country"]
+    uppercase: true
+
+  # ============================================================================
+  # PACKAGE/WEIGHT INFORMATION
+  # ============================================================================
+
+  items:
+    source: "fields.number_of_items"
+    fallback: ["fields.total_items"]
+
+  total_package:
+    source: "fields.total_packages"
+    fallback: ["fields.quantity", "fields.number_of_packages"]
+
+  gross_mass_kg:
+    source: "fields.gross_weight"
+    fallback: ["fields.total_gross_weight"]
+
+  gross_wt_kg:
+    source: "items.0.gross_weight"
+    fallback: ["fields.gross_weight"]
+
+  net_wt_kg:
+    source: "items.0.net_weight"
+    fallback: ["items.0.gross_weight", "fields.net_weight"]
+
+  # ============================================================================
+  # FINANCIAL INFORMATION
+  # ============================================================================
+
+  total_invoice_fcy:
+    source: "fields.total_invoice_value"
+    fallback: ["fields.invoice_total", "fields.total_amount"]
+
+  total_invoice_fcy_cc:
+    source: "fields.currency"
+    fallback: ["fields.currency_code"]
+    uppercase: true
+    default: "USD"
+
+  curr_code:
+    source: "fields.currency"
+    fallback: ["fields.currency_code"]
+    uppercase: true
+    default: "USD"
+
+  xchange_rate:
+    source: "fields.exchange_rate"
+    default: "1.00"
+
+  total_fob:
+    source: "fields.fob_value"
+    fallback: ["fields.total_fob", "fields.total_invoice_value"]
+
+  fob_ncy:
+    source: "fields.fob_value"
+    fallback: ["fields.fob_total"]
+
+  fob_ncy_2:
+    source: "fields.fob_value"
+    fallback: ["fields.fob_total"]
+
+  freight_ncy:
+    source: "fields.freight"
+    fallback: ["fields.freight_charges"]
+    default: "0.00"
+
+  insurance_ncy:
+    source: "fields.insurance"
+    fallback: ["fields.insurance_charges"]
+    default: "0.00"
+
+  other_costs:
+    source: "fields.other_charges"
+    default: "0.00"
+
+  customs_value:
+    source: "fields.customs_value"
+    fallback: ["fields.total_invoice_value", "fields.fob_value"]
+
+  # ============================================================================
+  # ITEM-LEVEL INFORMATION
+  # ============================================================================
+
+  item_no:
+    source: "items.0.item_number"
+    default: "1"
+
+  commodity_code:
+    source: "items.0.hs_code"
+    fallback: ["items.0.commodity_code", "items.0.tariff_code"]
+
+  description_goods:
+    source: "items.0.description_of_goods"
+    fallback: ["items.0.description", "items.0.goods_description"]
+    max_length: 500
+
+  quantity_unit:
+    source: "items.0.quantity"
+    fallback: ["items.0.qty"]
+
+  dqy:
+    source: "items.0.quantity"
+    fallback: ["items.0.qty"]
+
+  fob_fcy:
+    source: "items.0.fob_value"
+    fallback: ["items.0.unit_price", "items.0.value"]
+
+  fob_fcy_cc:
+    source: "fields.currency"
+    uppercase: true
+    default: "USD"
+
+  cty_org_dest:
+    source: "fields.country_of_origin"
+    fallback: ["items.0.country_of_origin"]
+    uppercase: true
+
+  # ============================================================================
+  # CONTAINER/MARKS INFORMATION
+  # ============================================================================
+
+  container_nos:
+    source: "fields.container_number"
+    fallback: ["fields.cntr", "fields.container"]
+    uppercase: true
+
+  marks_numbers:
+    source: "fields.marks_and_numbers"
+    fallback: ["fields.marks"]
+    uppercase: true
+
+  # ============================================================================
+  # DECLARANT/AGENT INFORMATION
+  # ============================================================================
+
+  declarant:
+    source: "fields.declarant_name"
+    fallback: ["fields.customs_broker_name", "fields.agent_name"]
+
+  declarant_no:
+    source: "fields.declarant_no"
+    fallback: ["fields.broker_no", "fields.agent_code"]
+
+  # ============================================================================
+  # PAYMENT/BANK INFORMATION
+  # ============================================================================
+
+  delivery_terms:
+    source: "fields.delivery_terms"
+    fallback: ["fields.incoterms"]
+    uppercase: true
+    default: "CIF"
+
+  term_payment:
+    source: "fields.payment_terms"
+    fallback: ["fields.terms_of_payment"]
+
+  mode_payment:
+    source: "fields.mode_of_payment"
+    fallback: ["fields.payment_method"]
+
+  bank_code:
+    source: "fields.bank_code"
+
+  bank_name:
+    source: "fields.bank_name"
+
+  branch_name:
+    source: "fields.bank_branch"
+    fallback: ["fields.branch_name"]
+
+  ac_no:
+    source: "fields.account_number"
+    fallback: ["fields.bank_account"]
+
+  # ============================================================================
+  # LICENSE/PERMIT INFORMATION
+  # ============================================================================
+
+  licence_type:
+    source: "fields.licence_type"
+
+  licence_no:
+    source: "fields.licence_number"
+    fallback: ["fields.license_no", "fields.permit_no"]
+
+  dgd_ref_no:
+    source: "fields.dgd_reference"
+    fallback: ["fields.customs_reference"]
+
+  # ============================================================================
+  # VALUATION/TAX INFORMATION
+  # ============================================================================
+
+  valuation_method:
+    source: "fields.valuation_method"
+    default: "1"
+
+  dv:
+    source: "fields.declared_value"
+    fallback: ["fields.customs_value", "fields.total_invoice_value"]
+
+  tax_total:
+    source: "fields.total_tax"
+    fallback: ["fields.tax_amount"]
+
+  tax_summary_total:
+    source: "fields.total_tax"
+    fallback: ["fields.tax_summary"]
+
+  # ============================================================================
+  # WAREHOUSE/GUARANTEE INFORMATION
+  # ============================================================================
+
+  id_warehouse:
+    source: "fields.warehouse_id"
+
+  bank_guarantee:
+    source: "fields.guarantee_number"
+
+  bg_amount:
+    source: "fields.guarantee_amount"
+
+  # ============================================================================
+  # DOCUMENTS/ANNEXURES
+  # ============================================================================
+
+  attached_docs_main:
+    source: "fields.attached_documents"
+    default: "Invoice, Bill of Lading, Packing List"
+
+  annexed_docs:
+    source: "fields.supporting_documents"
+
+  # ============================================================================
+  # ADDITIONAL FIELDS
+  # ============================================================================
+
+  zone:
+    source: "fields.zone"
+
+  cpc:
+    source: "fields.cpc"
+
+  concess:
+    source: "fields.concession"
+
+  supp_u1:
+    source: "fields.supplementary_unit_1"
+
+  supp_u2:
+    source: "fields.supplementary_unit_2"
+
+  prev_declaration:
+    source: "fields.previous_declaration"
+
+  receipt_number:
+    source: "fields.receipt_no"
+
+  payment_date1:
+    source: "fields.payment_date"
+    date_format: "%d/%m/%Y"
+
+  payment_date2:
+    source: "fields.payment_date"
+    date_format: "%d/%m/%Y"
+
+  tax_details:
+    source: "fields.tax_breakdown"
+
+  tax_summary:
+    source: "fields.tax_summary"

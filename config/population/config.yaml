@@ -1,0 +1,236 @@
+# ==============================================================================
+# PDF FORM POPULATION MODULE CONFIGURATION
+# ==============================================================================
+# Configuration for the standalone PDF form population module
+
+# Module Information
+module:
+  name: "PDF Form Population"
+  version: "1.0.0"
+  description: "Fills existing fillable PDF forms with extracted document data"
+
+# ==============================================================================
+# AGENT CONFIGURATION (LangChain-based Intelligent Population)
+# ==============================================================================
+# MANDATORY: Agent-based population is the only supported mode for maximum accuracy
+
+agent:
+  enabled: true  # Agent-based population (always enabled)
+  mandatory: true  # NEW: Agent mode is mandatory - traditional mode disabled
+  verbose: true  # Enable verbose logging for agent (helpful for debugging)
+  max_iterations: 10  # Maximum agent iterations
+
+  # LLM for agent reasoning
+  llm:
+    provider: "google"  # anthropic, openai, google
+    model: "gemini-2.5-pro"  # Pro model for better reasoning
+    temperature: 0.0  # Deterministic for reliability
+    max_tokens: 4096
+    timeout: 120
+    max_retries: 3
+
+  # Vision provider for field detection
+  vision:
+    provider: "gemini"
+    model: "gemini-1.5-flash"
+    cache_enabled: true
+
+  # Tools configuration
+  tools:
+    field_mapping:
+      fuzzy_threshold: 0.45  # Lowered to capture more semantic matches
+      semantic_similarity: true
+      confidence_threshold: 0.45  # Match field_mapping threshold
+      include_low_confidence_warnings: true  # Flag low-confidence mappings in metadata
+
+    validation:
+      strict_mode: false  # DISABLED: Accept low-confidence mappings
+      require_confidence: 0.45  # Match field_mapping threshold
+
+# ==============================================================================
+# DATABASE CONFIGURATION
+# ==============================================================================
+# Reuses same database as other modules
+
+database:
+  type: postgresql
+
+  # Environment variable names for connection
+  host_env: DB_HOST
+  port_env: DB_PORT
+  user_env: DB_USER
+  password_env: DB_PASSWORD
+  database_env: DB_NAME
+
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# ==============================================================================
+# FORM TEMPLATE CONFIGURATION
+# ==============================================================================
+
+forms:
+  # Directory paths
+  templates_dir: "config/population/forms"
+  mappings_dir: "config/population/mappings"
+  output_dir: "output/population"
+
+  # Default settings
+  default_merge_strategy: "prioritized"  # prioritized, best_available, combine
+  default_flatten_form: true  # Make filled forms read-only by default
+
+# ==============================================================================
+# DATA QUERYING
+# ==============================================================================
+
+data_queries:
+  # How to fetch document data from database
+  get_document_by_id:
+    sql: |
+      SELECT
+        id,
+        document_id,
+        document_type,
+        fields,
+        items,
+        doc_metadata as metadata,
+        extraction_status
+      FROM api_documents
+      WHERE id = :id
+    parameters:
+      - id
+    returns: single
+
+  get_documents_by_ids:
+    sql: |
+      SELECT
+        id,
+        document_id,
+        document_type,
+        fields,
+        items,
+        doc_metadata as metadata,
+        extraction_status
+      FROM api_documents
+      WHERE id = ANY(:ids)
+      AND extraction_status = 'complete'
+    parameters:
+      - ids
+    returns: multiple
+
+# ==============================================================================
+# FIELD MAPPING CONFIGURATION
+# ==============================================================================
+
+field_mapping:
+  # Transformation functions available
+  transformations:
+    - name: "extract_company_name"
+      type: "regex"
+      pattern: "^([^,\n]+)"
+      group: 1
+
+    - name: "extract_address"
+      type: "regex"
+      pattern: ",\\s*(.+)$"
+      group: 1
+
+    - name: "format_date"
+      type: "date_format"
+      input_formats:
+        - "%Y-%m-%d"
+        - "%d/%m/%Y"
+        - "%B %d, %Y"
+      output_format: "%d/%m/%Y"
+
+    - name: "format_currency"
+      type: "number_format"
+      decimals: 2
+      thousand_separator: ","
+      decimal_separator: "."
+
+    - name: "uppercase"
+      type: "string_transform"
+      operation: "upper"
+
+# ==============================================================================
+# MERGE STRATEGIES
+# ==============================================================================
+
+merge_strategies:
+  prioritized:
+    description: "First document wins - values from first document take priority"
+    prefer_first: true
+
+  best_available:
+    description: "Most complete value wins - prefer non-empty values"
+    prefer_non_empty: true
+
+  combine:
+    description: "Merge complementary data from all documents"
+    merge_fields: true
+    combine_items: true
+
+# ==============================================================================
+# VALIDATION
+# ==============================================================================
+
+validation:
+  # Validate filled forms before saving
+  validate_before_save: true
+
+  # Check for required fields
+  check_required_fields: true
+
+  # Maximum field value lengths
+  max_field_length: 1000
+
+# ==============================================================================
+# ERROR HANDLING
+# ==============================================================================
+
+error_handling:
+  # Retry configuration
+  retry_on_failure: true
+  max_retries: 3
+  retry_delay_seconds: 1
+
+  # Logging
+  log_queries: true
+  log_errors: true
+  log_warnings: true
+  log_field_mappings: false  # Set true for debugging
+
+# ==============================================================================
+# PERFORMANCE
+# ==============================================================================
+
+performance:
+  # Caching
+  cache_form_templates: true
+  cache_mappings: true
+
+  # Batch processing
+  max_concurrent_populations: 10
+  batch_size: 50
+
+# ==============================================================================
+# SECURITY
+# ==============================================================================
+
+security:
+  # PDF validation
+  validate_pdf_structure: true
+  check_malicious_content: false  # Future: scan for embedded JavaScript
+
+  # Field sanitization
+  sanitize_field_values: true
+  remove_html_tags: true
+  escape_special_characters: true
+
+  # File size limits
+  max_pdf_size_mb: 50
+  max_output_size_mb: 100

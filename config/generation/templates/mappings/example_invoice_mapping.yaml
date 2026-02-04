@@ -1,0 +1,103 @@
+# ==============================================================================
+# DATA MAPPING: Example Invoice Mapping
+# ==============================================================================
+
+mapping_id: example_invoice_mapping
+mapping_name: Example Invoice Data Mapping
+version: "1.0.0"
+
+# Source configuration
+source:
+  provider: postgres
+  query:
+    document_id: "{document_id}"
+
+# Target configuration
+target:
+  template_id: example_invoice_v1
+  renderer: docx
+
+# Field mappings (source_field → target_field)
+field_mappings:
+  # Direct mappings from extracted data
+  "fields.invoice_number": invoice_number
+  "fields.invoice_date": invoice_date
+  "fields.currency": currency
+  "fields.consignee_name": buyer_name
+  "fields.shipper_name": seller_name
+  "fields.consignee_address": buyer_address
+  "fields.shipper_address": seller_address
+  "fields.total_invoice_value": total_amount
+  
+  # Default values
+  defaults:
+    payment_terms: "Net 30"
+    currency: "USD"
+
+# Transformations
+transformations:
+  # Format date
+  - field: invoice_date
+    type: date_format
+    params:
+      input_format: "%Y-%m-%d"
+      output_format: "%B %d, %Y"
+  
+  # Format currency
+  - field: total_amount
+    type: currency_format
+    params:
+      currency_field: currency
+      decimal_places: 2
+      include_symbol: true
+  
+  # Uppercase invoice number
+  - field: invoice_number
+    type: uppercase
+
+# Table mappings
+table_mappings:
+  line_items:
+    source: "items"
+    mappings:
+      "product_description": description
+      "quantity": quantity
+      "unit_price": unit_price
+      "total_value": total
+      
+    transformations:
+      - field: unit_price
+        type: currency_format
+        params:
+          decimal_places: 2
+      
+      - field: total
+        type: currency_format
+        params:
+          decimal_places: 2
+
+# Calculated fields
+calculated_fields:
+  subtotal:
+    type: sum
+    source: "items"
+    field: "total_value"
+  
+  tax_amount:
+    type: multiply
+    params:
+      field: subtotal
+      multiplier: 0.10
+  
+  grand_total:
+    type: add
+    params:
+      fields:
+        - subtotal
+        - tax_amount
+
+# Post-processing
+post_processing:
+  remove_null_fields: true
+  remove_empty_arrays: true
+  trim_strings: true

@@ -1,0 +1,31 @@
+# ==============================================================================
+# BILL OF ENTRY (BOE) V2 - GHANA REVENUE AUTHORITY
+# Minimal Configuration - AI Agent Handles Field Mapping
+# ==============================================================================
+
+form_id: boe_gra_v2
+form_name: "Bill of Entry - Ghana Revenue Authority V2"
+description: "Ghana Customs BOE form V2 for import/export declarations - AI-powered field mapping"
+template_path: "config/population/forms/boe_gra_v2.pdf"
+merge_strategy: best_available
+
+# Form metadata
+required_document_types:
+  - invoice
+  - bill_of_lading
+  - packing_list
+
+created_at: "2026-01-03T00:00:00Z"
+updated_at: "2026-01-03T00:00:00Z"
+
+# ==============================================================================
+# AI AGENT CONFIGURATION
+# ==============================================================================
+# The AI agent will automatically:
+# - Analyze all 71 PDF form fields
+# - Semantically match them to extracted document data
+# - Use fuzzy matching (60% threshold) for flexibility
+# - Fill the form intelligently
+#
+# No manual field mappings needed!
+# ==============================================================================

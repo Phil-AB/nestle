@@ -1,0 +1,65 @@
+# Banking Customer Insights Report Template Metadata
+# Generates comprehensive insights reports for bank account opening customers
+
+template_id: banking_customer_insights_report_v1
+template_name: Banking Customer Insights Report
+template_format: html
+template_path: banking_customer_insights_report.html
+template_file: banking_customer_insights_report.html
+description: |
+  Generates a comprehensive customer insights report including:
+  - Customer profile summary
+  - AI-powered risk assessment and creditworthiness
+  - Product eligibility (Extra Cash, Extra Balance, Credit Card)
+  - Personalized recommendations
+  - Comparative benchmarks
+  - Automated approval decisions
+
+version: "1.0"
+created_date: "2026-01-28"
+category: banking
+
+# Template capabilities
+capabilities:
+  supports_insights_generation: true
+  supports_multi_source: false  # Single customer only
+  supports_benchmarks: true
+  requires_ai_insights: true
+
+# Required input fields
+required_fields:
+  - customer_name
+  - date_of_birth
+
+# Optional fields with defaults
+optional_fields:
+  - employment_status
+  - income_range
+  - marital_status
+  - nationality
+  - occupation
+  - employer_name
+
+# Insights configuration
+insights_config:
+  enabled: true
+  service: banking_insights
+  enabled_insights:
+    - risk_assessment
+    - product_eligibility
+    - recommendations
+    - benchmarks
+    - automated_decisions
+
+# Output configuration
+output:
+  format: pdf
+  filename_pattern: "customer_insights_{customer_name}_{timestamp}.pdf"
+  page_size: A4
+  orientation: portrait
+
+# Security and compliance
+security:
+  data_classification: confidential
+  retention_days: 365
+  audit_logging: true

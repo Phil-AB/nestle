@@ -1,0 +1,80 @@
+template_id: simple_extraction_report
+mapping_version: "1.0"
+description: Field mapping for simple extraction report
+
+# Data source configuration
+data_source:
+  provider: postgres
+  query: by_document_id
+
+# Direct field mappings (source -> template)
+fields:
+  # Document metadata (from api_documents table columns)
+  document_id:
+    source: document_id
+    required: true
+    default: "N/A"
+  
+  document_type:
+    source: document_type
+    required: true
+    default: "Unknown"
+  
+  extraction_status:
+    source: extraction_status
+    required: true
+    default: "pending"
+  
+  created_at:
+    source: created_at
+    required: true
+    transformation: format_date
+    transformation_params:
+      format: "%Y-%m-%d %H:%M:%S"
+  
+  # Extracted fields (from fields JSONB, already transformed to flat structure)
+  item_no:
+    source: fields.item_no
+    default: "-"
+  
+  quantity:
+    source: fields.quantity
+    default: "-"
+  
+  item_hs_code:
+    source: fields.item_hs_code
+    default: "-"
+  
+  package_type:
+    source: fields.package_type
+    default: "-"
+  
+  unit_price_fcy:
+    source: fields.unit_price_fcy
+    default: "-"
+  
+  unit_price_nci:
+    source: fields.unit_price_nci
+    default: "-"
+  
+  country_of_origin:
+    source: fields.country_of_origin
+    default: "-"
+  
+  hs_code_description:
+    source: fields.hs_code_description
+    default: "-"
+  
+  foreign_currency_code:
+    source: fields.foreign_currency_code
+    default: "-"
+  
+  applicant_remarks:
+    source: fields.applicant_remarks
+    default: "-"
+
+# No table mappings for this simple template
+tables: []
+
+# No calculated fields needed
+calculated_fields: []

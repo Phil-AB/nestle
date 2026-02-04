@@ -1,0 +1,247 @@
+# Analytics Database Schema Configuration
+# Defines the database table structure for storing analytics aggregations
+# Version: 1.0.0
+
+use_case_id: "forms-capital-loan"
+version: "1.0.0"
+
+# Table configuration
+table:
+  name: "analytics_forms_capital_loan"
+  description: "Stores pre-computed analytics aggregations for loan applications"
+
+  # Indexes for query optimization
+  indexes:
+    - name: "idx_period_metric"
+      columns: ["period_type", "period_start", "metric_id"]
+      unique: false
+    - name: "idx_dimension_value"
+      columns: ["dimension_id", "dimension_value"]
+      unique: false
+    - name: "idx_period_range"
+      columns: ["period_start", "period_end"]
+      unique: false
+
+# Schema definition
+schema:
+  # Primary identification
+  id:
+    type: "uuid"
+    primary_key: true
+    nullable: false
+    description: "Unique analytics record ID"
+
+  use_case_id:
+    type: "string"
+    length: 100
+    nullable: false
+    default: "forms-capital-loan"
+    description: "Use case identifier"
+
+  # Aggregation period
+  period_type:
+    type: "string"
+    length: 20
+    nullable: false
+    index: true
+    description: "Period granularity: daily, weekly, monthly, yearly, all_time"
+
+  period_start:
+    type: "timestamp"
+    nullable: false
+    index: true
+    description: "Period start timestamp"
+
+  period_end:
+    type: "timestamp"
+    nullable: false
+    index: true
+    description: "Period end timestamp"
+
+  period_label:
+    type: "string"
+    length: 50
+    nullable: true
+    description: "Human-readable period label (e.g., '2026-02', 'Q1 2026')"
+
+  # Metric identification
+  metric_id:
+    type: "string"
+    length: 100
+    nullable: false
+    index: true
+    description: "Metric identifier from config"
+
+  metric_name:
+    type: "string"
+    length: 255
+    nullable: true
+    description: "Human-readable metric name"
+
+  # Dimension breakdown (optional)
+  dimension_id:
+    type: "string"
+    length: 100
+    nullable: true
+    index: true
+    description: "Dimension identifier if this is a dimensional breakdown"
+
+  dimension_value:
+    type: "string"
+    length: 255
+    nullable: true
+    index: true
+    description: "Dimension value (e.g., 'Male', '25-34', 'High Risk')"
+
+  # Aggregated values
+  count:
+    type: "integer"
+    nullable: false
+    default: 0
+    description: "Count of records in this aggregation"
+
+  sum:
+    type: "decimal"
+    precision: 20
+    scale: 2
+    nullable: true
+    description: "Sum aggregation (if applicable)"
+
+  average:
+    type: "decimal"
+    precision: 15
+    scale: 4
+    nullable: true
+    description: "Average/mean value"
+
+  min:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Minimum value"
+
+  max:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Maximum value"
+
+  median:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Median value"
+
+  percentile_25:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "25th percentile"
+
+  percentile_75:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "75th percentile"
+
+  # Product-specific metrics
+  product_id:
+    type: "string"
+    length: 100
+    nullable: true
+    index: true
+    description: "Product identifier if this is product-specific"
+
+  eligible_count:
+    type: "integer"
+    nullable: true
+    description: "Count of eligible applications"
+
+  approval_rate:
+    type: "decimal"
+    precision: 5
+    scale: 2
+    nullable: true
+    description: "Approval rate percentage"
+
+  # Additional aggregations (flexible JSONB)
+  additional_metrics:
+    type: "jsonb"
+    nullable: true
+    description: "Additional metric values as key-value pairs"
+
+  breakdown_details:
+    type: "jsonb"
+    nullable: true
+    description: "Detailed breakdown data"
+
+  # Computation metadata
+  last_computed_at:
+    type: "timestamp"
+    nullable: false
+    default: "now"
+    description: "When this aggregation was last computed"
+
+  computation_duration_ms:
+    type: "integer"
+    nullable: true
+    description: "Time taken to compute this aggregation"
+
+  records_processed:
+    type: "integer"
+    nullable: true
+    description: "Number of source records processed"
+
+  config_version:
+    type: "string"
+    length: 20
+    nullable: true
+    description: "Config version used for computation"
+
+  # Timestamps
+  created_at:
+    type: "timestamp"
+    nullable: false
+    default: "now"
+    index: true
+    description: "Record creation timestamp"
+
+  updated_at:
+    type: "timestamp"
+    nullable: false
+    default: "now"
+    on_update: "now"
+    description: "Record update timestamp"
+
+# Unique constraints to prevent duplicate aggregations
+constraints:
+  - type: "unique"
+    name: "uq_analytics_aggregation"
+    columns: ["use_case_id", "period_type", "period_start", "metric_id", "dimension_id", "dimension_value", "product_id"]
+    description: "Prevent duplicate aggregations for same parameters"
+
+  - type: "check"
+    name: "chk_period_valid"
+    expression: "period_start <= period_end"
+
+  - type: "check"
+    name: "chk_period_type_valid"
+    expression: "period_type IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'all_time')"
+
+# Partitioning strategy (for large datasets)
+partitioning:
+  enabled: true
+  strategy: "range"
+  column: "period_start"
+  interval: "monthly"
+
+# Data retention policy
+retention:
+  enabled: true
+  days: 730  # 2 years
+  archive_after_days: 365

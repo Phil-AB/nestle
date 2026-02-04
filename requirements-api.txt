@@ -1,0 +1,35 @@
+# FastAPI and API dependencies for Nestle Document Processing System
+
+# Core FastAPI
+# Core FastAPI
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+python-multipart==0.0.6
+
+# Pydantic settings
+# Pydantic settings
+pydantic>=2.9.0
+pydantic-settings>=2.4.0
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Background tasks (optional - for production)
+celery==5.3.4
+redis==5.0.1
+
+# HTTP client for webhooks
+httpx==0.25.1
+aiofiles==23.2.1
+
+# Already in main requirements.txt (ensure these are installed):
+# - sqlalchemy
+# - asyncpg
+# - pyyaml
+# - python-dotenv
+
+# Development (optional)
+pytest-asyncio==0.21.1
+httpx==0.25.1  # For testing API endpoints

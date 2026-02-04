@@ -1,0 +1,113 @@
+# Universal Validation Rules Configuration
+# Define validation rules for different document types
+
+# Global validation settings
+global:
+  validation_mode: strict  # strict, lenient, warning_only
+  stop_on_first_error: false
+  confidence_threshold: 0.70
+
+# Validator definitions (for reference)
+validators:
+  # Field validators
+  required:
+    description: "Check if field exists and is not null/empty"
+  pattern:
+    description: "Validate against regex pattern"
+  type_check:
+    description: "Validate data type"
+  range:
+    description: "Validate numeric range"
+  length:
+    description: "Validate string/array length"
+  enum:
+    description: "Validate value is in allowed list"
+  
+  # Advanced validators
+  field_comparison:
+    description: "Compare two fields"
+  field_dependency:
+    description: "Conditional field requirements"
+  formula:
+    description: "Validate calculated fields"
+  aggregate:
+    description: "Validate aggregations over items"
+  
+  # Metadata validators
+  confidence:
+    description: "Check extraction confidence"
+  overall_confidence:
+    description: "Check overall document confidence"
+
+# Document type validation rules
+document_types:
+  # Example: Generic document (minimal validation)
+  generic:
+    validations:
+      - validator: overall_confidence
+        params:
+          min_confidence: 0.70
+          aggregation: "average"
+        severity: warning
+  
+  # Example: Custom document type (add your own!)
+  # You can define any document type with custom validation rules
+  my_document:
+    validations:
+      # Required field example
+      - validator: required
+        field: document_id
+        severity: error
+        message: "Document ID is mandatory"
+      
+      # Pattern validation example
+      - validator: pattern
+        field: reference_code
+        params:
+          pattern: "^[A-Z]{3}-\\d{4,}$"
+        severity: error
+        message: "Reference code must match format: XXX-NNNN"
+      
+      # Type check example
+      - validator: type_check
+        field: amount
+        params:
+          expected_type: "number"
+        severity: error
+      
+      # Range validation example
+      - validator: range
+        field: amount
+        params:
+          min: 0
+          max: 999999999
+        severity: error
+        message: "Amount must be positive and reasonable"
+      
+      # Field comparison example
+      - validator: field_comparison
+        params:
+          field1: start_date
+          operator: "<"
+          field2: end_date
+        severity: warning
+        message: "Start date should be before end date"
+      
+      # Aggregate validation example
+      - validator: aggregate
+        params:
+          items_path: "items"
+          function: "sum"
+          source_field: "amount"
+          target_field: "total_amount"
+          tolerance: 0.01
+        severity: warning
+        message: "Total must equal sum of item amounts"
+      
+      # Confidence check example
+      - validator: confidence
+        params:
+          fields: ["document_id", "amount"]
+          min_confidence: 0.85
+        severity: warning
+        message: "Critical fields have low extraction confidence"

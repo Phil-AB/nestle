@@ -1,0 +1,82 @@
+# ==============================================================================
+# RENDERER CONFIGURATIONS
+# ==============================================================================
+
+renderers:
+  # Microsoft Word (DOCX) Renderer
+  docx:
+    enabled: true
+    engine: python-docx
+    
+    options:
+      preserve_formatting: true
+      auto_adjust_tables: true
+      embed_images: true
+      use_template_cache: true
+      
+    supported_formats:
+      - docx
+    
+    capabilities:
+      supports_tables: true
+      supports_images: true
+      supports_headers_footers: true
+      supports_styles: true
+
+  # PDF Renderer
+  pdf:
+    enabled: false
+    engine: reportlab
+    
+    options:
+      page_size: A4
+      orientation: portrait
+      compression: true
+      embed_fonts: true
+      
+    supported_formats:
+      - pdf
+    
+    capabilities:
+      supports_tables: true
+      supports_images: true
+      supports_vector_graphics: true
+
+  # Excel (XLSX) Renderer
+  excel:
+    enabled: false
+    engine: openpyxl
+    
+    options:
+      auto_width: true
+      freeze_panes: true
+      add_filters: true
+      
+    supported_formats:
+      - xlsx
+      - xls
+    
+    capabilities:
+      supports_tables: true
+      supports_formulas: true
+      supports_charts: true
+      supports_multiple_sheets: true
+
+  # HTML Renderer
+  html:
+    enabled: false
+    engine: jinja2
+    
+    options:
+      minify_output: true
+      include_css: true
+      responsive: true
+      
+    supported_formats:
+      - html
+      - htm
+    
+    capabilities:
+      supports_tables: true
+      supports_images: true
+      supports_javascript: false

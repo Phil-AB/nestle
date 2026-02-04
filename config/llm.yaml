@@ -1,0 +1,298 @@
+# ==============================================================================
+# LLM PROVIDER CONFIGURATION
+# ==============================================================================
+# Centralized configuration for all LLM providers used across the system
+#
+# Supported providers:
+#   - anthropic: Claude models (claude-3-5-sonnet, claude-3-opus, etc.)
+#   - google: Gemini models (gemini-2.5-pro, gemini-2.0-flash-exp, etc.)
+#   - openai: GPT models (gpt-4, gpt-3.5-turbo, etc.)
+#   - custom: OpenAI-compatible endpoints (Ollama, vLLM, etc.)
+#
+# Environment variables required (auto-detected by provider):
+#   - anthropic: ANTHROPIC_API_KEY
+#   - google: GEMINI_API_KEY
+#   - openai: OPENAI_API_KEY
+#   - custom: CUSTOM_LLM_API_KEY (optional)
+
+# ==============================================================================
+# ACTIVE PROVIDER SELECTION
+# ==============================================================================
+# Change this to switch between LLM providers globally
+# Options: anthropic, google, openai, custom
+
+active_provider: google  # Use Gemini for insights
+
+# ==============================================================================
+# PROVIDER CONFIGURATIONS
+# ==============================================================================
+
+providers:
+  # Anthropic (Claude) - Best for instruction following and structured output
+  anthropic:
+    enabled: true
+
+    # Authentication - supports both direct API and AWS Bedrock
+    # For direct API: set ANTHROPIC_API_KEY
+    # For AWS Bedrock: set AWS credentials below and use bedrock_enabled: true
+    api_key_env: ANTHROPIC_API_KEY
+
+    # AWS Bedrock Configuration (alternative to direct API)
+    bedrock_enabled: true  # Set to true to use AWS Bedrock (requires AWS access)
+    aws_access_key_id_env: AWS_ACCESS_KEY_ID
+    aws_secret_access_key_env: AWS_SECRET_ACCESS_KEY
+    aws_region_env: AWS_REGION
+    aws_session_token_env: AWS_SESSION_TOKEN  # Optional, for temporary credentials
+
+    # Model configurations
+    models:
+      # Default model for general tasks
+      default:
+        # AWS Bedrock - Amazon Nova Lite (fast, multimodal, cost-effective)
+        model_id: "amazon.nova-lite-v1:0"
+        temperature: 0.0
+        max_tokens: 8192
+        timeout: 120
+        max_retries: 3
+
+      # Fast model for simple tasks
+      fast:
+        # AWS Bedrock - Amazon Nova Micro (fastest, text-only, cheapest)
+        model_id: "amazon.nova-micro-v1:0"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 60
+        max_retries: 2
+
+      # Powerful model for complex reasoning
+      pro:
+        # AWS Bedrock - Amazon Nova Pro (most powerful with direct invocation)
+        model_id: "amazon.nova-pro-v1:0"
+        temperature: 0.0
+        top_k: 1
+        topP: 1.0
+        max_tokens: 8192
+        timeout: 180
+        max_retries: 3
+
+  # Google (Gemini) - Fast and cost-effective
+  google:
+    enabled: true
+    api_key_env: GEMINI_API_KEY
+
+    models:
+      # Default model for general tasks
+      default:
+        model_id: "gemini-2.5-pro"
+        temperature: 0.0
+        max_tokens: 8192
+        timeout: 120
+        max_retries: 3
+
+      # Fast model for high-volume processing
+      fast:
+        model_id: "gemini-2.0-flash-exp"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 60
+        max_retries: 2
+
+      # Vision model for image/PDF understanding
+      vision:
+        model_id: "gemini-1.5-flash"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 90
+        max_retries: 2
+
+  # OpenAI (GPT) - Widely used and reliable
+  openai:
+    enabled: true
+    api_key_env: OPENAI_API_KEY
+    base_url: null  # Override for OpenAI-compatible endpoints
+
+    models:
+      # Default model for general tasks
+      default:
+        model_id: "gpt-4o"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 120
+        max_retries: 3
+
+      # Fast model for simple tasks
+      fast:
+        model_id: "gpt-4o-mini"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 60
+        max_retries: 2
+
+      # Legacy model (if needed)
+      legacy:
+        model_id: "gpt-3.5-turbo"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 90
+        max_retries: 2
+
+  # Custom endpoints (Ollama, vLLM, local models)
+  custom:
+    enabled: false
+    api_key_env: CUSTOM_LLM_API_KEY  # Optional for local models
+    base_url_env: CUSTOM_LLM_BASE_URL  # Required: e.g., "http://localhost:11434/v1"
+
+    models:
+      # Example: Ollama with Llama 2
+      default:
+        model_id: "llama2"
+        temperature: 0.0
+        max_tokens: 4096
+        timeout: 180
+        max_retries: 1
+
+# ==============================================================================
+# MODULE-SPECIFIC CONFIGURATIONS
+# ==============================================================================
+# Each module can specify which provider/model variant to use
+
+modules:
+  # AI Semantic Enhancement - Post-processing for extraction
+  ai_semantic_enhancer:
+    provider: anthropic  # Best for structured extraction
+    model_variant: default  # Uses provider's default model
+    description: "Intelligent parsing of section-based content (exporter, consignee, etc.)"
+
+  # Population Agent - Form population and field mapping
+  population_agent:
+    provider: anthropic  # Best for reasoning and mapping
+    model_variant: pro  # Uses most powerful model for accuracy
+    description: "Multi-step reasoning for PDF form population"
+
+  # Population Tools - Field mapping and validation
+  population_tools:
+    provider: google  # Fast and cost-effective for batch mapping
+    model_variant: fast  # Speed is important for batch processing
+    description: "Semantic field mapping with fuzzy matching"
+
+  # Form Generation - Dynamic form creation
+  form_generation:
+    provider: anthropic
+    model_variant: default
+    description: "Understanding form structure and requirements"
+
+  # Vision Tasks - Image/PDF analysis
+  vision:
+    provider: google  # Gemini has excellent vision capabilities
+    model_variant: vision
+    description: "PDF field detection and visual analysis"
+
+  # Insights Service - Banking customer insights and risk assessment
+  insights_service:
+    provider: anthropic  # Use Claude via AWS Bedrock
+    model_variant: pro  # Claude Sonnet 4.5 (most powerful model)
+    description: "AI-powered banking customer insights and risk assessment via AWS Bedrock"
+
+  # Automation Agent - Automated approval workflows
+  automation_agent:
+    provider: anthropic  # Use Claude Haiku for fast automation
+    model_variant: fast  # Claude 3.5 Haiku
+    description: "Automated approval for low-risk loan applications"
+
+# ==============================================================================
+# PERFORMANCE AND RETRY SETTINGS
+# ==============================================================================
+
+performance:
+  # Request timeout (can be overridden per model)
+  default_timeout: 120
+
+  # Maximum concurrent requests
+  max_concurrent_requests: 10
+
+  # Rate limiting (requests per minute)
+  rate_limit:
+    anthropic: 50
+    google: 60
+    openai: 100
+    custom: 30
+
+retry_policy:
+  max_retries: 3
+  initial_delay: 1.0  # seconds
+  max_delay: 10.0  # seconds
+  exponential_backoff: true
+  backoff_multiplier: 2.0
+
+  # Retry on specific errors
+  retry_on_timeout: true
+  retry_on_rate_limit: true
+  retry_on_server_error: true  # 5xx errors
+
+# ==============================================================================
+# FALLBACK CONFIGURATION
+# ==============================================================================
+# If primary provider fails, automatically fallback to backup
+
+fallback:
+  enabled: true
+  # Priority order for fallback
+  provider_priority:
+    - anthropic  # Try Claude first
+    - google     # Then Gemini
+    - openai     # Then GPT
+  max_fallback_attempts: 2  # Try up to 2 backup providers
+
+# ==============================================================================
+# LOGGING AND MONITORING
+# ==============================================================================
+
+monitoring:
+  # Log LLM requests and responses
+  log_requests: false  # Set true for debugging (can be verbose)
+  log_responses: false
+  log_errors: true
+
+  # Track token usage
+  track_tokens: true
+  log_token_counts: true
+
+  # Performance monitoring
+  track_latency: true
+  log_slow_requests: true
+  slow_request_threshold: 5.0  # seconds
+
+# ==============================================================================
+# COST OPTIMIZATION
+# ==============================================================================
+
+cost_optimization:
+  # Use smaller models for simple tasks
+  use_fast_models_when_possible: true
+
+  # Cache LLM responses for identical inputs
+  enable_cache: true
+  cache_ttl: 3600  # seconds (1 hour)
+
+  # Batch similar requests
+  enable_batching: true
+  batch_size: 10
+  batch_timeout: 5.0  # seconds
+
+# ==============================================================================
+# SECURITY
+# ==============================================================================
+
+security:
+  # Validate API keys on startup
+  validate_keys_on_init: true
+
+  # Mask API keys in logs
+  mask_api_keys_in_logs: true
+
+  # Sanitize prompts before sending (remove sensitive data)
+  sanitize_prompts: false  # Enable if processing sensitive documents
+
+  # Allowed model names (whitelist)
+  # Empty list means all models are allowed
+  allowed_models: []

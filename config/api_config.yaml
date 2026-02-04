@@ -1,0 +1,208 @@
+# API Configuration
+# Additional API settings beyond environment variables
+
+# API Metadata
+api:
+  title: "Nestle Document Processing API"
+  description: "Production-grade REST API for intelligent document extraction and validation"
+  version: "1.0.0"
+  contact:
+    name: "API Support"
+    email: "api-support@nestle.com"
+  license:
+    name: "Proprietary"
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4  # Number of Uvicorn workers for production
+  reload: false  # Set to true in development
+
+# CORS Configuration
+cors:
+  enabled: true
+  origins:
+    - "http://localhost:3000"  # React default
+    - "http://localhost:8080"  # Vue default
+    - "http://localhost:4200"  # Angular default
+  methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  headers:
+    - "*"
+  credentials: true
+
+# Authentication
+auth:
+  enabled: true
+  # API keys should be set in environment variables
+  # API_KEYS=key1,key2,key3
+  require_https: false  # Set to true in production
+  api_key_header: "X-API-Key"
+
+  # JWT settings (for future OAuth implementation)
+  jwt:
+    algorithm: "HS256"
+    access_token_expire_minutes: 30
+    refresh_token_expire_days: 7
+
+# Rate Limiting
+rate_limit:
+  enabled: true
+  requests_per_window: 100
+  window_seconds: 60
+
+  # Per-endpoint overrides
+  endpoints:
+    "/api/v1/documents/upload":
+      requests_per_window: 20
+      window_seconds: 60
+    "/api/v1/documents/":
+      requests_per_window: 200
+      window_seconds: 60
+
+# File Upload
+upload:
+  max_size_mb: 50
+  allowed_extensions:
+    - pdf
+    - png
+    - jpg
+    - jpeg
+    - tiff
+    - xlsx
+    - xls
+  storage:
+    type: "local"  # local, s3, azure
+    path: "uploads/"
+
+  # S3 Configuration (if using S3)
+  s3:
+    bucket: "nestle-documents"
+    region: "us-east-1"
+    prefix: "uploads/"
+
+# Background Tasks
+background_tasks:
+  enabled: true
+  max_concurrent: 5
+  timeout_seconds: 300
+
+  # Celery configuration (for production)
+  celery:
+    broker_url: "redis://localhost:6379/0"
+    result_backend: "redis://localhost:6379/0"
+    task_serializer: "json"
+    result_serializer: "json"
+    accept_content:
+      - "json"
+
+# Webhooks
+webhooks:
+  enabled: false
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  timeout_seconds: 30
+
+  # Events that trigger webhooks
+  events:
+    - "extraction.completed"
+    - "extraction.failed"
+    - "validation.completed"
+    - "validation.failed"
+
+# Response Configuration
+response:
+  # Control what data is included in responses
+  include_raw_data: false  # Raw parser output
+  include_layout_data: false  # Document layout structure
+  include_metadata: true  # Extraction metadata
+
+  # Pagination
+  default_page_size: 50
+  max_page_size: 100
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json or text
+
+  # Log files
+  file:
+    enabled: true
+    path: "logs/api.log"
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+
+# Monitoring
+monitoring:
+  enabled: false
+
+  # Prometheus metrics
+  prometheus:
+    enabled: false
+    path: "/metrics"
+
+  # Health checks
+  health_check:
+    path: "/health"
+    include_services: true  # Include dependent service status
+
+# Performance
+performance:
+  # Enable response compression
+  gzip_compression: true
+  gzip_minimum_size: 1000
+
+  # Connection pooling
+  db_pool_size: 10
+  db_max_overflow: 20
+
+  # Caching
+  cache:
+    enabled: false
+    backend: "redis"  # redis, memcached
+    ttl_seconds: 300
+
+# Security
+security:
+  # Request validation
+  max_request_size_mb: 100
+
+  # Headers
+  add_security_headers: true
+  security_headers:
+    X-Content-Type-Options: "nosniff"
+    X-Frame-Options: "DENY"
+    X-XSS-Protection: "1; mode=block"
+    Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+
+  # HTTPS
+  force_https: false  # Set to true in production
+
+# Documentation
+docs:
+  enabled: true
+  swagger_ui: true
+  redoc: true
+
+  # Custom documentation
+  openapi_url: "/openapi.json"
+  docs_url: "/docs"
+  redoc_url: "/redoc"
+
+  # API examples and descriptions
+  include_examples: true
+  include_schemas: true
+
+# Feature Flags
+features:
+  enable_batch_upload: false
+  enable_async_processing: true
+  enable_webhooks: false
+  enable_export: true
+  enable_validation: true

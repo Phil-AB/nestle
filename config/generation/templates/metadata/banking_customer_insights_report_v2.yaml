@@ -1,0 +1,68 @@
+# Banking Customer Insights Report V2 Template Metadata
+# Matches the UI layout from the insights page
+
+template_id: banking_customer_insights_report_v2
+template_name: Banking Customer Insights Report V2
+template_format: html
+template_path: banking_customer_insights_report_v2.html
+template_file: banking_customer_insights_report_v2.html
+description: |
+  Modern, card-based layout matching the UI insights page with:
+  - Customer profile section
+  - Visual risk score card with color coding
+  - Detailed risk reasoning chain
+  - Product eligibility cards
+  - Recommendations with color-coded categories
+  - Automated decisions grid
+
+version: "2.0"
+created_date: "2026-02-02"
+category: banking
+
+# Template capabilities
+capabilities:
+  supports_insights_generation: true
+  supports_multi_source: false
+  supports_benchmarks: true
+  requires_ai_insights: true
+
+# Required input fields
+required_fields:
+  - customer_name
+  - risk_score
+
+# Optional fields with defaults
+optional_fields:
+  - age
+  - employment_status
+  - occupation
+  - employer
+  - estimated_monthly_income
+  - risk_level
+  - creditworthiness
+  - scoring_breakdown
+  - factors
+  - product_eligibility
+
+# Insights configuration
+insights_config:
+  enabled: true
+  service: banking_insights
+  enabled_insights:
+    - risk_assessment
+    - product_eligibility
+    - recommendations
+    - automated_decisions
+
+# Output configuration
+output:
+  format: pdf
+  filename_pattern: "customer_insights_{customer_name}_{timestamp}.pdf"
+  page_size: A4
+  orientation: portrait
+
+# Security and compliance
+security:
+  data_classification: confidential
+  retention_days: 365
+  audit_logging: true

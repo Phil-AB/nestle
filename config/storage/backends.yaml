@@ -1,0 +1,53 @@
+# Storage Backends Configuration
+# Define storage backends and routing rules
+
+storage:
+  # Default backend to use when no specific routing is defined
+  default_backend: postgresql
+  
+  # Backend configurations
+  backends:
+    # PostgreSQL backend (JSONB-based flexible storage)
+    postgresql:
+      type: postgresql
+      table_name: documents
+      connection:
+        # Connection details come from environment variables
+        host: ${DB_HOST}
+        port: ${DB_PORT}
+        database: ${DB_NAME}
+        user: ${DB_USER}
+        password: ${DB_PASSWORD}
+  
+  # Document type routing (which backend for which document type)
+  routing:
+    # Default for all document types
+    default: postgresql
+    
+    # Override for specific document types
+    overrides:
+      # Example: route large_documents to S3 (if configured)
+      # large_documents: s3
+  
+  # Multi-backend storage (store in multiple backends simultaneously)
+  multi_store:
+    enabled: false  # Set to true to enable multi-backend storage
+    strategy: async  # async or sync
+    backends:
+      - postgresql  # Primary
+      # - s3  # Backup (if configured)
+
+# Example: Add more backends as needed
+#   mongodb:
+#     type: mongodb
+#     connection:
+#       uri: ${MONGO_URI}
+#       database: documents
+#   
+#   s3:
+#     type: s3
+#     connection:
+#       bucket: ${S3_BUCKET}
+#       region: ${AWS_REGION}
+#       access_key: ${AWS_ACCESS_KEY}
+#       secret_key: ${AWS_SECRET_KEY}

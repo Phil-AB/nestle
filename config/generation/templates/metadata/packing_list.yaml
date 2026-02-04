@@ -1,0 +1,43 @@
+template_id: packing_list
+template_name: Packing List
+template_format: docx
+description: Detailed list of items in shipment packages for logistics and customs
+version: "1.0"
+template_path: config/generation/templates/files/packing_list.docx
+
+# Required fields
+required_fields:
+  - packing_list_number
+  - packing_date
+  - consignee_name
+  - shipper_name
+  - total_packages
+
+# Optional fields
+optional_fields:
+  - consignee_address
+  - shipper_address
+  - total_gross_weight
+  - total_net_weight
+  - vessel_name
+  - voyage_number
+  - container_number
+  - seal_number
+  - remarks
+
+# Table support
+supports_tables: true
+supports_images: false
+
+# Table definitions
+tables:
+  - table_id: packages
+    description: Package details with contents
+    columns:
+      - package_number
+      - package_type
+      - description
+      - quantity
+      - gross_weight
+      - net_weight
+      - dimensions

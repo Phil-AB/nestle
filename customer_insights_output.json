@@ -1,0 +1,168 @@
+{
+  "customer_profile": {
+    "customer_name": "ELLE BISHOP",
+    "customer_id": "<empty>",
+    "age": 35,
+    "gender": "Male",
+    "marital_status": "Single",
+    "nationality": "AMERICAN",
+    "employment_status": "Employed",
+    "occupation": "TERRAFORM SPECIALIST",
+    "employer": "MARS TERRAFORMING",
+    "education": "Undergraduate",
+    "income_range": "Less than 1,000",
+    "estimated_monthly_income": 800,
+    "account_number": "1234567890123"
+  },
+  "risk_assessment": {
+    "risk_score": 61,
+    "risk_level": "Low-Medium",
+    "creditworthiness": "Good",
+    "factors": {
+      "positive": [
+        "Applicant is employed, indicating a stable and regular source of income.",
+        "At 35 years old, the applicant is in the prime working age demographic.",
+        "Holds an undergraduate degree, suggesting good earning potential.",
+        "Source of funds is salary, which is considered a reliable and predictable income source."
+      ],
+      "concerns": [
+        "The declared monthly income of GHS 800.00 is extremely low and falls into the 'Limited income capacity' category, which is a significant risk factor.",
+        "There is a notable mismatch between the specialized job title ('Terraform Specialist'), university education, and the very low income.",
+        "The stated employer ('Mars Terraforming') and occupation are highly unusual and warrant further due diligence and verification."
+      ]
+    }
+  },
+  "product_eligibility": {
+    "extra_cash": {
+      "eligible": false,
+      "max_amount": 0,
+      "recommended_amount": 0,
+      "interest_rate": 0,
+      "term_months": 0,
+      "monthly_fee": 0,
+      "annual_fee": 0,
+      "credit_limit": 0,
+      "overdraft_limit": 0,
+      "confidence": 0.95,
+      "reason": "Customer's monthly income of GHS 800.00 is below the minimum requirement of GHS 1,000.",
+      "benefits": [],
+      "upgrade_recommended": false
+    },
+    "extra_balance": {
+      "eligible": false,
+      "max_amount": 0,
+      "recommended_amount": 0,
+      "interest_rate": 0,
+      "term_months": 0,
+      "monthly_fee": 0,
+      "annual_fee": 0,
+      "credit_limit": 0,
+      "overdraft_limit": 0,
+      "confidence": 0.98,
+      "reason": "Customer's monthly income of GHS 800.00 is below the minimum requirement of GHS 1,000. Additionally, this facility requires a current account, and the customer holds a savings account.",
+      "benefits": [],
+      "upgrade_recommended": false
+    },
+    "credit_card": {
+      "eligible": false,
+      "max_amount": 0,
+      "recommended_amount": 0,
+      "interest_rate": 0,
+      "term_months": 0,
+      "monthly_fee": 0,
+      "annual_fee": 0,
+      "credit_limit": 0,
+      "overdraft_limit": 0,
+      "confidence": 0.99,
+      "reason": "Customer's monthly income of GHS 800.00 is significantly below the minimum requirement of GHS 2,000.",
+      "benefits": [],
+      "upgrade_recommended": false
+    },
+    "premium_account": {
+      "eligible": false,
+      "max_amount": 0,
+      "recommended_amount": 0,
+      "interest_rate": 0,
+      "term_months": 0,
+      "monthly_fee": 0,
+      "annual_fee": 0,
+      "credit_limit": 0,
+      "overdraft_limit": 0,
+      "confidence": 0.99,
+      "reason": "Customer's monthly income of GHS 800.00 is significantly below the minimum requirement of GHS 3,000.",
+      "benefits": [],
+      "upgrade_recommended": false
+    },
+    "overall_recommendation": "The customer is not eligible for any of the assessed credit or premium products due to their monthly income being below the minimum threshold for each product. While the risk profile is favorable, the income level is the primary disqualifying factor. It is recommended that the customer continues with their current savings account and considers reapplying if their income increases in the future."
+  },
+  "recommendations": {
+    "account_upgrades": [
+      {
+        "category": "account_upgrade",
+        "title": "Plan for a Future Account Upgrade",
+        "description": "While you are not currently eligible for our Gold or Premium accounts, focusing on increasing your monthly income will unlock access to accounts with higher interest rates, fewer fees, and priority customer service in the future.",
+        "priority": "low",
+        "reasoning": "The customer's current income of GHS 800.00 is below the minimum threshold required for premium account tiers. This recommendation sets a long-term goal."
+      }
+    ],
+    "cross_sell_products": [
+      {
+        "category": "cross_sell",
+        "title": "Apply for a Salary Advance",
+        "description": "As an employed customer with a steady income, a Salary Advance can provide a crucial safety net for unexpected expenses, allowing you to access a portion of your salary before payday.",
+        "priority": "high",
+        "reasoning": "This product directly addresses potential cash flow challenges for a customer with a low monthly income but stable employment, offering immediate practical value."
+      },
+      {
+        "category": "cross_sell",
+        "title": "Consider an Extra Balance Overdraft",
+        "description": "An overdraft facility can provide a buffer for your account, preventing declined payments for small amounts if your balance is temporarily low. We can check your eligibility for this service.",
+        "priority": "medium",
+        "reasoning": "Offers financial flexibility and a safety net. It is a lower priority than a salary advance as eligibility might be stricter, but it's a relevant option to explore."
+      }
+    ],
+    "next_steps": [
+      {
+        "category": "next_step",
+        "title": "Verify and Update Your Income Information",
+        "description": "Your recorded income of GHS 800.00 seems low for your profession. Please provide us with your most recent payslip to ensure our records are accurate. This is the most important step to unlock better products and services.",
+        "priority": "high",
+        "reasoning": "A potential data discrepancy is the biggest barrier to the customer's financial options. Correcting this is the highest-impact action they can take."
+      },
+      {
+        "category": "next_step",
+        "title": "Build an Emergency Fund",
+        "description": "We strongly recommend setting up a small, automatic monthly transfer to your savings account to build an emergency fund. Having 3-6 months of living expenses saved provides critical financial security.",
+        "priority": "high",
+        "reasoning": "Building an emergency fund is a fundamental step towards financial stability, especially with a limited income. It is a crucial recommendation for long-term financial health."
+      },
+      {
+        "category": "next_step",
+        "title": "Schedule a Free Financial Health Check",
+        "description": "Book a complimentary session with one of our financial advisors to create a personalized budget, discuss your financial goals, and build a roadmap to achieve them.",
+        "priority": "medium",
+        "reasoning": "Provides personalized, expert guidance to help the customer manage their finances effectively and plan for the future, which builds a stronger customer relationship."
+      }
+    ],
+    "summary": "Hello Elle, our recommendations are focused on building a strong financial foundation for you. The most critical first step is to update your income information with us. We also highly recommend starting an emergency fund and considering a Salary Advance for short-term flexibility. As your financial profile grows, we can explore more advanced products and account upgrades together."
+  },
+  "benchmarks": {
+    "income_percentile": 50,
+    "income_comparison": "Insufficient data for comparison",
+    "age_group_avg_income": 2500,
+    "similar_profile_count": 0,
+    "approval_likelihood": "Pending more data"
+  },
+  "automated_decisions": {
+    "account_approval": "AUTO_APPROVE",
+    "credit_pre_qualification": "APPROVED",
+    "tier_assignment": "Standard",
+    "relationship_manager_needed": false,
+    "recommended_branch": "Accra Main Branch",
+    "priority_level": "Standard",
+    "overall_decision": "Account auto-approved for a Standard tier with credit pre-qualification. No relationship manager or high priority service assigned.",
+    "reasoning": "The customer's risk score of 61 meets the thresholds for automatic account approval (\u226550) and credit pre-qualification (\u226560). The account is assigned the 'Standard' tier as the risk score is \u226550, but income and risk score do not meet the criteria for Gold or Premium. A relationship manager and high priority service are not required as both income and risk score are below the specified thresholds."
+  },
+  "generated_at": "2026-01-28T16:53:32.621513",
+  "generation_method": "llm"
+}

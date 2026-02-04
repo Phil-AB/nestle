@@ -1,0 +1,62 @@
+# ==============================================================================
+# DATA SOURCE CONFIGURATIONS
+# ==============================================================================
+
+data_sources:
+  # PostgreSQL Data Provider
+  postgres:
+    enabled: true
+    connection_env: DATABASE_URL
+    
+    options:
+      pool_size: 20
+      max_overflow: 10
+      timeout: 30
+      
+    query_types:
+      - document_id
+      - custom_query
+      - table_query
+    
+    queries:
+      get_document:
+        table: api_documents
+        fields: "*"
+        where: "id = :document_id"
+
+  # Static Data Provider
+  static:
+    enabled: true
+    
+    options:
+      data_directory: ./config/generation/static_data/
+      
+    query_types:
+      - static_key
+      - data
+    
+    data_sets:
+      test_invoice:
+        fields:
+          invoice_number: "INV-TEST-001"
+          invoice_date: "2025-01-15"
+          currency: "USD"
+          buyer_name: "Test Company"
+          seller_name: "Nestle Inc."
+          total_amount: 1000.00
+        items:
+          - description: "Test Item 1"
+            quantity: 10
+            unit_price: 50.00
+            total: 500.00
+          - description: "Test Item 2"
+            quantity: 20
+            unit_price: 25.00
+            total: 500.00
+
+# Global settings
+global:
+  default_provider: postgres
+  fallback_provider: static
+  enable_caching: true
+  cache_ttl: 300

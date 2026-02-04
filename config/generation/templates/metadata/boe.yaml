@@ -1,0 +1,197 @@
+template_id: boe
+template_name: Bill of Entry (BOE) - Ghana Customs
+template_format: html
+version: "3.0"
+template_path: config/generation/templates/files/boe.html
+description: Ghana Revenue Authority (GRA) Customs Division Bill of Entry declaration form for import/export (PDF output with HTML styling)
+
+# Required fields - core customs declaration data
+required_fields:
+  # Header fields
+  - regime
+  - office_code
+  - manifest_number
+  - bl_awb_number
+  - declaration_number
+  - declaration_date
+  - gross_mass_kg
+  - total_items
+  - total_packages
+  - reference_number
+
+  # Party information
+  - exporter_name
+  - exporter_address
+  - importer_number
+  - importer_name
+  - importer_address
+  - consignee_number
+  - consignee_name
+  - consignee_address
+  - declarant_number
+  - declarant_name
+  - declarant_address
+  - country_code
+  - country_name
+
+  # Financial data
+  - delivery_terms
+  - delivery_place
+  - total_invoice_fcy
+  - invoice_currency
+  - total_fob_fcy
+  - currency_code
+  - exchange_rate
+  - fob_local_currency
+
+  # Shipping details
+  - transport_mode
+  - vessel_name
+  - port_of_loading_code
+  - port_of_loading_name
+  - place_of_shipment
+  - entry_office
+  - valuation_method
+  - crms_level
+
+  # Items (array)
+  - items
+
+  # Customs value
+  - customs_value
+
+  # Tax totals
+  - tax_base
+  - total_taxes_payable
+
+# Optional fields - additional details and placeholders
+optional_fields:
+  # Additional header
+  - cl_plan
+
+  # Banking
+  - bank_code
+  - payment_terms
+  - bank_name
+  - bank_branch
+  - account_number
+
+  # Documents
+  - attached_documents
+  - container_numbers
+  - marks_and_numbers
+
+  # Additional customs
+  - licence_type
+  - licence_number
+  - warehouse_id
+  - previous_declaration
+
+  # Tax breakdown - all optional with placeholders
+  - import_duty_rate
+  - import_duty_amount
+  - vat_base
+  - vat_rate
+  - vat_amount
+  - processing_base
+  - processing_rate
+  - processing_amount
+  - ecowas_base
+  - ecowas_rate
+  - ecowas_amount
+  - network_base
+  - network_rate
+  - network_amount
+  - nhil_base
+  - nhil_rate
+  - nhil_amount
+  - shippers_base
+  - shippers_rate
+  - shippers_amount
+  - irs_base
+  - irs_rate
+  - irs_amount
+  - exim_base
+  - exim_rate
+  - exim_amount
+  - get_base
+  - get_rate
+  - get_amount
+  - inspection_base
+  - inspection_rate
+  - inspection_amount
+  - au_base
+  - au_rate
+  - au_amount
+
+  # Accounting
+  - receipt_number
+  - bank_guarantee
+  - bg_amount
+  - payment_mode
+  - payment_date
+
+  # Declaration
+  - declarant_full_name
+
+  # Footer
+  - doc_status
+  - user_reference
+  - page_number
+
+supports_tables: true
+supports_images: false
+
+# Field descriptions for mapping guidance
+field_descriptions:
+  regime: "Import/Export regime code (e.g., 40 for Import)"
+  office_code: "GRA office code (e.g., TMA1 for Tema)"
+  manifest_number: "Shipping manifest number"
+  bl_awb_number: "Bill of Lading or Airway Bill number"
+  declaration_number: "Customs declaration reference number"
+  declaration_date: "Date of customs declaration (DD/MM/YYYY)"
+  gross_mass_kg: "Total gross weight in kilograms"
+  total_items: "Total number of line items"
+  total_packages: "Total number of packages/containers"
+  items: "Array of line items with HS codes, quantities, values, duties"
+  customs_value: "Total customs valuation amount (FOB + Freight + Insurance)"
+  tax_base: "Base amount for tax calculation"
+  total_taxes_payable: "Total of all duties and taxes"
+  crms_level: "Customs Risk Management System level (Red/Yellow/Green)"
+  valuation_method: "Customs valuation method used"
+
+# Item structure for items array
+item_structure:
+  - item_number: "Line item number"
+  - hs_code: "Harmonized System commodity code"
+  - description: "Item description"
+  - quantity: "Item quantity"
+  - unit: "Unit of measurement"
+  - country_of_origin: "Country of origin code"
+  - zone: "Customs zone"
+  - cpc: "Customs Procedure Code"
+  - gross_weight: "Gross weight in kg"
+  - net_weight: "Net weight in kg"
+  - fob_fcy: "FOB value in foreign currency"
+  - fob_ncy: "FOB value in local currency"
+  - freight_ncy: "Freight charges in local currency"
+  - insurance_ncy: "Insurance value in local currency"
+  - other_costs: "Other costs"
+  - supp_unit_1: "Supplementary unit 1"
+  - supp_unit_2: "Supplementary unit 2"
+
+# Mapping hints for invoice → BOE conversion
+mapping_hints:
+  exporter_name: "supplier_name or seller_name from invoice"
+  exporter_address: "supplier_address from invoice"
+  importer_name: "buyer_name or customer_name from invoice"
+  importer_address: "buyer_address or shipping_address from invoice"
+  consignee_name: "ship_to_name or buyer_name from invoice"
+  consignee_address: "shipping_address from invoice"
+  total_invoice_fcy: "invoice_total or total_amount from invoice"
+  invoice_currency: "currency from invoice"
+  delivery_terms: "incoterms or delivery_terms from invoice (e.g., CFR, FOB, CIF)"
+  items: "line_items array from invoice"
+  vessel_name: "From freight/shipping document if available"
+  hs_code: "Requires manual entry or HS code lookup based on product description"
+  customs_value: "Calculated as FOB + Freight + Insurance"

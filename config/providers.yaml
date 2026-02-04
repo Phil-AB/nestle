@@ -1,0 +1,103 @@
+# OCR Provider Configuration
+# Configure which provider to use and provider-specific settings
+
+# ==============================================================================
+# ACTIVE PROVIDER SELECTION
+# ==============================================================================
+# Change this to switch providers (reducto, google_document_ai)
+active_provider: reducto
+
+# ==============================================================================
+# PROVIDER CREDENTIALS AND CONFIGURATION
+# ==============================================================================
+
+providers:
+  # Reducto API Configuration
+  reducto:
+    enabled: true
+    api_key_env: REDUCTO_API_KEY
+    base_url: https://platform.reducto.ai
+    timeout: 120
+
+    # Reducto-specific options
+    options:
+      # Enable accurate table clustering for spreadsheets
+      accurate_clustering: true
+      # Return structured JSON with schema
+      structured_output: true
+
+  # Google Document AI Configuration
+  google_document_ai:
+    enabled: true
+
+    # Google Cloud credentials
+    credentials_env: GOOGLE_APPLICATION_CREDENTIALS  # Path to service account JSON
+    project_id_env: GOOGLE_CLOUD_PROJECT
+    location: us  # Processor location (us, eu, asia-northeast1)
+
+    # Processor IDs for different document types
+    # You need to create processors in Google Cloud Console first
+    processors:
+      invoice: ""  # Will be set when processor is created
+      boe: ""
+      packing_list: ""
+      coo: ""
+      freight: ""
+      # Generic processor for unknown document types
+      general: ""
+
+    # Google-specific options
+    options:
+      # Enable handwriting detection
+      enable_native_pdf_parsing: true
+      # Enable table extraction
+      enable_form_extraction: true
+
+# ==============================================================================
+# PROVIDER CAPABILITIES
+# ==============================================================================
+# This helps the system understand what each provider can do
+
+capabilities:
+  reducto:
+    # What features does Reducto support?
+    supports_schema_extraction: true
+    supports_tables: true
+    supports_handwriting: true
+    supports_forms: true
+    max_file_size_mb: 50
+    supported_formats:
+      - pdf
+      - png
+      - jpg
+      - jpeg
+      - tiff
+
+  google_document_ai:
+    supports_schema_extraction: false  # Google uses processors, not schemas
+    supports_tables: true
+    supports_handwriting: true
+    supports_forms: true
+    max_file_size_mb: 20
+    supported_formats:
+      - pdf
+      - png
+      - jpg
+      - jpeg
+      - tiff
+      - gif
+      - bmp
+
+# ==============================================================================
+# RETRY AND TIMEOUT CONFIGURATION
+# ==============================================================================
+retry_policy:
+  max_retries: 3
+  retry_delay_seconds: 2
+  exponential_backoff: true
+  backoff_multiplier: 2
+
+timeout_policy:
+  upload_timeout: 30
+  extraction_timeout: 120
+  health_check_timeout: 5

@@ -1,0 +1,591 @@
+template_id: boe
+mapping_version: "2.0"
+description: Map extracted invoice data to Ghana Customs BOE template with placeholders
+
+# Data source
+data_source:
+  provider: postgres
+  query: by_document_id
+
+# Direct field mappings - DUAL MODE: Invoice → BOE OR BOE → BOE
+# Supports both invoice data and extracted BOE data as source
+field_mappings:
+  # HEADER SECTION (Fields 1-6, A)
+  regime:
+    source: fields.regime
+    fallback: [fields.regime_45_cl_plan_a_office_code]
+    default: "40"  # 40 = Import, 10 = Export
+
+  office_code:
+    source: fields.office_code
+    fallback: [fields.regime_45_cl_plan_a_office_code, fields.entry_exit]
+    default: "TMA1"  # Tema port code
+
+  manifest_number:
+    source: fields.manifest_number
+    fallback: [fields.booking_ref, fields.bl_number]
+    default: "PENDING"  # Assigned by port/shipping line
+
+  bl_awb_number:
+    source: fields.b_l_no
+    fallback: [fields.bl_number, fields.awb_number, fields.bill_of_lading_number]
+    default: "[BL/AWB_NO]"
+
+  declaration_number:
+    source: fields.declaration_number
+    fallback: [fields.invoice_number, fields.reference]
+    default: "DRAFT"  # Will be assigned by GRA upon submission
+
+  declaration_date:
+    source: fields.date
+    fallback: [fields.date_of_issue, created_at]
+    transformation: format_date
+    transformation_params:
+      format: "%d/%m/%Y"
+    default: "[DD/MM/YYYY]"
+
+  gross_mass_kg:
+    source: fields.gross_weight
+    fallback: [fields.total_weight, fields.gross, fields.weight, fields.measurement]
+    default: "0.00"
+
+  total_items:
+    source: items_count
+    fallback: [fields.items, fields.total_items]
+    default: "0"
+
+  total_packages:
+    source: fields.total_packages
+    fallback: [fields.number_of_containers, fields.items]
+    default: "1"
+
+  reference_number:
+    source: fields.invoice_no
+    fallback: [fields.ref_no, fields.booking_ref, fields.reference_number, fields.reference]
+    default: "[REF_NO]"
+
+  # PARTY INFORMATION (Fields 7-11)
+  exporter_name:
+    source: fields.exporter_shipper
+    fallback: [fields.shipper_exporter, fields.supplier_name, fields.seller_name, fields.exporter, fields.shipper]
+    default: "[EXPORTER_NAME]"
+
+  exporter_address:
+    source: fields.exporter_shipper
+    fallback: [fields.shipper_exporter, fields.supplier_address, fields.seller_address, fields.exporter_address]
+    default: "[EXPORTER_ADDRESS]"
+
+  importer_number:
+    source: fields.importer_number
+    fallback: [fields.buyer_tin, fields.importer_tin, fields.importer]
+    default: "IMPORTER TIN REQUIRED"
+
+  importer_name:
+    source: fields.consignee_importer
+    fallback: [fields.consignee, fields.buyer_name, fields.importer, fields.importer_name]
+    default: "[IMPORTER_NAME]"
+
+  importer_address:
+    source: fields.consignee_importer
+    fallback: [fields.consignee, fields.buyer_address, fields.importer, fields.importer_address]
+    default: "[IMPORTER_ADDRESS]"
+
+  consignee_number:
+    source: fields.consignee_number
+    fallback: [fields.buyer_tin, fields.consignee_tin, fields.importer_tin]
+    default: "CONSIGNEE TIN REQUIRED"
+
+  consignee_name:
+    source: fields.consignee_importer
+    fallback: [fields.consignee, fields.buyer_name]
+    default: "[CONSIGNEE_NAME]"
+
+  consignee_address:
+    source: fields.consignee_importer
+    fallback: [fields.consignee, fields.shipping_address, fields.buyer_address, fields.delivery_address]
+    default: "[CONSIGNEE_ADDRESS]"
+
+  declarant_number:
+    source: fields.declarant_number
+    fallback: [fields.customs_broker_number, fields.declarant_representative_ms_a_no]
+    default: "TO BE ASSIGNED BY BROKER"
+
+  declarant_name:
+    source: fields.declarant_name
+    fallback: [fields.customs_broker_name, fields.declarant_representative_ms_a_no]
+    default: "TO BE ASSIGNED BY BROKER"
+
+  declarant_address:
+    source: fields.declarant_address
+    fallback: [fields.customs_broker_address, fields.declarant_representative_ms_a_no]
+    default: "TO BE ASSIGNED BY BROKER"
+
+  country_code:
+    source: fields.country_of_origin_code
+    fallback: [fields.country_code, fields.origin_country_code, fields.country]
+    default: "JP"
+
+  country_name:
+    source: fields.country_of_origin
+    fallback: [fields.country, fields.origin_country, fields.origin, fields.cty_org_dest]
+    default: "Japan"
+
+  licence_type:
+    source: fields.licence_type
+    fallback: [fields.type]
+    default: ""
+
+  # FINANCIAL DETAILS (Fields 12-16, 19-20)
+  delivery_terms:
+    source: fields.incoterms
+    fallback: [fields.delivery_terms, fields.delivery]
+    default: "CFR"
+
+  delivery_place:
+    source: fields.place_of_delivery
+    fallback: [fields.port_of_discharge, fields.discharge_port, fields.pod, fields.destination, fields.place, fields.delivery]
+    default: "TEMA"
+
+  total_invoice_fcy:
+    source: fields.total_amount_chargeable
+    fallback: [fields.invoice_total, fields.total_amount, fields.total, fields.total_jpy, fields.invoice_value]
+    default: "0.00"
+
+  invoice_currency:
+    source: fields.currency
+    fallback: [fields.foreign_currency_code, fields.curr, fields.invoice_currency, fields.local_currency]
+    default: "JPY"
+
+  total_fob_fcy:
+    source: fields.fob_value
+    fallback: [fields.total_amount, fields.fob, fields.total, fields.unit_price]
+    default: "0.00"
+
+  currency_code:
+    source: fields.currency
+    fallback: [fields.curr, fields.invoice_currency]
+    default: "JPY"
+
+  exchange_rate:
+    source: fields.exchange_rate
+    default: "0.048"  # JPY to GHS conversion rate (approximate)
+
+  fob_local_currency:
+    source: fields.fob_local
+    fallback: [fields.fob]
+    default: "0.00"
+
+  freight_value:
+    source: fields.freight
+    fallback: [fields.freight_charges, fields.freight_cost, fields.shipping_cost]
+    default: "0.00"
+
+  insurance_value:
+    source: fields.insurance
+    fallback: [fields.insurance_cost, fields.insurance_charges]
+    default: "0.00"
+
+  valuation_method:
+    source: fields.valuation_method
+    fallback: [fields.valuation]
+    default: "Other"
+
+  crms_level:
+    source: fields.crms_level
+    fallback: [fields.crms]
+    default: "Red"
+
+  # SHIPPING DETAILS (Fields 14, 17-18, 21-22)
+  transport_mode:
+    source: fields.transport_mode
+    fallback: [fields.m_trans]
+    default: "10"  # 10 = Sea, 20 = Rail, 30 = Road, 40 = Air
+
+  vessel_name:
+    source: fields.vessel_name
+    fallback: [fields.carrier_name, fields.vessel, fields.vessel/voyage, fields.ship_name, fields.m_trans]
+    default: "[VESSEL_NAME]"
+
+  port_of_loading_code:
+    source: fields.port_of_loading_code
+    fallback: [fields.port]
+    default: "[POL_CODE]"
+
+  port_of_loading_name:
+    source: fields.port_of_loading
+    fallback: [fields.place_of_receipt, fields.port, fields.loading_port, fields.pol, fields.origin_port]
+    default: "[PORT_OF_LOADING]"
+
+  place_of_shipment:
+    source: fields.place_of_shipment
+    fallback: [fields.port_of_loading, fields.place]
+    default: "[PLACE_OF_SHIPMENT]"
+
+  entry_office:
+    source: fields.entry_office
+    fallback: [fields.entry_exit]
+    default: "TMA1"
+
+  warehouse_id:
+    source: fields.warehouse_id
+    default: "CEPS TEMA"
+
+  # BANKING & DOCUMENTS (Fields 23-25)
+  bank_code:
+    source: fields.bank_code
+    fallback: [fields.financial_and_banking_data_bank_code]
+    default: ""
+
+  payment_terms:
+    source: fields.payment_terms
+    fallback: [fields.mode_of_payment]
+    default: ""
+
+  bank_name:
+    source: fields.bank_name
+    fallback: [fields.financial_and_banking_data_bank_code]
+    default: ""
+
+  bank_branch:
+    source: fields.bank_branch
+    default: ""
+
+  account_number:
+    source: fields.account_number
+    fallback: [fields.b_accounting_details_receipt_number]
+    default: ""
+
+  attached_documents:
+    source: fields.attached_documents
+    fallback: [fields.attached]
+    default: "BLA, ECOM, GSA, IDF, ITC, INV, PKL"
+
+  container_numbers:
+    source: fields.cntr
+    fallback: [fields.con_tainer, fields.container, fields.container_no, fields.container_numbers]
+    default: "[CONTAINER_NOS]"
+
+  marks_and_numbers:
+    source: fields.marks_and_numbers
+    fallback: [fields.marks_&_numbers, fields.marks]
+    default: "[MARKS_AND_NUMBERS]"
+
+  # CUSTOMS VALUE (Fields 40-42)
+  licence_number:
+    source: fields.licence_number
+    default: ""
+
+  customs_value:
+    source: fields.customs_value
+    fallback: [fields.costs_38_supp_u1_39_supp_electrically_0_00_alldateur_entry_41_licence_no]
+    default: "0.00"
+
+  previous_declaration:
+    source: fields.previous_declaration
+    fallback: [fields.previous]
+    default: "-"
+
+  # TAX CALCULATIONS (Base amounts and rates)
+  tax_base:
+    source: fields.tax_base
+    fallback: [fields.tax]
+    default: "0.00"
+
+  import_duty_rate:
+    source: fields.import_duty_rate
+    default: "20.00"
+
+  import_duty_amount:
+    source: fields.import_duty_amount
+    default: "0.00"
+
+  vat_base:
+    source: fields.vat_base
+    default: "0.00"
+
+  vat_rate:
+    source: fields.vat_rate
+    default: "0.00"
+
+  vat_amount:
+    source: fields.vat_amount
+    default: "0.00"
+
+  processing_base:
+    source: fields.processing_base
+    default: "0.00"
+
+  processing_rate:
+    source: fields.processing_rate
+    default: "0.00"
+
+  processing_amount:
+    source: fields.processing_amount
+    default: "0.00"
+
+  ecowas_base:
+    source: fields.ecowas_base
+    default: "0.00"
+
+  ecowas_rate:
+    source: fields.ecowas_rate
+    default: "0.50"
+
+  ecowas_amount:
+    source: fields.ecowas_amount
+    default: "0.00"
+
+  network_base:
+    source: fields.network_base
+    default: "0.00"
+
+  network_rate:
+    source: fields.network_rate
+    default: "0.40"
+
+  network_amount:
+    source: fields.network_amount
+    default: "0.00"
+
+  nhil_base:
+    source: fields.nhil_base
+    default: "0.00"
+
+  nhil_rate:
+    source: fields.nhil_rate
+    default: "0.00"
+
+  nhil_amount:
+    source: fields.nhil_amount
+    default: "0.00"
+
+  shippers_base:
+    source: fields.shippers_base
+    default: "0.00"
+
+  shippers_rate:
+    source: fields.shippers_rate
+    default: "0.00"
+
+  shippers_amount:
+    source: fields.shippers_amount
+    default: "0.00"
+
+  irs_base:
+    source: fields.irs_base
+    default: "0.00"
+
+  irs_rate:
+    source: fields.irs_rate
+    default: "1.00"
+
+  irs_amount:
+    source: fields.irs_amount
+    default: "0.00"
+
+  exim_base:
+    source: fields.exim_base
+    default: "0.00"
+
+  exim_rate:
+    source: fields.exim_rate
+    default: "0.75"
+
+  exim_amount:
+    source: fields.exim_amount
+    default: "0.00"
+
+  get_base:
+    source: fields.get_base
+    default: "0.00"
+
+  get_rate:
+    source: fields.get_rate
+    default: "0.00"
+
+  get_amount:
+    source: fields.get_amount
+    default: "0.00"
+
+  inspection_base:
+    source: fields.inspection_base
+    default: "0.00"
+
+  inspection_rate:
+    source: fields.inspection_rate
+    default: "1.00"
+
+  inspection_amount:
+    source: fields.inspection_amount
+    default: "0.00"
+
+  au_base:
+    source: fields.au_base
+    default: "0.00"
+
+  au_rate:
+    source: fields.au_rate
+    default: "0.20"
+
+  au_amount:
+    source: fields.au_amount
+    default: "0.00"
+
+  total_taxes_payable:
+    source: fields.total_taxes
+    default: "0.00"
+
+  # ACCOUNTING (Section B)
+  receipt_number:
+    source: fields.receipt_number
+    fallback: [fields.b_accounting_details_receipt_number]
+    default: ""
+
+  bank_guarantee:
+    source: fields.bank_guarantee
+    default: ""
+
+  bg_amount:
+    source: fields.bg_amount
+    default: ""
+
+  payment_mode:
+    source: fields.payment_mode
+    fallback: [fields.mode_of_payment]
+    default: ""
+
+  payment_date:
+    source: fields.payment_date
+    fallback: [fields.mode_of_payment]
+    default: ""
+
+  # DECLARATION
+  declarant_full_name:
+    source: fields.declarant_full_name
+    fallback: [fields.declarant_representative_ms_a_no]
+    default: "[DECLARANT_NAME]"
+
+  # FOOTER
+  doc_status:
+    source: fields.doc_status
+    default: "Verified"
+
+  user_reference:
+    source: fields.user_reference
+    default: ""
+
+  page_number:
+    source: fields.page_number
+    default: "A-1"
+
+# ITEMS TABLE MAPPING (Fields 26-42 per item)
+tables:
+  items:
+    source: items  # From extracted invoice items
+    fallback: create_from_fields  # Create single item if items empty
+    columns:
+      item_number:
+        source: line_number
+        fallback: item_no
+        default: "0001"
+
+      hs_code:
+        source: hs_code
+        fallback: commodity_code
+        default: "[HS_CODE]"
+
+      description:
+        source: description
+        fallback: [product_description, item_description, goods_description, description_of_goods]
+        default: "[ITEM_DESCRIPTION]"
+
+      quantity:
+        source: quantity
+        fallback: [qty, item_quantity, units]
+        default: "0"
+
+      unit:
+        source: unit
+        fallback: [unit_of_measure, uom, measurement_unit]
+        default: "PE"
+
+      country_of_origin:
+        source: country_of_origin
+        fallback: [origin_country, origin, coo]
+        default: "JP"
+
+      zone:
+        source: zone
+        default: "GEN"
+
+      cpc:
+        source: cpc
+        default: "40D01"
+
+      gross_weight:
+        source: gross_weight
+        fallback: [weight, g.w_(kg), gw, total_weight]
+        default: "0.00"
+
+      net_weight:
+        source: net_weight
+        fallback: [weight, n.w_(kg), nw, net]
+        default: "0.00"
+
+      fob_fcy:
+        source: fob_value
+        fallback: [unit_price, price, value, total_(jpy)]
+        default: "0.00"
+
+      fob_ncy:
+        source: fob_local
+        default: "0.00"
+
+      freight_ncy:
+        source: freight
+        default: "0.00"
+
+      insurance_ncy:
+        source: insurance
+        default: "0.00"
+
+      other_costs:
+        source: other_costs
+        default: "0.00"
+
+      supp_unit_1:
+        source: supp_unit_1
+        default: "0.0000"
+
+      supp_unit_2:
+        source: supp_unit_2
+        default: ""
+
+# Calculated fields (using proper structured format)
+calculated_fields:
+  # Calculate customs value from FOB + Freight + Insurance
+  customs_value:
+    type: add
+    params:
+      fields: [total_fob_fcy, freight_value, insurance_value]
+
+  # Calculate FOB in local currency (FOB * exchange rate)
+  fob_local_currency:
+    type: multiply
+    params:
+      field: total_fob_fcy
+      multiplier: 0.048
+
+  # Calculate tax base (same as customs value)
+  tax_base:
+    type: add
+    params:
+      fields: [customs_value]
+
+# Placeholder rules - Fields that typically require manual entry
+placeholder_fields:
+  - hs_code: "HS codes must be looked up based on product description"
+  - crms_level: "Risk level assigned by customs (Red/Yellow/Green)"
+  - tax_rates: "Tax rates vary by product classification"
+  - customs_value: "Must be verified and may be adjusted by customs"
+  - declaration_number: "Assigned by customs system upon submission"

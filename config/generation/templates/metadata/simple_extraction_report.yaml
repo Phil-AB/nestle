@@ -1,0 +1,30 @@
+template_id: simple_extraction_report
+template_name: Simple Extraction Report
+template_format: docx
+description: Basic document extraction report with field placeholders
+version: "1.0"
+template_path: config/generation/templates/files/simple_extraction_report.docx
+
+# Required fields for this template
+required_fields:
+  - document_id
+  - document_type
+  - extraction_status
+  - created_at
+
+# Optional fields (will show as empty if not available)
+optional_fields:
+  - item_no
+  - quantity
+  - item_hs_code
+  - package_type
+  - unit_price_fcy
+  - unit_price_nci
+  - country_of_origin
+  - hs_code_description
+  - foreign_currency_code
+  - applicant_remarks
+
+# Capabilities
+supports_tables: false
+supports_images: false

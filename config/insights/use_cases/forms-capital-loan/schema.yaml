@@ -1,0 +1,221 @@
+# Insights Database Schema Configuration
+# Defines the database table structure for storing insights data
+# Version: 1.0.0
+
+use_case_id: "forms-capital-loan"
+version: "1.0.0"
+
+# Table configuration
+table:
+  name: "insights_forms_capital_loan"
+  description: "Stores risk assessment and decision insights for loan applications"
+
+  # Indexes for query optimization
+  indexes:
+    - name: "idx_customer_profile"
+      columns: ["document_id", "customer_id"]
+      unique: false
+    - name: "idx_risk_level"
+      columns: ["risk_level", "created_at"]
+      unique: false
+    - name: "idx_auto_approval"
+      columns: ["auto_approval_status"]
+      unique: false
+
+# Schema definition
+schema:
+  # Primary identification
+  id:
+    type: "uuid"
+    primary_key: true
+    nullable: false
+    description: "Unique insight record ID"
+
+  document_id:
+    type: "string"
+    length: 100
+    nullable: false
+    index: true
+    description: "Reference to source document"
+
+  use_case_id:
+    type: "string"
+    length: 100
+    nullable: false
+    default: "forms-capital-loan"
+    description: "Use case identifier"
+
+  # Customer profile fields (normalized)
+  customer_id:
+    type: "string"
+    length: 100
+    nullable: true
+    index: true
+    description: "Customer identifier"
+
+  full_name:
+    type: "string"
+    length: 255
+    nullable: true
+    description: "Customer full name"
+
+  age:
+    type: "integer"
+    nullable: true
+    description: "Customer age"
+
+  monthly_income:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Monthly income in GHS"
+
+  occupation:
+    type: "string"
+    length: 255
+    nullable: true
+    description: "Customer occupation"
+
+  employment_status:
+    type: "string"
+    length: 50
+    nullable: true
+    description: "Employment status"
+
+  # Risk assessment fields
+  risk_score:
+    type: "integer"
+    nullable: false
+    index: true
+    description: "Calculated risk score (0-100)"
+
+  risk_level:
+    type: "string"
+    length: 20
+    nullable: false
+    index: true
+    description: "Risk category: low, medium, high, critical"
+
+  risk_factors:
+    type: "jsonb"
+    nullable: true
+    description: "Breakdown of risk factor scores"
+
+  # Product eligibility
+  eligible_products:
+    type: "jsonb"
+    nullable: true
+    description: "List of eligible products with details"
+
+  product_eligibility_scores:
+    type: "jsonb"
+    nullable: true
+    description: "Eligibility scores for each product"
+
+  # Automated decisions
+  auto_approval_status:
+    type: "string"
+    length: 50
+    nullable: true
+    index: true
+    description: "Auto-approval decision: approved, rejected, manual_review"
+
+  max_loan_amount:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Maximum approved loan amount"
+
+  recommended_products:
+    type: "jsonb"
+    nullable: true
+    description: "AI-recommended products"
+
+  # LLM reasoning
+  reasoning:
+    type: "text"
+    nullable: true
+    description: "LLM-generated reasoning for decisions"
+
+  recommendations:
+    type: "text"
+    nullable: true
+    description: "LLM-generated recommendations"
+
+  # Financial metrics
+  debt_to_income_ratio:
+    type: "decimal"
+    precision: 5
+    scale: 2
+    nullable: true
+    description: "Debt to income ratio percentage"
+
+  disposable_income:
+    type: "decimal"
+    precision: 15
+    scale: 2
+    nullable: true
+    description: "Calculated disposable income"
+
+  # Metadata
+  config_version:
+    type: "string"
+    length: 20
+    nullable: true
+    description: "Configuration version used"
+
+  processing_time_ms:
+    type: "integer"
+    nullable: true
+    description: "Processing time in milliseconds"
+
+  engine_type:
+    type: "string"
+    length: 50
+    nullable: true
+    description: "Engine used: hybrid, rule-based, llm"
+
+  # Timestamps
+  created_at:
+    type: "timestamp"
+    nullable: false
+    default: "now"
+    index: true
+    description: "Record creation timestamp"
+
+  updated_at:
+    type: "timestamp"
+    nullable: false
+    default: "now"
+    on_update: "now"
+    description: "Record update timestamp"
+
+# Foreign keys
+# Note: Commented out because api_documents table may not be in metadata at creation time
+# The relationship is enforced at application level
+# foreign_keys:
+#   - name: "fk_insights_document"
+#     column: "document_id"
+#     references:
+#       table: "api_documents"
+#       column: "document_id"
+#     on_delete: "CASCADE"
+#     on_update: "CASCADE"
+
+# Constraints
+constraints:
+  - type: "check"
+    name: "chk_risk_score_range"
+    expression: "risk_score >= 0 AND risk_score <= 100"
+
+  - type: "check"
+    name: "chk_risk_level_valid"
+    expression: "risk_level IN ('low', 'medium', 'high', 'critical')"
+
+# Data retention policy
+retention:
+  enabled: true
+  days: 365
+  archive_after_days: 90

@@ -1,0 +1,53 @@
+# ==============================================================================
+# TEMPLATE METADATA: Example Invoice Template
+# ==============================================================================
+
+template_id: example_invoice_v1
+template_name: Example Invoice Template
+template_format: docx
+template_path: templates/docx/example_invoice.docx
+version: "1.0.0"
+
+description: |
+  Example invoice template for demonstration.
+  Supports basic invoice fields and line items.
+
+# Template requirements
+required_fields:
+  - invoice_number
+  - invoice_date
+  - buyer_name
+  - seller_name
+  - total_amount
+  - currency
+
+optional_fields:
+  - buyer_address
+  - seller_address
+  - payment_terms
+  - notes
+
+# Table support
+supports_tables: true
+table_definitions:
+  line_items:
+    required_columns:
+      - description
+      - quantity
+      - unit_price
+      - total
+    optional_columns:
+      - sku
+      - unit_of_measure
+
+# Image support
+supports_images: false
+
+# Metadata
+created_at: "2025-01-01T00:00:00Z"
+updated_at: "2025-01-01T00:00:00Z"
+created_by: admin
+tags:
+  - invoice
+  - example
+  - demo

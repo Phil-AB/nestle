@@ -1,0 +1,151 @@
+template_id: packing_list
+mapping_version: "1.0"
+description: Map extracted invoice data to Packing List template
+
+# Data source
+data_source:
+  provider: postgres
+  query: by_document_id
+
+# Direct field mappings
+field_mappings:
+  # Packing list header
+  packing_list_number:
+    source: fields.invoice_number
+    fallback: fields.item_no
+    default: "PL-XXXXX"
+
+  packing_date:
+    source: created_at
+    transformation: format_date
+    transformation_params:
+      format: "%d %B %Y"
+    default: "TBD"
+
+  # Consignee info
+  consignee_name:
+    source: fields.consignee_name
+    default: "To Be Determined"
+
+  consignee_address:
+    source: fields.consignee_address
+    default: "-"
+
+  # Shipper info
+  shipper_name:
+    source: fields.shipper_name
+    default: "Nestle Trading Ltd."
+
+  shipper_address:
+    source: fields.shipper_address
+    default: "Avenue Nestle, Vevey, Switzerland"
+
+  # Summary totals
+  total_packages:
+    source: items_count
+    fallback: fields.total_packages
+    default: "1"
+
+  total_gross_weight:
+    source: fields.total_gross_weight
+    default: "TBD"
+
+  total_net_weight:
+    source: fields.total_net_weight
+    default: "TBD"
+
+  # Shipping details
+  vessel_name:
+    source: fields.vessel_name
+    default: "TBD"
+
+  voyage_number:
+    source: fields.voyage_number
+    default: "TBD"
+
+  container_number:
+    source: fields.container_number
+    default: "TBD"
+
+  seal_number:
+    source: fields.seal_number
+    default: "TBD"
+
+  # Additional info
+  remarks:
+    source: fields.applicant_remarks
+    fallback: fields.remarks
+    default: "N/A"
+
+# Table mappings (for packages)
+tables:
+  packages:
+    source: items  # Map invoice items to packages
+    fallback: single_item  # Otherwise create single package from fields
+    columns:
+      package_number:
+        source: line_number
+        fallback: item_no
+        default: "1"
+
+      package_type:
+        source: package_type
+        default: "Carton"
+
+      description:
+        source: product_description
+        fallback: item_description
+        default: "Product Description"
+
+      quantity:
+        source: quantity
+        default: "1"
+
+      gross_weight:
+        source: gross_weight
+        default: "TBD"
+
+      net_weight:
+        source: net_weight
+        default: "TBD"
+
+      dimensions:
+        source: dimensions
+        default: "TBD"
+
+    # Fallback: Create single package from fields if items array is empty
+    fallback_mapping:
+      package_number:
+        source: fields.item_no
+        default: "1"
+
+      package_type:
+        default: "Carton"
+
+      description:
+        source: fields.item_description
+        fallback: fields.hs_code_description
+        default: "Product Description"
+
+      quantity:
+        source: fields.quantity
+        default: "1"
+
+      gross_weight:
+        source: fields.gross_weight
+        default: "TBD"
+
+      net_weight:
+        source: fields.net_weight
+        default: "TBD"
+
+      dimensions:
+        default: "TBD"
+
+# Calculated fields
+calculated_fields:
+  # Calculate total packages from items count
+  - name: total_packages
+    formula: "count(items)"
+    applies_to: document
+    condition: "total_packages == '1'"

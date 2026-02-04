@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banking Customer Insights Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            font-size: 11pt;
+        }
+
+        .header {
+            text-align: center;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24pt;
+        }
+
+        .header .subtitle {
+            font-size: 10pt;
+            opacity: 0.9;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-left: 4px solid #1e3c72;
+            margin-bottom: 15px;
+            font-weight: bold;
+            font-size: 14pt;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            text-align: left;
+        }
+
+        .data-table th {
+            background: #e9ecef;
+            font-weight: 600;
+            width: 40%;
+        }
+
+        .risk-box {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .risk-score {
+            font-size: 32pt;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .risk-low { color: #28a745; }
+        .risk-medium { color: #ffc107; }
+        .risk-high { color: #dc3545; }
+
+        .risk-label {
+            text-align: center;
+            font-size: 12pt;
+            margin-top: 5px;
+            font-weight: bold;
+        }
+
+        .factors-list {
+            margin: 10px 0;
+        }
+
+        .factors-list li {
+            margin: 5px 0;
+        }
+
+        .positive {
+            color: #28a745;
+        }
+
+        .concern {
+            color: #dc3545;
+        }
+
+        .product-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: white;
+        }
+
+        .product-card.eligible {
+            border-left: 4px solid #28a745;
+        }
+
+        .product-card.not-eligible {
+            border-left: 4px solid #dc3545;
+            opacity: 0.8;
+        }
+
+        .product-name {
+            font-weight: bold;
+            font-size: 13pt;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .status-eligible {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-not-eligible {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .product-details {
+            margin-top: 10px;
+            font-size: 10pt;
+            color: #666;
+        }
+
+        .recommendation-box {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+        }
+
+        .benchmark-card {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .decision-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .decision-table th {
+            background: #343a40;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .decision-table td {
+            padding: 10px;
+            border: 1px solid #dee2e6;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .badge-success { background: #28a745; color: white; }
+        .badge-warning { background: #ffc107; color: #000; }
+        .badge-danger { background: #dc3545; color: white; }
+        .badge-info { background: #17a2b8; color: white; }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 9pt;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>BANKING CUSTOMER INSIGHTS REPORT</h1>
+        <div class="subtitle">
+            GCB Bank Ltd | AI-Powered Customer Intelligence
+        </div>
+    </div>
+
+    <p style="text-align: center; color: #666;">
+        <strong>Generated:</strong> {{report_date}} at {{report_time}}
+    </p>
+
+    <!-- Section 1: Customer Profile -->
+    <div class="section">
+        <div class="section-title">1. CUSTOMER PROFILE</div>
+
+        <table class="data-table">
+            <tr>
+                <th>Customer Name</th>
+                <td>{{customer_name}}</td>
+            </tr>
+            <tr>
+                <th>Customer ID</th>
+                <td>{{customer_id}}</td>
+            </tr>
+            <tr>
+                <th>Age</th>
+                <td>{{age}} years</td>
+            </tr>
+            <tr>
+                <th>Gender</th>
+                <td>{{gender}}</td>
+            </tr>
+            <tr>
+                <th>Marital Status</th>
+                <td>{{marital_status}}</td>
+            </tr>
+            <tr>
+                <th>Nationality</th>
+                <td>{{nationality}}</td>
+            </tr>
+            <tr>
+                <th>Employment Status</th>
+                <td>{{employment_status}}</td>
+            </tr>
+            <tr>
+                <th>Occupation</th>
+                <td>{{occupation}}</td>
+            </tr>
+        </table>
+
+        <table class="data-table">
+            <tr>
+                <th>Employer</th>
+                <td>{{employer}}</td>
+            </tr>
+            <tr>
+                <th>Education Level</th>
+                <td>{{education_level}}</td>
+            </tr>
+            <tr>
+                <th>Income Range</th>
+                <td>{{income_range}}</td>
+            </tr>
+            <tr>
+                <th>Estimated Monthly Income</th>
+                <td>GHS {{estimated_monthly_income}}</td>
+            </tr>
+            <tr>
+                <th>Account Number</th>
+                <td>{{account_number}}</td>
+            </tr>
+        </table>
+
+        <table class="data-table">
+            <tr>
+                <th>Postal Address</th>
+                <td>{{postal_address}}</td>
+            </tr>
+            <tr>
+                <th>Email</th>
+                <td>{{email}}</td>
+            </tr>
+            <tr>
+                <th>Phone</th>
+                <td>{{phone}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 2: Risk Assessment -->
+    <div class="section">
+        <div class="section-title">2. RISK ASSESSMENT</div>
+
+        <div class="risk-box">
+            <div class="risk-score risk-{{risk_level|lower}}">
+                {{risk_score}}<span style="font-size: 20pt;">/100</span>
+            </div>
+            <div class="risk-label">
+                Risk Level: {{risk_level}}
+            </div>
+            <div style="text-align: center; margin-top: 10px;">
+                <strong>Creditworthiness: {{creditworthiness}}</strong>
+            </div>
+        </div>
+
+        <h3 style="color: #28a745;">Positive Factors</h3>
+        {% if positive_factors %}
+        <ul class="factors-list">
+        {% for factor in positive_factors %}
+            <li class="positive">✓ {{factor}}</li>
+        {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #666;">No specific positive factors identified.</p>
+        {% endif %}
+
+        <h3 style="color: #dc3545; margin-top: 20px;">Areas of Concern</h3>
+        {% if concerns %}
+        <ul class="factors-list">
+        {% for concern in concerns %}
+            <li class="concern">⚠ {{concern}}</li>
+        {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #28a745;"><strong>✓</strong> No significant concerns identified.</p>
+        {% endif %}
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 3: Product Eligibility -->
+    <div class="section">
+        <div class="section-title">3. PRODUCT ELIGIBILITY</div>
+
+        <!-- Extra Cash -->
+        <div class="product-card {% if extra_cash_eligible %}eligible{% else %}not-eligible{% endif %}">
+            <div class="product-name">EXTRA CASH (Personal Loan Facility)</div>
+            <span class="status-badge {% if extra_cash_eligible %}status-eligible{% else %}status-not-eligible{% endif %}">
+                {% if extra_cash_eligible %}✓ ELIGIBLE{% else %}✗ NOT ELIGIBLE{% endif %}
+            </span>
+            <div class="product-details">
+                <strong>Maximum Amount:</strong> GHS {{extra_cash_max_amount}}<br>
+                <strong>Recommended Amount:</strong> GHS {{extra_cash_recommended_amount}}<br>
+                <strong>Interest Rate:</strong> {{extra_cash_interest_rate}}%<br>
+                <strong>Confidence:</strong> {{(extra_cash_confidence * 100)|round(1)}}%
+            </div>
+        </div>
+
+        <!-- Extra Balance -->
+        <div class="product-card {% if extra_balance_eligible %}eligible{% else %}not-eligible{% endif %}">
+            <div class="product-name">EXTRA BALANCE (Overdraft Protection)</div>
+            <span class="status-badge {% if extra_balance_eligible %}status-eligible{% else %}status-not-eligible{% endif %}">
+                {% if extra_balance_eligible %}✓ ELIGIBLE{% else %}✗ NOT ELIGIBLE{% endif %}
+            </span>
+            <div class="product-details">
+                <strong>Overdraft Limit:</strong> GHS {{extra_balance_limit}}<br>
+                <strong>Monthly Fee:</strong> GHS {{extra_balance_monthly_fee}}
+            </div>
+        </div>
+
+        <!-- Credit Card -->
+        <div class="product-card {% if credit_card_eligible %}eligible{% else %}not-eligible{% endif %}">
+            <div class="product-name">CREDIT CARD</div>
+            <span class="status-badge {% if credit_card_eligible %}status-eligible{% else %}status-not-eligible{% endif %}">
+                {% if credit_card_eligible %}✓ ELIGIBLE{% else %}✗ NOT ELIGIBLE{% endif %}
+            </span>
+            <div class="product-details">
+                <strong>Credit Limit:</strong> GHS {{credit_card_limit}}
+            </div>
+        </div>
+
+        <!-- Premium Account -->
+        <div class="product-card {% if premium_account_eligible %}eligible{% else %}not-eligible{% endif %}">
+            <div class="product-name">PREMIUM ACCOUNT</div>
+            <span class="status-badge {% if premium_account_eligible %}status-eligible{% else %}status-not-eligible{% endif %}">
+                {% if premium_account_eligible %}✓ ELIGIBLE{% else %}✗ NOT ELIGIBLE{% endif %}
+            </span>
+            <div class="product-details">
+                <strong>Benefits:</strong><br>
+                {% if premium_account_benefits %}
+                {% for benefit in premium_account_benefits %}
+                • {{benefit}}<br>
+                {% endfor %}
+                {% else %}
+                Standard benefits apply
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 4: Recommendations -->
+    <div class="section">
+        <div class="section-title">4. RECOMMENDATIONS</div>
+
+        <h3>Account Upgrades</h3>
+        {% if account_upgrades %}
+        {% for upgrade in account_upgrades %}
+        <div class="recommendation-box">
+            <strong>→</strong> {{upgrade}}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p>No immediate upgrades recommended.</p>
+        {% endif %}
+
+        <h3 style="margin-top: 20px;">Cross-Sell Products</h3>
+        {% if cross_sell_products %}
+        {% for product in cross_sell_products %}
+        <div class="recommendation-box">
+            <strong>→</strong> {{product}}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p>No additional products recommended at this time.</p>
+        {% endif %}
+
+        <h3 style="margin-top: 20px;">Next Steps</h3>
+        {% if next_steps %}
+        {% for step in next_steps %}
+        <div style="margin: 10px 0;">
+            <strong>→</strong> {{step}}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p>No specific actions required.</p>
+        {% endif %}
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Section 5: Benchmarks -->
+    <div class="section">
+        <div class="section-title">5. COMPARATIVE BENCHMARKS</div>
+
+        <div class="benchmark-card">
+            <strong>Income Analysis</strong><br><br>
+            <strong>Your income percentile:</strong> {{income_percentile}}%<br>
+            <em>{{income_comparison}}</em>
+        </div>
+
+        <table class="data-table">
+            <tr>
+                <th>Metric</th>
+                <td>Value</td>
+            </tr>
+            <tr>
+                <th>Age Group Average Income</th>
+                <td>GHS {{age_group_avg_income}}</td>
+            </tr>
+            <tr>
+                <th>Similar Profiles in Database</th>
+                <td>{{similar_profile_count}}</td>
+            </tr>
+            <tr>
+                <th>Approval Likelihood</th>
+                <td>{{approval_likelihood}}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Section 6: Automated Decisions -->
+    <div class="section">
+        <div class="section-title">6. AUTOMATED DECISIONS</div>
+
+        <table class="decision-table">
+            <tr>
+                <th>Decision</th>
+                <th>Outcome</th>
+            </tr>
+            <tr>
+                <td>Account Approval</td>
+                <td>
+                    <span class="badge {% if account_approval == 'AUTO_APPROVE' %}badge-success{% elif account_approval == 'MANUAL_REVIEW' %}badge-warning{% else %}badge-danger{% endif %}">
+                        {{account_approval}}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Credit Pre-Qualification</td>
+                <td>
+                    <span class="badge {% if credit_pre_qualification == 'APPROVED' %}badge-success{% else %}badge-warning{% endif %}">
+                        {{credit_pre_qualification}}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Assigned Tier</td>
+                <td>
+                    <span class="badge badge-info">{{tier_assignment}}</span>
+                </td>
+            </tr>
+            <tr>
+                <td>Relationship Manager Needed</td>
+                <td>
+                    <span class="badge {% if relationship_manager_needed %}badge-warning{% else %}badge-success{% endif %}">
+                        {% if relationship_manager_needed %}Yes{% else %}No{% endif %}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Priority Level</td>
+                <td>
+                    <span class="badge {% if priority_level == 'High' %}badge-danger{% else %}badge-info{% endif %}">
+                        {{priority_level}}
+                    </span>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p><strong>This report was automatically generated by the AI-powered Banking Insights System</strong></p>
+        <p>For questions about this report, please contact your relationship manager.</p>
+        <p style="margin-top: 10px;">GCB Bank Ltd - Digital Banking Division</p>
+        <p style="font-size: 8pt; color: #999;">Generated on {{report_date}} at {{report_time}}</p>
+    </div>
+</body>
+</html>

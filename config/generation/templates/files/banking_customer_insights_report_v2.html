@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banking Customer Insights Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: white;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        /* Customer Profile Grid */
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .profile-item {
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .profile-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .profile-value {
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+
+        /* Risk Score Card */
+        .risk-card {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 24px;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 12px;
+            border: 2px solid #22c55e;
+            margin-bottom: 20px;
+        }
+
+        .risk-card.medium-risk {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border-color: #f59e0b;
+        }
+
+        .risk-card.high-risk {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-color: #ef4444;
+        }
+
+        .risk-score-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+
+        .risk-card.medium-risk .risk-score-circle {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .risk-card.high-risk .risk-score-circle {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .risk-info h3 {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .risk-score-display {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .risk-badges {
+            display: flex;
+            gap: 8px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .badge-outline {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        /* Factors */
+        .factors-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .factors-section h4 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .factors-section.positive h4 {
+            color: #16a34a;
+        }
+
+        .factors-section.concerns h4 {
+            color: #dc2626;
+        }
+
+        .factor-item {
+            display: flex;
+            align-items: start;
+            gap: 8px;
+            padding: 10px 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .factor-item.positive {
+            background: #f0fdf4;
+        }
+
+        .factor-item.concern {
+            background: #fef2f2;
+        }
+
+        .factor-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Risk Reasoning */
+        .reasoning-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .reasoning-header {
+            background: #f9fafb;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .reasoning-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .reasoning-header p {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .reasoning-content {
+            padding: 20px;
+        }
+
+        .reasoning-summary {
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .reasoning-summary-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .reasoning-summary-text {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Factor Breakdown */
+        .factor-breakdown {
+            margin-bottom: 20px;
+        }
+
+        .factor-breakdown-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .factor-detail {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .factor-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .factor-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .factor-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .factor-stat {
+            font-size: 13px;
+        }
+
+        .factor-stat-label {
+            color: #6b7280;
+        }
+
+        .factor-stat-value {
+            font-weight: 600;
+        }
+
+        .factor-progress {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .factor-progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            background: #22c55e;
+        }
+
+        .factor-progress-bar.medium {
+            background: #f59e0b;
+        }
+
+        .factor-progress-bar.high {
+            background: #ef4444;
+        }
+
+        .factor-reasoning {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .factor-data-points {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .data-point {
+            padding: 3px 10px;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        /* Product Cards */
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .product-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+            background: #f9fafb;
+        }
+
+        .product-card.eligible {
+            border-color: #22c55e;
+            background: #f0fdf4;
+        }
+
+        .product-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .product-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .product-status-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .product-details {
+            font-size: 13px;
+        }
+
+        .product-detail-item {
+            margin-bottom: 4px;
+        }
+
+        .product-detail-label {
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        /* Recommendations */
+        .recommendation-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+
+        .recommendation-item.account {
+            background: #eff6ff;
+            border-left-color: #3b82f6;
+        }
+
+        .recommendation-item.cross-sell {
+            background: #f5f3ff;
+            border-left-color: #8b5cf6;
+        }
+
+        .recommendation-item.next-step {
+            background: #fefce8;
+            border-left-color: #eab308;
+        }
+
+        .recommendation-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .recommendation-description {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Automated Decisions */
+        .decisions-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .decision-item {
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .decision-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .decision-value {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* Overall Assessment */
+        .overall-assessment {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .overall-assessment-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .overall-assessment-content {
+            flex: 1;
+        }
+
+        .overall-assessment-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .overall-assessment-text {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            text-align: center;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* Page break */
+        .page-break {
+            page-break-before: always;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📊 Banking Customer Insights Report</h1>
+            <p>AI-powered document analysis with risk assessment and intelligent recommendations</p>
+            <p style="margin-top: 8px; font-size: 12px;">Generated: {{ _generated_at }}</p>
+        </div>
+
+        <!-- Customer Profile Section -->
+        <div class="section">
+            <h2 class="section-title">👤 Customer Profile</h2>
+            <div class="profile-grid">
+                <div class="profile-item">
+                    <div class="profile-label">Name</div>
+                    <div class="profile-value">{{ customer_name }}</div>
+                </div>
+                <div class="profile-item">
+                    <div class="profile-label">Age</div>
+                    <div class="profile-value">{{ age }}</div>
+                </div>
+                <div class="profile-item">
+                    <div class="profile-label">Employment</div>
+                    <div class="profile-value">{{ employment_status }}</div>
+                </div>
+                <div class="profile-item">
+                    <div class="profile-label">Occupation</div>
+                    <div class="profile-value">{{ occupation }}</div>
+                </div>
+                <div class="profile-item">
+                    <div class="profile-label">Employer</div>
+                    <div class="profile-value">{{ employer }}</div>
+                </div>
+                <div class="profile-item">
+                    <div class="profile-label">Monthly Income</div>
+                    <div class="profile-value">GHS {{ estimated_monthly_income }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk Assessment Section -->
+        <div class="section">
+            <h2 class="section-title">🛡️ Risk Assessment</h2>
+
+            {% if risk_score >= 70 %}
+            <div class="risk-card">
+            {% elif risk_score >= 50 %}
+            <div class="risk-card medium-risk">
+            {% else %}
+            <div class="risk-card high-risk">
+            {% endif %}
+                <div class="risk-score-circle">{{ risk_score }}</div>
+                <div class="risk-info">
+                    <h3>Risk Score</h3>
+                    <div class="risk-score-display">{{ risk_score }}/100</div>
+                    <div class="risk-badges">
+                        {% if risk_score >= 70 %}
+                        <span class="badge badge-success">{{ risk_level }} Risk</span>
+                        {% elif risk_score >= 50 %}
+                        <span class="badge badge-warning">{{ risk_level }} Risk</span>
+                        {% else %}
+                        <span class="badge badge-danger">{{ risk_level }} Risk</span>
+                        {% endif %}
+                        <span class="badge badge-outline">{{ creditworthiness }} Creditworthiness</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Factors -->
+            <div class="factors-container">
+                {% if positive_factors %}
+                <div class="factors-section positive">
+                    <h4>✓ Positive Factors</h4>
+                    {% for factor in positive_factors %}
+                    <div class="factor-item positive">
+                        <span class="factor-icon">✓</span>
+                        <span>{{ factor }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if concerns %}
+                <div class="factors-section concerns">
+                    <h4>⚠ Areas of Concern</h4>
+                    {% for concern in concerns %}
+                    <div class="factor-item concern">
+                        <span class="factor-icon">⚠</span>
+                        <span>{{ concern }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Risk Reasoning Chain -->
+        {% if scoring_breakdown %}
+        <div class="section">
+            <div class="reasoning-card">
+                <div class="reasoning-header">
+                    <h3>ℹ️ Risk Assessment Reasoning</h3>
+                    <p>Step-by-step breakdown of how the risk score was calculated</p>
+                </div>
+                <div class="reasoning-content">
+                    <!-- Final Score Summary -->
+                    <div class="reasoning-summary">
+                        <div class="reasoning-summary-title">Final Risk Score: {{ risk_score }}/100</div>
+                        <div class="reasoning-summary-text">{{ calculation_summary }}</div>
+                    </div>
+
+                    <!-- Scoring Breakdown -->
+                    <div class="factor-breakdown">
+                        <div class="factor-breakdown-title">Factor Breakdown ({{ scoring_breakdown|length }} factors evaluated)</div>
+
+                        {% for factor in scoring_breakdown %}
+                        <div class="factor-detail">
+                            <div class="factor-detail-header">
+                                <span class="factor-name">{{ factor.factor_name.replace('_', ' ')|title }}</span>
+                                <span class="badge badge-outline">Weight: {{ (factor.weight * 100)|round(0) }}%</span>
+                            </div>
+
+                            <div class="factor-stats">
+                                <span class="factor-stat">
+                                    <span class="factor-stat-label">Score:</span>
+                                    <span class="factor-stat-value {% if factor.score >= 70 %}text-green-600{% elif factor.score >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">{{ factor.score }}/100</span>
+                                </span>
+                                <span class="factor-stat">
+                                    <span class="factor-stat-label">Contribution:</span>
+                                    <span class="factor-stat-value">{{ factor.weighted_score|round(1) }} points</span>
+                                </span>
+                                <span class="factor-stat">
+                                    <span class="factor-stat-label">Confidence:</span>
+                                    <span class="factor-stat-value">{{ (factor.confidence * 100)|round(0) }}%</span>
+                                </span>
+                            </div>
+
+                            <div class="factor-progress">
+                                <div class="factor-progress-bar {% if factor.score < 50 %}high{% elif factor.score < 70 %}medium{% endif %}" style="width: {{ factor.weighted_score }}%"></div>
+                            </div>
+
+                            <div class="factor-reasoning">
+                                ⚠ {{ factor.reasoning }}
+                            </div>
+
+                            {% if factor.data_points %}
+                            <div class="factor-data-points">
+                                {% for point in factor.data_points %}
+                                <span class="data-point">{{ point }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Overall Assessment -->
+                    <div class="overall-assessment">
+                        <div class="overall-assessment-icon">✓</div>
+                        <div class="overall-assessment-content">
+                            <div class="overall-assessment-title">Overall Assessment</div>
+                            <div class="overall-assessment-text">{{ reasoning }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">{{ scoring_breakdown|length }}</div>
+                            <div class="stat-label">Factors Evaluated</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">100%</div>
+                            <div class="stat-label">Total Weight</div>
+                        </div>
+                        <div class="stat-item">
+                            {% set avg_confidence = (scoring_breakdown|map(attribute='confidence')|sum / scoring_breakdown|length * 100)|round(0) %}
+                            <div class="stat-value">{{ avg_confidence }}%</div>
+                            <div class="stat-label">Avg Confidence</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Product Eligibility -->
+        <div class="section">
+            <h2 class="section-title">💼 Product Eligibility</h2>
+            <div class="products-grid">
+                <!-- Extra Cash -->
+                <div class="product-card {% if extra_cash_eligible %}eligible{% endif %}">
+                    <div class="product-card-header">
+                        <span class="product-name">Extra Cash Loan</span>
+                        {% if extra_cash_eligible %}
+                        <span class="product-status-icon">✓</span>
+                        {% else %}
+                        <span class="product-status-icon">✗</span>
+                        {% endif %}
+                    </div>
+                    <div class="product-details">
+                        {% if extra_cash_eligible %}
+                        <span class="badge badge-success">Eligible</span>
+                        <div class="product-detail-item">
+                            <div class="product-detail-label">Max Amount</div>
+                            <div>GHS {{ extra_cash_max_amount }}</div>
+                        </div>
+                        <div class="product-detail-item">
+                            <div class="product-detail-label">Interest Rate</div>
+                            <div>{{ extra_cash_interest_rate }}%</div>
+                        </div>
+                        {% else %}
+                        <span class="badge badge-outline">Not Eligible</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Extra Balance -->
+                <div class="product-card {% if extra_balance_eligible %}eligible{% endif %}">
+                    <div class="product-card-header">
+                        <span class="product-name">Extra Balance Overdraft</span>
+                        {% if extra_balance_eligible %}
+                        <span class="product-status-icon">✓</span>
+                        {% else %}
+                        <span class="product-status-icon">✗</span>
+                        {% endif %}
+                    </div>
+                    <div class="product-details">
+                        {% if extra_balance_eligible %}
+                        <span class="badge badge-success">Eligible</span>
+                        <div class="product-detail-item">
+                            <div class="product-detail-label">Overdraft Limit</div>
+                            <div>GHS {{ extra_balance_limit }}</div>
+                        </div>
+                        <div class="product-detail-item">
+                            <div class="product-detail-label">Monthly Fee</div>
+                            <div>GHS {{ extra_balance_monthly_fee }}</div>
+                        </div>
+                        {% else %}
+                        <span class="badge badge-outline">Not Eligible</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Credit Card -->
+                <div class="product-card {% if credit_card_eligible %}eligible{% endif %}">
+                    <div class="product-card-header">
+                        <span class="product-name">💳 Credit Card</span>
+                        {% if credit_card_eligible %}
+                        <span class="product-status-icon">✓</span>
+                        {% else %}
+                        <span class="product-status-icon">✗</span>
+                        {% endif %}
+                    </div>
+                    <div class="product-details">
+                        {% if credit_card_eligible %}
+                        <span class="badge badge-success">Eligible</span>
+                        <div class="product-detail-item">
+                            <div class="product-detail-label">Credit Limit</div>
+                            <div>GHS {{ credit_card_limit }}</div>
+                        </div>
+                        {% else %}
+                        <span class="badge badge-outline">Not Eligible</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Premium Account -->
+                <div class="product-card {% if premium_account_eligible %}eligible{% endif %}">
+                    <div class="product-card-header">
+                        <span class="product-name">Premium Account</span>
+                        {% if premium_account_eligible %}
+                        <span class="product-status-icon">✓</span>
+                        {% else %}
+                        <span class="product-status-icon">✗</span>
+                        {% endif %}
+                    </div>
+                    <div class="product-details">
+                        {% if premium_account_eligible %}
+                        <span class="badge badge-success">Eligible</span>
+                        {% else %}
+                        <span class="badge badge-outline">Not Eligible</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        {% if account_upgrades or cross_sell_products or next_steps %}
+        <div class="section">
+            <h2 class="section-title">💡 Recommendations</h2>
+            {% for rec in account_upgrades %}
+            <div class="recommendation-item account">
+                <div class="recommendation-title">{{ rec.title }}</div>
+                <div class="recommendation-description">{{ rec.description }}</div>
+            </div>
+            {% endfor %}
+            {% for rec in cross_sell_products %}
+            <div class="recommendation-item cross-sell">
+                <div class="recommendation-title">{{ rec.title }}</div>
+                <div class="recommendation-description">{{ rec.description }}</div>
+            </div>
+            {% endfor %}
+            {% for rec in next_steps %}
+            <div class="recommendation-item next-step">
+                <div class="recommendation-title">{{ rec.title }}</div>
+                <div class="recommendation-description">{{ rec.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Automated Decisions -->
+        <div class="section">
+            <h2 class="section-title">🤖 Automated Decisions</h2>
+            <div class="decisions-grid">
+                <div class="decision-item">
+                    <div class="decision-label">Account Approval</div>
+                    <div class="decision-value">{{ account_approval }}</div>
+                </div>
+                <div class="decision-item">
+                    <div class="decision-label">Credit Pre-Qualification</div>
+                    <div class="decision-value">{{ credit_pre_qualification }}</div>
+                </div>
+                <div class="decision-item">
+                    <div class="decision-label">Tier Assignment</div>
+                    <div class="decision-value">{{ tier_assignment }}</div>
+                </div>
+                <div class="decision-item">
+                    <div class="decision-label">Priority Level</div>
+                    <div class="decision-value">{{ priority_level|lower|title }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>This report was generated by AI and should be reviewed by a qualified banking professional.</p>
+            <p>Generated on {{ _generated_at }}</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,314 @@
+# Universal Document Types Configuration
+# Add ANY document type here - the system will handle it dynamically
+
+# Default document type for unknown documents
+default_document_type: "document"
+
+# Document type detection rules
+# Each document type defines field patterns that identify it
+detection_rules:
+  # Financial Documents
+  invoice:
+    required_fields: ["invoice_number"]
+    optional_fields: ["invoice_date", "total_amount", "currency", "due_date"]
+    excluded_fields: []
+    description: "Detected by invoice number field"
+
+  purchase_order:
+    required_fields: ["purchase_order_number", "order_date"]
+    optional_fields: ["supplier_name", "buyer_name", "total_amount"]
+    excluded_fields: ["invoice_number"]
+    description: "Detected by PO number and order date"
+
+  receipt:
+    required_fields: ["receipt_number", "purchase_date"]
+    optional_fields: ["merchant_name", "amount_paid", "payment_method"]
+    excluded_fields: ["invoice_number", "purchase_order_number"]
+    description: "Detected by receipt number and purchase date"
+
+  contract:
+    required_fields: ["contract_number", "effective_date"]
+    optional_fields: ["party_a", "party_b", "contract_value"]
+    excluded_fields: ["invoice_number", "receipt_number"]
+    description: "Detected by contract number and effective date"
+
+  # Trade Documents (legacy support)
+  boe:
+    required_fields: ["declaration_number"]
+    optional_fields: ["import_date", "customs_value", "duty_amount"]
+    excluded_fields: []
+    description: "Bill of Entry detected by declaration number"
+
+  bill_of_lading:
+    required_fields: ["bill_of_lading_number", "vessel_name"]
+    optional_fields: ["port_of_loading", "port_of_discharge", "carrier_name"]
+    excluded_fields: []
+    description: "Bill of Lading detected by BOL number and vessel"
+
+  packing_list:
+    required_fields: ["reference_no"]
+    optional_fields: [
+      "date",
+      "exporter",
+      "exporter_address",
+      "exporter_country",
+      "consignee",
+      "consignee_address",
+      "consignee_country",
+      "shipper",
+      "notify_party",
+      "vessel",
+      "vessel_name",
+      "voyage_no",
+      "port_of_loading",
+      "port_of_discharge",
+      "container_no",
+      "container_type",
+      "gross_weight",
+      "net_weight",
+      "number_of_packages",
+      "total_packages",
+      "marks_numbers",
+      "marks_and_numbers",
+      "description",
+      "quantity",
+      "hs_code",
+      "chassis_no",
+      "make",
+      "model",
+      "year",
+      "cc",
+      "cubic_capacity"
+    ]
+    excluded_fields: []
+    description: "Packing List with complete party information, shipping details, and cargo data"
+
+  coo:
+    required_fields: ["certificate_number"]
+    optional_fields: ["country_of_origin", "exporter_name", "issuing_authority"]
+    excluded_fields: []
+    description: "Certificate of Origin detected by certificate number"
+
+  freight:
+    required_fields: ["freight_cost"]
+    optional_fields: ["shipping_line", "port_of_loading", "port_of_discharge"]
+    excluded_fields: []
+    description: "Freight document detected by freight cost"
+
+  customs_duty_assessment:
+    required_fields: ["duty_amount", "assessment_date"]
+    optional_fields: ["customs_value", "tariff_code", "tax_amount", "total_duty"]
+    excluded_fields: []
+    description: "Customs Duty Assessment detected by duty amount and tax fields"
+
+  customs_declaration:
+    required_fields: ["declaration_number", "declaration_date"]
+    optional_fields: ["declarant_name", "reference_number", "customs_office"]
+    excluded_fields: []
+    description: "Customs Declaration detected by declaration number and administrative fields"
+
+  shipping_manifest:
+    required_fields: ["manifest_number", "vessel_name"]
+    optional_fields: ["voyage_number", "port_of_loading", "port_of_discharge", "routing_details"]
+    excluded_fields: []
+    description: "Shipping Manifest detected by manifest number and routing details"
+
+  # HR/Personnel Documents
+  employee_id:
+    required_fields: ["employee_id", "full_name"]
+    optional_fields: ["department", "hire_date", "job_title"]
+    excluded_fields: ["invoice_number", "receipt_number"]
+    description: "Employee ID detected by employee ID and name"
+
+  timesheet:
+    required_fields: ["employee_id", "work_date", "hours_worked"]
+    optional_fields: ["project_code", "approval_status", "supervisor"]
+    excluded_fields: ["invoice_number", "contract_number"]
+    description: "Timesheet detected by employee ID and hours"
+
+  # Banking Documents
+  bank_account_opening_form:
+    required_fields: ["customer_name", "account_type"]
+    optional_fields: [
+      "customer_id",
+      "application_date",
+      "date_of_birth",
+      "age",
+      "gender",
+      "nationality",
+      "address",
+      "city",
+      "country",
+      "phone_number",
+      "email",
+      "identification_type",
+      "identification_number",
+      "employment_status",
+      "employer_name",
+      "occupation",
+      "income_range",
+      "annual_income",
+      "initial_deposit",
+      "account_currency",
+      "branch_location",
+      "branch_code",
+      "account_features",
+      "account_purpose",
+      "reference_name",
+      "reference_phone",
+      "marital_status",
+      "number_of_dependents",
+      "education_level",
+      "existing_accounts",
+      "previous_banking_relationship"
+    ]
+    excluded_fields: ["invoice_number", "receipt_number", "contract_number"]
+    description: "Bank account opening form detected by customer name and account type"
+
+  # Legal Documents
+  nda:
+    required_fields: ["agreement_date", "disclosing_party", "receiving_party"]
+    optional_fields: ["term_years", "purpose_of_disclosure"]
+    excluded_fields: ["invoice_number", "contract_number"]
+    description: "NDA detected by agreement date and parties"
+
+  power_of_attorney:
+    required_fields: ["principal_name", "attorney_name", "execution_date"]
+    optional_fields: ["notary_public", "document_number"]
+    excluded_fields: ["invoice_number", "receipt_number"]
+    description: "Power of Attorney detected by principal and attorney"
+
+  # Generic/Unknown
+  document:
+    required_fields: []
+    optional_fields: ["document_number", "document_date", "title"]
+    excluded_fields: []
+    description: "Generic document type as fallback"
+
+# Document type definitions for system configuration
+document_types:
+  invoice:
+    display_name: "Invoice"
+    description: "Commercial invoice for goods sold"
+    category: "financial"
+    icon: "receipt"
+
+  purchase_order:
+    display_name: "Purchase Order"
+    description: "Order document from buyer to seller"
+    category: "procurement"
+    icon: "shopping-cart"
+
+  receipt:
+    display_name: "Receipt"
+    description: "Proof of payment transaction"
+    category: "financial"
+    icon: "credit-card"
+
+  contract:
+    display_name: "Contract"
+    description: "Legal agreement between parties"
+    category: "legal"
+    icon: "file-contract"
+
+  boe:
+    display_name: "Bill of Entry"
+    description: "Customs declaration document"
+    category: "customs"
+    icon: "file-invoice"
+
+  bill_of_lading:
+    display_name: "Bill of Lading"
+    description: "Transport document for shipping"
+    category: "shipping"
+    icon: "truck"
+
+  packing_list:
+    display_name: "Packing List"
+    description: "List of items in shipment"
+    category: "shipping"
+    icon: "list"
+
+  coo:
+    display_name: "Certificate of Origin"
+    description: "Certificate stating country of origin"
+    category: "compliance"
+    icon: "certificate"
+
+  freight:
+    display_name: "Freight Document"
+    description: "Freight contract or agreement"
+    category: "shipping"
+    icon: "ship"
+
+  customs_duty_assessment:
+    display_name: "Customs Duty Assessment Summary"
+    description: "Summary of customs duties and taxes assessed"
+    category: "customs"
+    icon: "calculator"
+
+  customs_declaration:
+    display_name: "Customs Declaration Form"
+    description: "Official customs declaration with administrative details"
+    category: "customs"
+    icon: "file-text"
+
+  shipping_manifest:
+    display_name: "Shipping Manifest & Routing Document"
+    description: "Manifest of shipped goods with routing information"
+    category: "shipping"
+    icon: "map"
+
+  employee_id:
+    display_name: "Employee ID"
+    description: "Employee identification document"
+    category: "hr"
+    icon: "user"
+
+  timesheet:
+    display_name: "Timesheet"
+    description: "Employee work hours record"
+    category: "hr"
+    icon: "clock"
+
+  nda:
+    display_name: "NDA"
+    description: "Non-Disclosure Agreement"
+    category: "legal"
+    icon: "shield"
+
+  power_of_attorney:
+    display_name: "Power of Attorney"
+    description: "Legal authorization document"
+    category: "legal"
+    icon: "gavel"
+
+  document:
+    display_name: "Document"
+    description: "Generic document type"
+    category: "other"
+    icon: "file"
+
+  # Add more document types here as needed:
+  # bill_of_lading:
+  #   display_name: "Bill of Lading"
+  #   description: "Transport document"
+  #   category: "shipping"
+  #
+  # purchase_order:
+  #   display_name: "Purchase Order"
+  #   description: "Order document from buyer"
+  #   category: "procurement"
+  #
+  # delivery_note:
+  #   display_name: "Delivery Note"
+  #   description: "Proof of delivery"
+  #   category: "shipping"
+
+# Categories for organizing document types in UI
+categories:
+  financial: "Financial Documents"
+  customs: "Customs Documents"
+  shipping: "Shipping Documents"
+  compliance: "Compliance Documents"
+  procurement: "Procurement Documents"

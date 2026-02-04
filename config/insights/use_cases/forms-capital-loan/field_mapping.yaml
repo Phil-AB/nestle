@@ -1,0 +1,295 @@
+# Forms Capital Loan Application - Field Mapping Configuration
+# Maps extracted OCR fields to normalized customer profile attributes
+# Version: 1.0.0
+
+use_case_id: "forms-capital-loan"
+use_case_name: "Forms Capital Loan Application"
+use_case_type: "loan_assessment"
+version: "1.0.0"
+
+# Normalized profile schema
+# Each attribute defines how to extract and transform raw OCR data
+profile_mapping:
+  # Customer identification
+  full_name:
+    source_fields:
+      - "surname"
+      - "first_names_and_other_names"
+    combine: true
+    separator: " "
+    order: ["first_names_and_other_names", "surname"]  # First names then surname
+    required: true
+    transforms:
+      - type: "clean_whitespace"
+      - type: "title_case"
+
+  # Demographics
+  age:
+    source_fields:
+      - "age"
+      - "date_of_birth"
+    required: true
+    transforms:
+      - type: "extract_numeric"  # "4 2" -> 42
+      - type: "calculate_age_from_dob"  # Fallback if DOB provided
+    validation:
+      min: 18
+      max: 120
+
+  gender:
+    source_fields:
+      - "gender"
+    required: false
+    transforms:
+      - type: "extract_checkbox"
+        pattern: "\\[x\\]\\s*([^\\[\\]]+)"
+    value_mapping:
+      "Male": "Male"
+      "Female": "Female"
+
+  marital_status:
+    source_fields:
+      - "marital_status"
+    required: false
+    transforms:
+      - type: "extract_checkbox"
+        pattern: "\\[x\\]\\s*([^\\[\\]]+)"
+    value_mapping:
+      "Married": "married"
+      "Single": "single"
+      "Divorced": "divorced"
+      "Widowed": "widowed"
+
+  nationality:
+    source_fields:
+      - "nationality"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  # Employment information
+  occupation:
+    source_fields:
+      - "occupation"
+      - "job_title"
+    required: true
+    transforms:
+      - type: "clean_whitespace"
+      - type: "title_case"
+
+  employment_status:
+    source_fields:
+      - "employment_type"
+    required: true
+    transforms:
+      - type: "extract_checkbox"
+        pattern: "\\[x\\]\\s*([^\\[\\]]+)"
+    value_mapping:
+      "Permanent": "employed"
+      "Contract": "employed"
+      "Self-employed": "self_employed"
+      "Unemployed": "unemployed"
+    default: "employed"
+
+  employer:
+    source_fields:
+      - "current_employer"
+      - "place_of_work"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  employer_address:
+    source_fields:
+      - "employer_address"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  date_employed:
+    source_fields:
+      - "date_employed"
+    required: false
+    transforms:
+      - type: "parse_date"
+
+  # Income information
+  monthly_income:
+    source_fields:
+      - "net_salary"
+      - "gross_salary"
+      - "monthly_income"
+    priority: ["net_salary", "gross_salary", "monthly_income"]
+    required: true
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+    validation:
+      min: 0
+      max: 1000000
+
+  gross_salary:
+    source_fields:
+      - "gross_salary"
+    required: false
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+
+  net_salary:
+    source_fields:
+      - "net_salary"
+    required: false
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+
+  # Contact information
+  contact_number:
+    source_fields:
+      - "contact_number"
+      - "mobile_number"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  email:
+    source_fields:
+      - "email"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+      - type: "lowercase"
+    validation:
+      pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+  residential_address:
+    source_fields:
+      - "current_residential_address"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  # Loan-specific information
+  loan_purpose:
+    source_fields:
+      - "loan_purpose"
+    required: false
+    transforms:
+      - type: "clean_whitespace"
+
+  loan_amount_requested:
+    source_fields:
+      - "loan_amount"
+      - "disbursement"
+    required: false
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+
+  loan_tenor:
+    source_fields:
+      - "tenor"
+    required: false
+    transforms:
+      - type: "extract_numeric"
+
+  # Financial obligations
+  total_monthly_commitment:
+    source_fields:
+      - "total_monthly_commitment"
+    required: false
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+
+  total_outstanding_balance:
+    source_fields:
+      - "total_outstanding_balance"
+    required: false
+    transforms:
+      - type: "extract_currency"
+        pattern: "GHS\\s*([0-9,]+\\.?[0-9]*)"
+        remove_chars: [","]
+
+  # Additional information
+  number_of_dependents:
+    source_fields:
+      - "number_of_dependents"
+      - "number_of_children"
+    required: false
+    transforms:
+      - type: "extract_numeric"
+
+# Field transformation definitions
+transformations:
+  clean_whitespace:
+    description: "Remove extra whitespace and trim"
+    operations:
+      - strip
+      - collapse_whitespace
+
+  extract_numeric:
+    description: "Extract numeric value from string"
+    operations:
+      - regex_extract: "([0-9]+)"
+      - remove_whitespace
+      - to_integer
+
+  extract_currency:
+    description: "Extract currency amount"
+    operations:
+      - regex_extract: "pattern"
+      - remove_chars: "chars"
+      - to_float
+
+  extract_checkbox:
+    description: "Extract checked value from checkbox notation [x] Option"
+    operations:
+      - regex_extract: "pattern"
+      - strip
+
+  calculate_age_from_dob:
+    description: "Calculate age from date of birth"
+    operations:
+      - parse_date
+      - calculate_age
+
+  parse_date:
+    description: "Parse date string to standard format"
+    formats:
+      - "%d/%m/%Y"
+      - "%Y-%m-%d"
+      - "%d-%m-%Y"
+
+  title_case:
+    description: "Convert to title case"
+    operations:
+      - title
+
+  lowercase:
+    description: "Convert to lowercase"
+    operations:
+      - lower
+
+# Empty value handling
+empty_value_markers:
+  - "<empty>"
+  - "N/A"
+  - "n/a"
+  - "null"
+  - "None"
+  - ""
+
+# Metadata
+metadata:
+  country: "Ghana"
+  currency: "GHS"
+  organization: "Forms Capital Limited"
+  form_type: "Loan Application"
+  last_updated: "2026-02-02"
