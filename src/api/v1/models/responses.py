@@ -68,7 +68,7 @@ class DocumentResponse(BaseModel):
 
     status: ResponseStatus = Field(default=ResponseStatus.SUCCESS)
     document_id: str = Field(..., description="Unique document identifier")
-    document_type: str = Field(..., description="Type of document")
+    document_type: Optional[str] = Field(default=None, description="Type of document")
     document_number: Optional[str] = Field(None, description="Document number (invoice number, etc.)")
 
     extraction_status: ExtractionStatus = Field(..., description="Extraction completeness status")
@@ -91,6 +91,7 @@ class DocumentResponse(BaseModel):
 
     created_at: datetime = Field(..., description="Document creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
+    mime_type: Optional[str] = Field(None, description="MIME type of the original file")
 
     class Config:
         json_schema_extra = {

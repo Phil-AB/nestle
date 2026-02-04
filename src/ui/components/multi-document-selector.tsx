@@ -62,7 +62,7 @@ export default function MultiDocumentSelector({
       // Filter by allowed types if specified
       if (allowedTypes && allowedTypes.length > 0) {
         filteredDocs = filteredDocs.filter((doc) =>
-          allowedTypes.includes(doc.document_type)
+          doc.document_type && allowedTypes.includes(doc.document_type)
         )
       }
 
@@ -99,12 +99,13 @@ export default function MultiDocumentSelector({
     const searchLower = searchTerm.toLowerCase()
     return (
       doc.document_id.toLowerCase().includes(searchLower) ||
-      doc.document_type.toLowerCase().includes(searchLower) ||
+      (doc.document_type?.toLowerCase().includes(searchLower) ?? false) ||
       doc.document_number?.toLowerCase().includes(searchLower)
     )
   })
 
-  const getDocumentTypeColor = (type: string) => {
+  const getDocumentTypeColor = (type: string | null | undefined) => {
+    if (!type) return "bg-gray-100 text-gray-700"
     const colors: Record<string, string> = {
       invoice: "bg-blue-100 text-blue-700",
       "packing-list": "bg-green-100 text-green-700",
@@ -195,7 +196,7 @@ export default function MultiDocumentSelector({
                           variant="outline"
                           className={`text-xs ${getDocumentTypeColor(doc.document_type)}`}
                         >
-                          {doc.document_type}
+                          {doc.document_type || "unknown"}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">

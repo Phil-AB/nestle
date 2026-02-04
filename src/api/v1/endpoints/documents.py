@@ -48,6 +48,23 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 processing_service = get_processing_service(use_database=False)
 
 
+def get_mime_type_from_extension(file_extension: str) -> Optional[str]:
+    """Get MIME type from file extension."""
+    extension = file_extension.lower()
+    mime_types = {
+        "pdf": "application/pdf",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "tiff": "image/tiff",
+        "tif": "image/tiff",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+    }
+    return mime_types.get(extension)
+
+
+
 async def get_db_session():
     """Dependency to get database session."""
     async with get_session() as session:
@@ -184,6 +201,10 @@ async def upload_document(
         file_path = _save_uploaded_file(file, document_id)
         logger.info(f"Saved uploaded file: {file_path}")
 
+        # Determine MIME type
+        file_extension = file.filename.split(".")[-1] if file.filename else ""
+        mime_type = get_mime_type_from_extension(file_extension)
+
         # Create document record in database
         repo = APIDocumentRepository(session)
 
@@ -194,6 +215,7 @@ async def upload_document(
             "filename": file.filename,
             "file_path": str(file_path),
             "file_size": file_size,
+            "mime_type": mime_type,
             "extraction_mode": extraction_mode,
             "extraction_status": ExtractionStatus.PROCESSING,
             "shipment_id": shipment_id,
@@ -406,7 +428,8 @@ async def get_document(
             confidence=document.extraction_confidence,
             page_count=document.doc_metadata.get("page_count") if document.doc_metadata else None,
             job_id=document.doc_metadata.get("job_id") if document.doc_metadata else None
-        )
+        ),
+        mime_type=document.mime_type
     )
 
 
@@ -452,6 +475,7 @@ async def list_documents(
             "fields_count": len(fields) if fields else 0,  # Add fields_count
             "is_multi_page": doc.is_multi_page if hasattr(doc, 'is_multi_page') else False,  # Add multi-page flag
             "total_pages": doc.total_pages if hasattr(doc, 'total_pages') else 1,  # Add total pages
+            "mime_type": doc.mime_type,  # Add mime_type
             "created_at": doc.created_at.isoformat() if doc.created_at else None,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None
         })
@@ -960,6 +984,10 @@ async def upload_multi_page_document(
         
         # Create parent document record
         repo = APIDocumentRepository(session)
+        # Use the mime type of the first page, or default to PDF
+        first_file_extension = files[0].filename.split(".")[-1] if files[0].filename else "pdf"
+        parent_mime_type = get_mime_type_from_extension(first_file_extension) or "application/pdf"
+
         document = await repo.create({
             "document_id": document_id,
             "document_type": document_type,
@@ -967,6 +995,7 @@ async def upload_multi_page_document(
             "filename": f"{len(files)}_pages.pdf",
             "file_path": str(Path(settings.UPLOAD_DIRECTORY) / document_id),
             "file_size": total_size,
+            "mime_type": parent_mime_type,
             "extraction_mode": extraction_mode,
             "extraction_status": ExtractionStatus.PROCESSING,
             "shipment_id": shipment_id,

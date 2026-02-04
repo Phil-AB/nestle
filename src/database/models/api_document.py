@@ -36,7 +36,8 @@ class APIDocument(Base):
     # File storage
     file_path = Column(Text, nullable=False)
     file_size = Column(Integer)
-    
+    mime_type = Column(String(100))  # MIME type for proper file rendering
+
     # Multi-page support
     is_multi_page = Column(Boolean, default=False, nullable=False)
     total_pages = Column(Integer, default=1, nullable=False)
@@ -98,6 +99,7 @@ class APIDocument(Base):
             "filename": self.filename,
             "file_path": self.file_path,
             "file_size": self.file_size,
+            "mime_type": self.mime_type,
             "extraction_mode": self.extraction_mode,
             "extraction_status": self.extraction_status,
             "shipment_id": self.shipment_id,

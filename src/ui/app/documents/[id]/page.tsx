@@ -342,7 +342,7 @@ export default function DocumentRenderPage() {
                         <Card className="p-6">
                             <DocumentViewerWrapper
                                 fileUrl={apiClient.getDocumentFileUrl(documentId)}
-                                fileType="auto-detect"
+                                fileType={document.mime_type || undefined}
                                 blocks={document.blocks}
                             />
                         </Card>

@@ -11,6 +11,7 @@ interface PDFViewerProps {
   blocks?: ContentBlock[]
   onBlockClick?: (blockIndex: number) => void
   highlightedBlockIndex?: number
+  showAnnotations?: boolean
 }
 
 export function PDFViewer({
@@ -18,9 +19,11 @@ export function PDFViewer({
   blocks = [],
   onBlockClick,
   highlightedBlockIndex,
+  showAnnotations = true,
 }: PDFViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const renderTaskRef = useRef<any>(null)
 
   const [pdf, setPdf] = useState<any>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -62,6 +65,16 @@ export function PDFViewer({
     if (!pdf || !canvasRef.current) return
 
     const renderPage = async () => {
+      // Cancel any ongoing render task
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch (e) {
+          // Ignore cancel errors
+        }
+        renderTaskRef.current = null
+      }
+
       const page = await pdf.getPage(currentPage)
       const viewport = page.getViewport({ scale })
 
@@ -72,13 +85,34 @@ export function PDFViewer({
       canvas.height = viewport.height
       setCanvasSize({ width: viewport.width, height: viewport.height })
 
-      await page.render({
+      const renderTask = page.render({
         canvasContext: context,
         viewport: viewport,
-      }).promise
+      })
+      renderTaskRef.current = renderTask
+
+      try {
+        await renderTask.promise
+      } catch (error: any) {
+        // Ignore cancelled render errors
+        if (error?.name !== 'RenderingCancelledException') {
+          console.error("Error rendering PDF page:", error)
+        }
+      }
     }
 
     renderPage()
+
+    // Cleanup on unmount or before re-render
+    return () => {
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch (e) {
+          // Ignore cancel errors
+        }
+      }
+    }
   }, [pdf, currentPage, scale])
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.25, 3))
@@ -139,7 +173,7 @@ export function PDFViewer({
         style={{ maxHeight: "70vh" }}
       >
         <canvas ref={canvasRef} className="mx-auto" />
-        {canvasSize.width > 0 && (
+        {canvasSize.width > 0 && showAnnotations && (
           <AnnotationOverlay
             blocks={blocks}
             containerWidth={canvasSize.width}

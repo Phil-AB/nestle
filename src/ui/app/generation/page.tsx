@@ -370,8 +370,8 @@ export default function GenerationPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {forms.map((form) => (
-                    <Card key={form.form_id} className="hover:shadow-lg transition-shadow">
+                  {forms.map((form, index) => (
+                    <Card key={`${form.form_id}-${index}`} className="hover:shadow-lg transition-shadow">
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div>

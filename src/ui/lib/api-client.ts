@@ -75,6 +75,7 @@ export interface DocumentResponse {
   missing_fields: string[]
   metadata?: DocumentMetadata
   layout?: Record<string, any>
+  mime_type?: string
   raw_data?: Record<string, any>
   created_at: string
   updated_at?: string

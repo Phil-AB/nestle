@@ -11,6 +11,7 @@ interface ImageViewerProps {
   blocks?: ContentBlock[]
   onBlockClick?: (blockIndex: number) => void
   highlightedBlockIndex?: number
+  showAnnotations?: boolean
 }
 
 export function ImageViewer({
@@ -18,6 +19,7 @@ export function ImageViewer({
   blocks = [],
   onBlockClick,
   highlightedBlockIndex,
+  showAnnotations = true,
 }: ImageViewerProps) {
   const [scale, setScale] = useState(1)
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
@@ -132,7 +134,7 @@ export function ImageViewer({
                 setError("Failed to load document image. The file may not exist or there may be a network issue.")
               }}
             />
-            {imageDimensions.width > 0 && blocks && blocks.length > 0 && !loading && (
+            {imageDimensions.width > 0 && blocks && blocks.length > 0 && !loading && showAnnotations && (
               <AnnotationOverlay
                 blocks={blocks}
                 containerWidth={imageDimensions.width * scale}
