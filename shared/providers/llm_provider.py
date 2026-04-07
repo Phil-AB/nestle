@@ -117,61 +117,59 @@ class LLMProvider(BaseProvider):
         bedrock_enabled = self.config.options and self.config.options.get('bedrock_enabled', False)
 
         if bedrock_enabled:
-            # AWS Bedrock configuration
-            import os
             import boto3
+            from langchain_aws import ChatBedrock
 
-            # Get AWS credentials from environment
-            aws_access_key_id = self.config.options.get('aws_access_key_id') or os.getenv("AWS_ACCESS_KEY_ID")
-            aws_secret_access_key = self.config.options.get('aws_secret_access_key') or os.getenv("AWS_SECRET_ACCESS_KEY")
-            aws_region = self.config.options.get('aws_region') or os.getenv("AWS_REGION", "us-east-1")
-            aws_session_token = self.config.options.get('aws_session_token') or os.getenv("AWS_SESSION_TOKEN")
+            aws_region = (
+                self.config.options.get('aws_region')
+                or os.getenv("AWS_REGION")
+                or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+            )
 
-            # Validate AWS credentials
-            if not aws_access_key_id or not aws_secret_access_key:
+            bearer_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK")
+
+            if not bearer_token:
                 raise ValueError(
-                    "AWS credentials required for Bedrock. Set AWS_ACCESS_KEY_ID and "
-                    "AWS_SECRET_ACCESS_KEY environment variables, or provide in config."
+                    "AWS_BEARER_TOKEN_BEDROCK is not set. "
+                    "This system uses Bedrock API key authentication exclusively."
                 )
 
-            # Create boto3 session for Bedrock
-            session_kwargs = {
-                'aws_access_key_id': aws_access_key_id,
-                'aws_secret_access_key': aws_secret_access_key,
-                'region_name': aws_region
-            }
+            from botocore import UNSIGNED
+            from botocore.config import Config as BotocoreConfig
 
-            # Add session token if available (for temporary credentials)
-            if aws_session_token:
-                session_kwargs['aws_session_token'] = aws_session_token
+            bedrock_client = boto3.client(
+                'bedrock-runtime',
+                region_name=aws_region,
+                aws_access_key_id='bedrock-api-key',
+                aws_secret_access_key='not-used',
+                config=BotocoreConfig(signature_version=UNSIGNED),
+            )
 
-            bedrock_session = boto3.Session(**session_kwargs)
+            _token = bearer_token
 
+            def _inject_bearer(request, **kwargs):
+                request.headers['Authorization'] = f'Bearer {_token}'
+
+            bedrock_client.meta.events.register(
+                'before-send.bedrock-runtime.*', _inject_bearer
+            )
             logger.info(
-                f"Creating Anthropic LLM via AWS Bedrock: "
+                f"Bedrock client using bearer token: "
                 f"model={self.config.model}, region={aws_region}"
             )
 
-            # Create Bedrock runtime client (not Session)
-            bedrock_client = bedrock_session.client('bedrock-runtime')
-
-            # Create ChatAnthropic with Bedrock
-            from langchain_aws import ChatBedrock
-
-            # Build model kwargs with deterministic sampling parameters
-            model_kwargs = {
-                "temperature": self.config.temperature,
-            }
-
-            # Add top_k and topP for more deterministic outputs
+            # Build model kwargs
+            model_kwargs = {"temperature": self.config.temperature}
             if self.config.top_k is not None:
                 model_kwargs["top_k"] = self.config.top_k
             if self.config.topP is not None:
                 model_kwargs["topP"] = self.config.topP
 
-            # Filter out Bedrock-specific keys from extra_args
             extra_args = self.config.options.get('extra_args') or {}
-            bedrock_keys = {'bedrock_enabled', 'aws_access_key_id', 'aws_secret_access_key', 'aws_region', 'aws_session_token', 'extra_args'}
+            bedrock_keys = {
+                'bedrock_enabled', 'aws_access_key_id', 'aws_secret_access_key',
+                'aws_region', 'aws_session_token', 'extra_args'
+            }
             filtered_args = {k: v for k, v in extra_args.items() if k not in bedrock_keys}
 
             return ChatBedrock(
@@ -411,3 +409,18 @@ def get_cached_llm(
         API keys are read from environment variables.
     """
     return get_llm(provider, model, temperature=temperature)
+
+
+def get_llm_provider(provider: str = "anthropic", model: str = "claude-3-5-sonnet-20241022", **kwargs) -> BaseChatModel:
+    """
+    Get LLM provider instance (alias for get_llm for backwards compatibility).
+
+    Args:
+        provider: Provider name
+        model: Model identifier
+        **kwargs: Additional arguments passed to get_llm
+
+    Returns:
+        LangChain BaseChatModel instance
+    """
+    return get_llm(provider, model, **kwargs)

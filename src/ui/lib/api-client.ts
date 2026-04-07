@@ -410,6 +410,41 @@ export interface InsightsHealthResponse {
 }
 
 // ============================================================================
+// Shipment & Validation Pipeline Types (V2 API)
+// ============================================================================
+
+export interface ValidationDiscrepancy {
+  id: string
+  severity: "critical" | "major" | "minor"
+  field: string
+  source_document?: string
+  target_document?: string
+  source_value?: any
+  target_value?: any
+  description?: string
+  message?: string
+  status?: string
+}
+
+export interface VendorValidationResponse {
+  session_id?: string
+  workflow_status: "completed" | "awaiting_user" | "failed" | "running"
+  final_status?: "passed" | "failed" | "requires_attention"
+  summary?: Record<string, any>
+  discrepancies?: ValidationDiscrepancy[]
+  validation_results?: any[]
+  shipment_id?: string
+}
+
+export interface BOEValidationResponse {
+  session_id?: string
+  workflow_status: "completed" | "awaiting_user" | "failed" | "running"
+  final_status?: "passed" | "failed" | "requires_attention"
+  summary?: Record<string, any>
+  discrepancies?: ValidationDiscrepancy[]
+}
+
+// ============================================================================
 // Document Profile Types (V2 API)
 // ============================================================================
 
@@ -931,10 +966,16 @@ class APIClient {
       hasBody: !!options.body
     })
 
+    // Abort after 120 seconds — prevents the UI from hanging indefinitely
+    // when the backend is unreachable or the connection is silently dropped.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120_000)
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       })
 
       // Handle non-JSON responses
@@ -950,7 +991,9 @@ class APIClient {
             url: url,
             error: error
           })
-          throw new Error(error.message || error.error || `API request failed: ${response.status}`)
+          // FastAPI errors use "detail"; fall back to message/error fields
+          const message = (error as any).detail || error.message || error.error || `API request failed: ${response.status}`
+          throw new Error(message)
         } else {
           const errorText = await response.text()
           console.error('Non-JSON API Error:', {
@@ -969,11 +1012,19 @@ class APIClient {
 
       return isJSON ? await response.json() : ({} as T)
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        const timeoutMsg = 'Request timed out. The server took too long to respond.'
+        console.error('API Timeout:', url)
+        toast.error(timeoutMsg)
+        throw new Error(timeoutMsg)
+      }
       console.error("API Error:", error)
       if (error instanceof Error) {
         toast.error(error.message)
       }
       throw error
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 
@@ -2132,6 +2183,121 @@ class APIClient {
     return this.request<AutomationTriggerResponse>(
       `/automation/documents/${documentId}/retry`,
       { method: "POST" },
+      true
+    )
+  }
+
+  // ========================================================================
+  // Shipment & Validation Pipeline Endpoints (V2)
+  // ========================================================================
+
+  /**
+   * Create a new shipment record (Step 2 prerequisite)
+   */
+  async createShipment(data: {
+    shipment_number: string
+    supplier_name: string
+    consignee_name: string
+    incoterm?: string
+    transport_mode?: string
+  }): Promise<{ shipment_id: string; shipment_number: string }> {
+    return this.request(
+      "/validation/shipments",
+      { method: "POST", body: JSON.stringify(data) },
+      true
+    )
+  }
+
+  /**
+   * Step 2: Upload and validate vendor documents for a shipment.
+   * Files are uploaded as multipart form data.
+   */
+  async validateVendorDocs(
+    shipmentId: string,
+    files: {
+      invoice?: File
+      packing_list?: File
+      freight_manifest?: File
+      certificate_of_origin?: File
+    }
+  ): Promise<VendorValidationResponse> {
+    const form = new FormData()
+    if (files.invoice)              form.append("invoice_file", files.invoice)
+    if (files.packing_list)         form.append("packing_list_file", files.packing_list)
+    if (files.freight_manifest)     form.append("freight_manifest_file", files.freight_manifest)
+    if (files.certificate_of_origin) form.append("certificate_of_origin_file", files.certificate_of_origin)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 300_000) // 5-min for multi-doc
+    try {
+      const response = await fetch(`${API_V2_BASE_URL}/validation/shipments/${shipmentId}/validate-vendor-docs`, {
+        method: "POST",
+        headers: { "X-API-Key": API_KEY },
+        body: form,
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+        throw new Error(err.detail || err.message || `HTTP ${response.status}`)
+      }
+      return response.json()
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Request timed out. Document extraction is taking too long.")
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  /**
+   * Step 6: Upload BOE and validate against stored vendor docs for a shipment.
+   */
+  async validateBOE(
+    shipmentId: string,
+    boeFile: File
+  ): Promise<BOEValidationResponse> {
+    const form = new FormData()
+    form.append("boe_file", boeFile)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 300_000)
+    try {
+      const response = await fetch(`${API_V2_BASE_URL}/validation/shipments/${shipmentId}/validate-boe`, {
+        method: "POST",
+        headers: { "X-API-Key": API_KEY },
+        body: form,
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+        throw new Error(err.detail || err.message || `HTTP ${response.status}`)
+      }
+      return response.json()
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Request timed out.")
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  /**
+   * HITL resume: confirm/reject discrepancies and continue a paused validation session.
+   */
+  async resumeValidationSession(
+    sessionId: string,
+    confirmations: Array<{ discrepancy_id: string; confirmed: boolean; comment?: string }>
+  ): Promise<VendorValidationResponse | BOEValidationResponse> {
+    return this.request(
+      `/validation/sessions/${sessionId}/resume`,
+      {
+        method: "POST",
+        body: JSON.stringify({ confirmations }),
+      },
       true
     )
   }

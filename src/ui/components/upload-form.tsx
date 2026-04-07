@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
-import { FileUp, CheckCircle, Loader, FileText, Layers } from "lucide-react"
+import { FileUp, CheckCircle, Loader, FileText, Layers, AlertCircle } from "lucide-react"
 import { api } from "@/lib/api"
 import MultiFileUpload from "@/components/multi-file-upload"
 import { apiClient } from "@/lib/api-client"
@@ -25,6 +25,7 @@ export default function UploadForm() {
   const [currentStep, setCurrentStep] = useState<"upload" | "validate" | "complete">("upload")
   const [uploadMode, setUploadMode] = useState<"single" | "multi">("single")
   const [multiFiles, setMultiFiles] = useState<File[]>([])
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -50,6 +51,7 @@ export default function UploadForm() {
     if (uploadMode === "multi" && multiFiles.length === 0) return
 
     setUploading(true)
+    setUploadError(null)
     setCurrentStep("validate")
 
     try {
@@ -101,9 +103,9 @@ export default function UploadForm() {
       }
     } catch (error) {
       console.error("Upload failed", error)
-      // Reset to upload step on error so user can try again
+      const message = error instanceof Error ? error.message : "Upload failed. Please try again."
+      setUploadError(message)
       setCurrentStep("upload")
-      // Toast is handled in api.ts
     } finally {
       setUploading(false)
     }
@@ -137,6 +139,19 @@ export default function UploadForm() {
 
       {currentStep === "upload" && (
         <div className="space-y-6">
+          {/* Error Banner */}
+          {uploadError && (
+            <Card className="p-4 border-l-4 border-destructive bg-destructive/5">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-destructive text-sm">Upload Failed</p>
+                  <p className="text-sm text-destructive/80 mt-0.5">{uploadError}</p>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Document Metadata */}
           <Card className="p-6">
             <div className="space-y-4">
@@ -294,10 +309,17 @@ export default function UploadForm() {
               <Loader className="w-8 h-8 text-primary animate-spin" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Validating Documents</h2>
-          <p className="text-muted-foreground">
-            Your documents are being processed and validated. This may take a few moments...
+          <h2 className="text-2xl font-bold text-foreground mb-2">Processing Document</h2>
+          <p className="text-muted-foreground mb-6">
+            Your document is being uploaded and extracted. This may take a few moments...
           </p>
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            className="mx-auto"
+          >
+            Cancel
+          </Button>
         </Card>
       )}
 

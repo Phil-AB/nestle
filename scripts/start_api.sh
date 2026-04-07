@@ -4,7 +4,7 @@
 # Usage: ./start_api.sh [start|stop|restart|status]
 # Default action: start
 
-set -e
+set -eo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,9 +40,9 @@ print_header() {
 # Activate conda environment
 activate_conda() {
     eval "$(conda shell.bash hook)"
-    conda activate nestle 2>/dev/null || {
-        print_msg "$RED" "Error: Failed to activate conda environment 'nestle'"
-        print_msg "$YELLOW" "Please create it first: conda create -n nestle python=3.11"
+    conda activate ocr 2>/dev/null || {
+        print_msg "$RED" "Error: Failed to activate conda environment 'ocr'"
+        print_msg "$YELLOW" "Please create it first: conda create -n ocr python=3.11"
         exit 1
     }
 }
@@ -72,33 +72,42 @@ get_status() {
     fi
 }
 
+# Kill anything occupying the API port
+kill_port() {
+    local pids
+    pids=$(lsof -ti tcp:"$API_PORT" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        print_msg "$YELLOW" "Killing processes on port $API_PORT: $pids"
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 # Stop the API
 stop_api() {
     print_header
     print_msg "$YELLOW" "Stopping API server..."
 
-    if is_running; then
-        local pid=$(cat "$PID_FILE")
-        kill "$pid" 2>/dev/null || true
-
-        # Wait for process to terminate (max 10 seconds)
-        local count=0
-        while ps -p "$pid" > /dev/null 2>&1 && [ $count -lt 10 ]; do
-            sleep 1
-            count=$((count + 1))
-        done
-
-        # Force kill if still running
+    # Kill by saved PID first
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PID_FILE")
         if ps -p "$pid" > /dev/null 2>&1; then
-            print_msg "$YELLOW" "Force killing process..."
+            kill "$pid" 2>/dev/null || true
+            local count=0
+            while ps -p "$pid" > /dev/null 2>&1 && [ $count -lt 10 ]; do
+                sleep 1
+                count=$((count + 1))
+            done
             kill -9 "$pid" 2>/dev/null || true
         fi
-
         rm -f "$PID_FILE"
-        print_msg "$GREEN" "✓ API stopped successfully"
-    else
-        print_msg "$YELLOW" "API was not running"
     fi
+
+    # Always clear the port regardless — catches processes started outside the script
+    kill_port
+
+    print_msg "$GREEN" "✓ API stopped"
 }
 
 # Start the API
@@ -114,12 +123,8 @@ start_api() {
     print_msg "$BLUE" "Activating conda environment: nestle..."
     activate_conda
 
-    # Check if already running
-    if is_running; then
-        print_msg "$YELLOW" "API is already running!"
-        get_status
-        exit 1
-    fi
+    # Ensure the port is free before binding
+    kill_port
 
     # Check dependencies
     print_msg "$BLUE" "Checking dependencies..."

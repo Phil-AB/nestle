@@ -86,4 +86,5 @@ npm-debug.log*
 /src/ui/out/
 /src/ui/node_modules/
 /src/ui/.turbo/
+test-pdfs/
 

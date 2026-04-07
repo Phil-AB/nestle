@@ -227,6 +227,64 @@ class DocumentProcessingService:
                         logger.error(f"AI Enhancement failed (continuing with original extraction): {e}")
                         # Don't fail the whole process if AI enhancement fails
 
+            # BOE Section Extraction — runs for bill_of_entry documents after AI enhancement.
+            # Extracts structured sections (16, 21, 25, 31, 40) from Ghana GRA BOE forms
+            # and flattens key fields into result["fields"] so validators can reference them.
+            if document_type.lower().replace("-", "_").replace(" ", "_") in ("bill_of_entry", "boe"):
+                try:
+                    from modules.extraction.parser.boe_section_extractor import BOESectionExtractor
+                    boe_extractor = BOESectionExtractor()
+                    # Use the flat-field extractor first — it handles GRA BOE key-name
+                    # encoding and multi-value strings.  Then also build the legacy
+                    # structured object for metadata storage.
+                    flat_fields = boe_extractor.extract_flat_fields(result.get("fields", {}))
+                    boe_data = boe_extractor.extract_sections(result.get("fields", {}))
+
+                    # Merge flat fields into result["fields"].
+                    # BOE section extractor values are authoritative for GRA BOE format —
+                    # they correctly decode key-name encoding and normalize formats that
+                    # Reducto/AI cannot (e.g. hs_code: 1901902000 → 1901.90, gross_weight
+                    # decoded from key names).  Always overwrite with extractor values.
+                    for field, value in flat_fields.items():
+                        if value is not None:
+                            result["fields"][field] = value
+
+                    # Structured section data fills fields not covered by flat_fields.
+                    # Only fill gaps here (don't overwrite known-good extractor values).
+                    def _is_empty(v: Any) -> bool:
+                        if v is None:
+                            return True
+                        if isinstance(v, dict) and "value" in v:
+                            v = v["value"]
+                        if v is None:
+                            return True
+                        return str(v).strip() in ("", "<empty>", "-", "—")
+
+                    section_fields: Dict[str, Any] = {}
+                    if boe_data.section_16:
+                        section_fields["exchange_rate"] = boe_data.section_16.exchange_rate
+                        section_fields["currency_code"] = boe_data.section_16.currency_code
+                    if boe_data.section_21:
+                        section_fields["mode_of_transport"] = boe_data.section_21.mode_of_transport
+                        section_fields["entry_exit_code"] = boe_data.section_21.entry_exit_code
+                    for field, value in section_fields.items():
+                        if value is not None:
+                            if _is_empty(result["fields"].get(field)):
+                                result["fields"][field] = value
+
+                    # Store full structured BOE data in metadata for downstream use
+                    result.setdefault("metadata", {})["boe_sections"] = boe_data.dict()
+
+                    logger.info(
+                        f"BOE sections extracted: s16={boe_data.section_16 is not None}, "
+                        f"s21={boe_data.section_21 is not None}, "
+                        f"s25={len(boe_data.section_25)} items, "
+                        f"s31={len(boe_data.section_31)} items, "
+                        f"s40={len(boe_data.section_40)} items"
+                    )
+                except Exception as e:
+                    logger.error(f"BOE section extraction failed (continuing): {e}")
+
             # Save to database if enabled
             if self.use_database:
                 storage = self._get_storage_service()

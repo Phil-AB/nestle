@@ -4,5 +4,7 @@
 - make the codebase 100% structured and professional. so that its scalable and can be built upon by other developers seamlessly
 - remember to build for simplicity, very good abstraction, evolvability. reliability, scalability and maintainability. it is imperative you heed this rules.
 - this is a universal system, so it should be 100 percent dynamic, 100 percent use case based, no hardcoding, fully config driven.
+- before you make any changes or fix anything, investigate and verify first
+
 
 

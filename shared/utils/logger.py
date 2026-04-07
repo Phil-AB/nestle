@@ -82,3 +82,7 @@ def log_error(logger: logging.Logger, error: Exception, context: str = "") -> No
 
     if settings.DEBUG:
         logger.exception("Full traceback:")
+
+
+# Alias for compatibility
+get_logger = setup_logger

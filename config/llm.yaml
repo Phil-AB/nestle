@@ -21,7 +21,7 @@
 # Change this to switch between LLM providers globally
 # Options: anthropic, google, openai, custom
 
-active_provider: google  # Use Gemini for insights
+active_provider: anthropic  # AWS Bedrock via bearer token
 
 # ==============================================================================
 # PROVIDER CONFIGURATIONS
@@ -49,7 +49,7 @@ providers:
       # Default model for general tasks
       default:
         # AWS Bedrock - Amazon Nova Lite (fast, multimodal, cost-effective)
-        model_id: "amazon.nova-lite-v1:0"
+        model_id: "us.anthropic.claude-sonnet-4-6"
         temperature: 0.0
         max_tokens: 8192
         timeout: 120
@@ -58,7 +58,7 @@ providers:
       # Fast model for simple tasks
       fast:
         # AWS Bedrock - Amazon Nova Micro (fastest, text-only, cheapest)
-        model_id: "amazon.nova-micro-v1:0"
+        model_id: "us.anthropic.claude-sonnet-4-6"
         temperature: 0.0
         max_tokens: 4096
         timeout: 60
@@ -67,7 +67,7 @@ providers:
       # Powerful model for complex reasoning
       pro:
         # AWS Bedrock - Amazon Nova Pro (most powerful with direct invocation)
-        model_id: "amazon.nova-pro-v1:0"
+        model_id: "us.anthropic.claude-sonnet-4-6"
         temperature: 0.0
         top_k: 1
         topP: 1.0
@@ -192,6 +192,12 @@ modules:
     provider: anthropic  # Use Claude via AWS Bedrock
     model_variant: pro  # Claude Sonnet 4.5 (most powerful model)
     description: "AI-powered banking customer insights and risk assessment via AWS Bedrock"
+
+  # Synonym Mapper - Field name normalisation during validation
+  synonym_mapper:
+    provider: anthropic
+    model_variant: fast
+    description: "Semantic field name matching for cross-document normalisation"
 
   # Automation Agent - Automated approval workflows
   automation_agent:

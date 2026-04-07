@@ -1,0 +1,579 @@
+# BOE 3-Way Validation Use Case
+# Validates Bill of Entry against Invoice, Packing List, and Bill of Lading/Airway Bill
+
+use_case:
+  name: "boe_validation"
+  display_name: "BOE 3-Way Validation"
+  description: "Validate BOE against Invoice, Packing List, and BOL/AWB to ensure compliance and correct duty payment"
+  version: "1.0"
+
+  # Documents involved in validation
+  documents:
+    primary:
+      type: "bill_of_entry"
+      role: "draft"
+      required: true
+      description: "Bill of Entry draft to be validated"
+
+    supporting:
+      - type: "invoice"
+        role: "source"
+        required: true
+        description: "Commercial Invoice from supplier"
+
+      - type: "packing_list"
+        role: "source"
+        required: true
+        description: "Packing List with shipment details"
+
+      - type: "bill_of_lading"
+        role: "source"
+        required: false
+        description: "Bill of Lading (sea) or Airway Bill (air)"
+        alternatives:
+          - "airway_bill"
+
+  # Normalization rules (applied before validation)
+  normalization:
+    enabled: true
+
+    # Field synonym mapping (handles French/English variations)
+    synonyms:
+      hs_code:
+        - "HS Code"
+        - "HSN Code"
+        - "Code SH"
+        - "Tariff Code"
+        - "Harmonized Code"
+        - "hs_code"
+        - "hsn_code"
+        - "tariff_code"
+
+      net_weight:
+        - "Net Weight"
+        - "Poids Net"
+        - "Net Wt"
+        - "Poids net"
+        - "weight_net"
+        - "poids_net"
+        - "net_wt"
+        - "NetWeight"
+
+      gross_weight:
+        - "Gross Weight"
+        - "Poids Brut"
+        - "Gross Wt"
+        - "Poids brut"
+        - "weight_gross"
+        - "poids_brut"
+        - "gross_wt"
+        - "GrossWeight"
+
+      quantity:
+        - "Quantity"
+        - "Quantité"
+        - "Qty"
+        - "Qté"
+        - "quantity"
+        - "quantite"
+
+      unit_price:
+        - "Unit Price"
+        - "Prix Unitaire"
+        - "Price per Unit"
+        - "unit_price"
+        - "prix_unitaire"
+
+      description:
+        - "Description"
+        - "Product Description"
+        - "Item Description"
+        - "description"
+        - "product_description"
+
+      origin:
+        - "Country of Origin"
+        - "Origin"
+        - "Pays d'Origine"
+        - "origin"
+        - "country_of_origin"
+
+    # Unit conversions
+    units:
+      weight:
+        target: "KG"
+        conversions:
+          LBS: 0.453592
+          MT: 1000
+          G: 0.001
+          TON: 1000
+          T: 1000
+          TONS: 1000
+
+      currency:
+        target: "USD"
+        # Will use live exchange rates from API
+        source: "exchange_rate_api"
+        fallback_rates:
+          EUR: 1.1
+          GBP: 1.3
+          JPY: 0.0091
+          CAD: 0.79
+          CHF: 1.12
+
+    # Format standardization
+    formats:
+      date:
+        target: "YYYY-MM-DD"
+        sources:
+          - "DD/MM/YYYY"
+          - "MM/DD/YYYY"
+          - "DD-MMM-YYYY"
+          - "YYYY/MM/DD"
+          - "DD.MM.YYYY"
+
+      decimal:
+        decimal_separator: "."
+        thousands_separator: ","
+        precision: 2
+
+      currency:
+        position: "prefix"
+        symbol: "$"
+
+  # Validation workflow
+  workflow:
+    type: "sequential"  # Execute steps in order
+
+    steps:
+      # Step 1: Shipper/Consignee Cross-Document Validation (NEW - Sprint 1)
+      - name: "shipper_consignee_validation"
+        description: "Verify shipper and consignee match across BOE, Invoice, and BL/AWB"
+        validators:
+          - "shipper_consignee_validator"
+        config:
+          parties:
+            - name: "shipper"
+              documents:
+                - "bill_of_entry"
+                - "invoice"
+                - "bill_of_lading"
+              field_mappings:
+                bill_of_entry: "shipper_name"
+                invoice: "shipper_name"
+                bill_of_lading: "shipper_name"
+              match_type: "fuzzy"
+              fuzzy_threshold: 0.8
+
+            - name: "consignee"
+              documents:
+                - "bill_of_entry"
+                - "invoice"
+              field_mappings:
+                bill_of_entry: "consignee_name"
+                invoice: "consignee_name"
+              match_type: "fuzzy"
+              fuzzy_threshold: 0.8
+
+          normalization:
+            remove_whitespace: true
+            remove_punctuation: true
+            lowercase: true
+            remove_company_suffixes: true
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 2: Check that all required fields exist
+      - name: "field_extraction_check"
+        description: "Verify all required fields were extracted"
+        validators:
+          - "required_fields_validator"
+        config:
+          required_fields:
+            bill_of_entry:
+              - "hs_code"
+              - "gross_weight"
+              - "quantity"
+              - "duty_rate"
+            invoice:
+              - "net_weight"
+              - "quantity"
+            packing_list:
+              - "net_weight"
+              - "gross_weight"
+        on_failure: "flag_and_continue"
+        severity: "major"
+
+      # Step 2: HS Code must match exactly across all documents
+      # Note: commercial invoices and packing lists often do not contain HS codes —
+      # those are declared by the customs broker.  require_all: false means the check
+      # only runs when the field is present in at least 2 documents.
+      - name: "hs_code_3way_matching"
+        description: "HS Code must match across BOE, Invoice, and Packing List (when present)"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "hs_code"
+          documents:
+            - "bill_of_entry"
+            - "invoice"
+            - "packing_list"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 3: Weight matching with tolerance
+      - name: "weight_matching"
+        description: "Validate net and gross weights match within tolerance"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 1.0
+          per_session_override: true
+
+          validations:
+            # GRA BOE forms only show gross mass — skip net_weight vs BOE checks.
+            # Net weight cross-check between invoice and packing list is still validated.
+            - name: "net_weight_invoice_to_packing"
+              source: "invoice.net_weight"
+              target: "packing_list.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            - name: "gross_weight_invoice_to_packing"
+              source: "invoice.gross_weight"
+              target: "packing_list.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            - name: "gross_weight_packing_to_boe"
+              source: "packing_list.gross_weight"
+              target: "bill_of_entry.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 4: Quantity matching
+      - name: "quantity_matching"
+        description: "Validate quantities match across documents"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 0.5
+
+          validations:
+            # Compare quantity between invoice and packing list (same unit — bags).
+            # BOE quantity is in different units (pallets/containers) so BOE vs vendor
+            # doc quantity is not directly comparable without a conversion factor.
+            - name: "quantity_invoice_to_packing"
+              source: "invoice.quantity"
+              target: "packing_list.quantity"
+              tolerance_percent: 0.5
+              operator: "equals"
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 5: Duty calculation verification
+      - name: "duty_calculation"
+        description: "Verify duty amount is correctly calculated"
+        validators:
+          - "calculation_validator"
+        config:
+          calculations:
+            - name: "duty_amount"
+              formula: "customs_value * duty_rate"
+              fields:
+                customs_value: "bill_of_entry.customs_value"
+                duty_rate: "bill_of_entry.duty_rate"
+              target: "bill_of_entry.duty_amount"
+              tolerance_percent: 0.5
+              description: "Duty amount = CIF customs value × duty rate"
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 6: Duty rate range validation
+      - name: "duty_rate_validation"
+        description: "Ensure duty rate is within valid range"
+        validators:
+          - "range_validator"
+        config:
+          validations:
+            - field: "duty_rate"
+              min: 0
+              max: 1.0
+              operator: "within_range"
+              inclusive: true
+              required: true
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 7: HS Code format validation
+      - name: "hs_code_format"
+        description: "Validate HS Code format (XXXX.XX)"
+        validators:
+          - "regex_validator"
+        config:
+          validations:
+            - field: "hs_code"
+              pattern: "^\\d{4}\\.\\d{2}$"
+              description: "HS Code format (XXXX.XX)"
+              required: true
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 8: Customs Code Validation (NEW - Sprint 1)
+      - name: "customs_code_validation"
+        description: "Validate customs code-specific rules (40E68, 40V02, 40U01, 40W01)"
+        validators:
+          - "customs_code_validator"
+        config:
+          customs_codes:
+            # Inherit from validator config, can override here if needed
+            "40E68":
+              vat_rate: 0.05
+            "40V02":
+              vat_rate: 0.05
+            "40U01":
+              vat_rate: 0.05
+            "40W01":
+              vat_rate: 0.05
+
+          validations:
+            - customs_value_field: "bill_of_entry.customs_value"
+              amount_payable_field: "bill_of_entry.amount_payable"
+              amount_exempted_field: "bill_of_entry.amount_exempted"
+              duty_amount_field: "bill_of_entry.duty_amount"
+              vat_amount_field: "bill_of_entry.vat_amount"
+              customs_code_field: "bill_of_entry.customs_code"
+
+          tolerance: 0.01  # ±$0.01 for rounding
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 10: Mode of Shipment Validation
+      - name: "mode_of_shipment_validation"
+        description: "Validate transport document matches Section 21 mode"
+        validators:
+          - "mode_of_shipment_validator"
+        config:
+          section_21_field: "bill_of_entry.entry_exit_code"
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 11: Incoterm Validation
+      - name: "incoterm_validation"
+        description: "Validate freight/insurance charges are consistent with Incoterm"
+        validators:
+          - "incoterm_validator"
+        config:
+          validations:
+            - incoterm_field: "invoice.incoterm"
+              freight_field: "invoice.freight_value"
+              insurance_field: "invoice.insurance_value"
+              fob_field: "invoice.total_fob_value"
+              cif_field: "bill_of_entry.customs_value"
+          tolerance: 0.01
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 12: CET HS Code Validation
+      - name: "cet_hs_code_validation"
+        description: "Validate HS codes against CET (Common External Tariff) file"
+        validators:
+          - "cet_hs_code_validator"
+        config:
+          validations:
+            - hs_code_field: "bill_of_entry.hs_code"
+              description_field: "bill_of_entry.description"
+              duty_rate_field: "bill_of_entry.duty_rate"
+              document: "bill_of_entry"
+
+          # What to verify
+          verify_hs_code_exists: true
+          verify_description: true
+          verify_duty_rate: true
+
+          # Thresholds
+          description_similarity_threshold: 0.6  # 60% similarity
+          duty_rate_tolerance_percent: 0.1  # ±0.1%
+        on_failure: "continue"
+        severity: "critical"
+
+  # Discrepancy handling
+  discrepancy_handling:
+    classification:
+      enabled: true
+
+      # Severity classification rules
+      severity_rules:
+        critical:
+          - "hs_code mismatch"
+          - "duty calculation error > 5%"
+          - "weight difference > 5%"
+          - "missing required field"
+          - "customs code amount payable incorrect"
+          - "customs code 40V02 non-zero payable"
+          - "customs code duty exemption violation"
+          - "hs_code not found in CET"
+          - "duty rate mismatch with CET"
+
+        major:
+          - "weight difference > 1% and <= 5%"
+          - "quantity mismatch"
+          - "duty rate out of range"
+          - "hs_code format invalid"
+          - "customs code amount exempted incorrect"
+          - "unrecognized customs code"
+          - "description does not match CET"
+
+        minor:
+          - "weight difference <= 1%"
+          - "rounding differences"
+          - "quantity difference < 1%"
+
+        info:
+          - "unit differences (resolved by normalization)"
+          - "date format differences"
+          - "synonym variations"
+
+    # Auto-fix configuration
+    auto_fix:
+      enabled: true
+
+      rules:
+        - type: "format_normalization"
+          issues:
+            - "date_format"
+            - "currency_format"
+            - "number_format"
+
+        - type: "unit_conversion"
+          issues:
+            - "weight_unit"
+            - "currency_unit"
+
+        - type: "synonym_resolution"
+          issues:
+            - "field_name_variation"
+
+    # User confirmation requirements
+    user_confirmation:
+      required_for:
+        - "critical"
+        - "major"
+
+      optional_for:
+        - "minor"
+
+      auto_approve:
+        - "info"
+
+  # Version control
+  versioning:
+    enabled: true
+    track_changes: true
+
+    # Revalidation rules (when V2 is uploaded)
+    revalidation:
+      on_new_version: true
+      compare_with_previous: true
+
+      comparison_rules:
+        - check: "fixed_discrepancies"
+          expected: "all_fixed"
+          description: "All previous discrepancies should be fixed"
+
+        - check: "new_discrepancies"
+          expected: "none_critical"
+          description: "No new critical discrepancies introduced"
+
+        - check: "unchanged_correct_fields"
+          expected: "all_unchanged"
+          description: "Previously correct fields should remain unchanged"
+
+      pass_criteria:
+        - "all_critical_fixed"
+        - "no_new_critical"
+
+  # Missing data handling
+  missing_data:
+    strategy: "continue_with_partial"  # User choice: continue with partial validation
+
+    # Fields that are often missing and should prompt user
+    prompt_fields:
+      - field: "freight_value"
+        message: "Freight value not found in documents. Would you like to provide it?"
+        optional: true
+
+      - field: "insurance_value"
+        message: "Insurance value not found in documents. Would you like to provide it?"
+        optional: true
+
+    # Mark validation as incomplete if critical fields missing
+    incomplete_if_missing:
+      - "hs_code"
+      - "net_weight"
+      - "duty_rate"
+
+  # Automation triggers
+  automation:
+    # Automatically send correction email after discrepancy detection
+    on_discrepancy_detected:
+      - action: "send_correction_email"
+        condition: "user_confirmed_discrepancy"
+        template: "boe_correction_request"
+        recipients: "customs_agent"
+
+    # Update validation status
+    on_validation_complete:
+      - action: "update_status"
+        target: "validation_session"
+
+    # Mark as validated and notify
+    on_revalidation_pass:
+      - action: "mark_as_validated"
+      - action: "notify_user"
+        message: "BOE V2 validation passed. All discrepancies resolved."
+
+  # Reporting
+  reporting:
+    enabled: true
+
+    templates:
+      summary: "boe_validation_summary"
+      detailed: "boe_validation_detailed"
+      comparison: "boe_version_comparison"
+
+    export_formats:
+      - "json"
+      - "pdf"
+      - "csv"
+
+    include:
+      - "validation_results"
+      - "discrepancies_by_severity"
+      - "discrepancies_by_field"
+      - "auto_fixes_applied"
+      - "user_confirmations"
+      - "version_history"
+      - "audit_trail"
+      - "performance_metrics"
+
+  # Performance targets
+  performance:
+    max_processing_time_seconds: 30
+    target_accuracy: 0.995  # 99.5%
+    false_positive_rate_max: 0.02  # 2%
+
+  # Metadata
+  metadata:
+    created_by: "Nestle Customs Team"
+    created_at: "2026-02-09"
+    use_case_category: "customs_clearance"
+    compliance_standard: "WCO_SAFE"
+    business_impact: "high"
+    penalty_risk: "92%"

@@ -1,0 +1,83 @@
+# Tolerance Validator Configuration
+# Used for numeric field comparisons with configurable tolerance
+
+validator:
+  name: "tolerance_validator"
+  type: "statistical"
+  description: "Validates numeric fields with configurable tolerance for measurement variations"
+
+  # Default settings
+  settings:
+    # Default tolerance value
+    default_tolerance_percent: 1.0
+    default_tolerance_absolute: null
+
+    # Tolerance types
+    comparison_modes:
+      - "percentage"  # Tolerance as % of target value
+      - "absolute"    # Fixed tolerance value
+      - "relative"    # Tolerance relative to average of both values
+
+    # Supported operators
+    operators:
+      - "equals"              # Values should be equal within tolerance
+      - "less_than"           # Source should be less than target
+      - "greater_than"        # Source should be greater than target
+      - "within_range"        # Alias for equals
+
+    # Precision settings
+    decimal_precision: 10  # Use Decimal with 10 decimal places
+    rounding_mode: "half_up"
+
+  # Per-use-case overrides
+  use_case_overrides:
+    boe_validation:
+      default_tolerance_percent: 1.0
+      allow_session_override: true
+
+    invoice_validation:
+      default_tolerance_percent: 0.5
+      allow_session_override: false
+
+  # LLM configuration (not used for this validator)
+  llm_config:
+    enabled: false
+
+  # Caching
+  caching:
+    enabled: true
+    ttl_seconds: 3600
+
+  # Confidence scoring
+  confidence:
+    # How confidence decreases as difference approaches tolerance
+    confidence_decay_rate: 0.3
+
+    # Minimum confidence for passed validation
+    min_passed_confidence: 0.7
+
+    # Confidence for failed validation based on how far outside tolerance
+    failed_confidence_thresholds:
+      barely_outside: 0.6  # < 1.2x tolerance
+      moderate: 0.4        # < 1.5x tolerance
+      far_outside: 0.2     # >= 1.5x tolerance
+
+  # Examples
+  examples:
+    - name: "Weight matching"
+      config:
+        tolerance_percent: 1.0
+        operator: "equals"
+      description: "1000.0 vs 1005.0 = PASS (0.5% difference)"
+
+    - name: "Currency rounding"
+      config:
+        tolerance_absolute: 0.01
+        operator: "equals"
+      description: "$100.00 vs $100.01 = PASS (within $0.01)"
+
+    - name: "Net < Gross weight"
+      config:
+        tolerance_percent: 5.0
+        operator: "less_than"
+      description: "900 kg < 1000 kg = PASS"

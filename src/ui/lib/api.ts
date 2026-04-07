@@ -4,7 +4,7 @@
  * Use the new api-client.ts for new code with full TypeScript support
  */
 
-import { apiClient, type UploadResponse, type DocumentResponse, type PaginatedResponse } from './api-client'
+import { apiClient, type UploadResponse, type DocumentResponse, type PaginatedResponse, type ExtractionMode } from './api-client'
 
 // DocumentType is now just a string alias for clarity
 type DocumentType = string
@@ -27,8 +27,16 @@ export const api = {
      * Upload a document for extraction
      * @deprecated Use apiClient.uploadDocument instead
      */
-    async uploadDocument(file: File, type: string): Promise<UploadResponse> {
-        return apiClient.uploadDocument(file, type)
+    async uploadDocument(
+        file: File,
+        type?: string,
+        options?: {
+            documentName?: string
+            extractionMode?: ExtractionMode
+            shipmentId?: string
+        }
+    ): Promise<UploadResponse> {
+        return apiClient.uploadDocument(file, type, options)
     },
 
     /**

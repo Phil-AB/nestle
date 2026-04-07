@@ -1,0 +1,100 @@
+# Calculation Validator Configuration
+# Validates computed fields by recomputing from source values
+
+validator:
+  name: "calculation_validator"
+  type: "cross_document"
+  description: "Validates calculated fields by recomputing and comparing with tolerance"
+
+  # Default settings
+  settings:
+    # Default tolerance for calculation results
+    default_tolerance_percent: 0.5
+
+    # Supported operators
+    supported_operators:
+      - "+"    # Addition
+      - "-"    # Subtraction
+      - "*"    # Multiplication
+      - "/"    # Division
+      - "**"   # Exponentiation
+
+    # Formula parsing
+    formula_parser:
+      type: "simple_stack"  # Simple stack-based parser
+      notation: "infix"     # Standard infix notation
+
+    # Precision
+    decimal_precision: 10
+    rounding_mode: "half_up"
+
+  # Per-use-case overrides
+  use_case_overrides:
+    boe_validation:
+      default_tolerance_percent: 0.5
+      strict_mode: true  # All operands must be present
+
+    invoice_validation:
+      default_tolerance_percent: 0.1
+      strict_mode: true
+
+  # LLM verification
+  llm_verification:
+    enabled: false  # Can enable for complex calculations
+    provider: "google"
+    model: "default"
+    confidence_threshold: 0.8
+    use_cases:
+      - "complex_formula"
+      - "multi_step_calculation"
+
+  # Error handling
+  error_handling:
+    missing_field: "fail"  # fail, warn, skip
+    zero_division: "fail"
+    invalid_operand: "fail"
+    formula_parse_error: "fail"
+
+  # Confidence scoring
+  confidence:
+    # Confidence based on calculation accuracy
+    perfect_match: 1.0
+    within_tolerance: 0.9
+    barely_outside: 0.5
+    far_outside: 0.1
+
+  # Common calculations
+  common_calculations:
+    duty_amount:
+      formula: "unit_price * quantity * duty_rate"
+      description: "Duty amount = unit price × quantity × duty rate"
+      tolerance_percent: 0.5
+
+    total_value:
+      formula: "unit_price * quantity"
+      description: "Total value = unit price × quantity"
+      tolerance_percent: 0.1
+
+    freight_percentage:
+      formula: "freight_value / total_value"
+      description: "Freight % = freight value ÷ total value"
+      tolerance_percent: 1.0
+
+  # Examples
+  examples:
+    - name: "Duty calculation"
+      formula: "unit_price * quantity * duty_rate"
+      fields:
+        unit_price: 100
+        quantity: 50
+        duty_rate: 0.05
+      expected: 250
+      description: "$100 × 50 × 5% = $250"
+
+    - name: "Total with tax"
+      formula: "subtotal + subtotal * tax_rate"
+      fields:
+        subtotal: 1000
+        tax_rate: 0.2
+      expected: 1200
+      description: "$1000 + $1000 × 20% = $1200"

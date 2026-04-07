@@ -1,0 +1,404 @@
+# Vendor Document Pre-Validation Use Case (Step 2)
+# Validates vendor documents against each other BEFORE the BOE exists.
+# This runs after documents arrive from the vendor/supplier (Step 1) and
+# before transmitting the package to the clearing agent (Step 3).
+# No BOE fields are referenced anywhere in this config.
+
+use_case:
+  name: "vendor_document_validation"
+  display_name: "Vendor Document Pre-Validation"
+  description: "Step 2: validate vendor documents for completeness and cross-document consistency before transmitting to the clearing agent"
+  version: "1.0"
+
+  # Documents involved — all vendor-originated, no BOE
+  documents:
+    primary:
+      type: "invoice"
+      role: "source"
+      required: true
+      description: "Commercial Invoice from supplier"
+
+    supporting:
+      - type: "packing_list"
+        role: "source"
+        required: true
+        description: "Packing List with shipment details"
+
+      - type: "bill_of_lading"
+        role: "source"
+        required: false
+        description: "Bill of Lading (sea) or Airway Bill (air)"
+        alternatives:
+          - "airway_bill"
+          - "freight_manifest"
+
+      - type: "certificate_of_origin"
+        role: "source"
+        required: false
+        description: "Certificate of Origin"
+
+  # Normalization — same EN/FR synonym mapping and unit conversions as BOE validation
+  normalization:
+    enabled: true
+
+    synonyms:
+      hs_code:
+        - "HS Code"
+        - "HSN Code"
+        - "Code SH"
+        - "Tariff Code"
+        - "Harmonized Code"
+        - "hs_code"
+        - "hsn_code"
+        - "tariff_code"
+
+      net_weight:
+        - "Net Weight"
+        - "Poids Net"
+        - "Net Wt"
+        - "Poids net"
+        - "weight_net"
+        - "poids_net"
+        - "net_wt"
+        - "NetWeight"
+
+      gross_weight:
+        - "Gross Weight"
+        - "Poids Brut"
+        - "Gross Wt"
+        - "Poids brut"
+        - "weight_gross"
+        - "poids_brut"
+        - "gross_wt"
+        - "GrossWeight"
+
+      quantity:
+        - "Quantity"
+        - "Quantité"
+        - "Qty"
+        - "Qté"
+        - "quantity"
+        - "quantite"
+
+      unit_price:
+        - "Unit Price"
+        - "Prix Unitaire"
+        - "Price per Unit"
+        - "unit_price"
+        - "prix_unitaire"
+
+      description:
+        - "Description"
+        - "Product Description"
+        - "Item Description"
+        - "description"
+        - "product_description"
+
+      origin:
+        - "Country of Origin"
+        - "Origin"
+        - "Pays d'Origine"
+        - "origin"
+        - "country_of_origin"
+
+      shipper_name:
+        - "Shipper"
+        - "Exporter"
+        - "Exportateur"
+        - "Expéditeur"
+        - "shipper_name"
+        - "exporter_name"
+
+      consignee_name:
+        - "Consignee"
+        - "Destinataire"
+        - "Consignataire"
+        - "consignee_name"
+
+      invoice_number:
+        - "Invoice No"
+        - "Invoice Number"
+        - "Facture No"
+        - "Numéro de Facture"
+        - "invoice_number"
+        - "facture_number"
+
+    units:
+      weight:
+        target: "KG"
+        conversions:
+          LBS: 0.453592
+          MT: 1000
+          G: 0.001
+          TON: 1000
+          T: 1000
+          TONS: 1000
+
+      currency:
+        target: "USD"
+        source: "exchange_rate_api"
+        fallback_rates:
+          EUR: 1.1
+          GBP: 1.3
+          JPY: 0.0091
+          CAD: 0.79
+          CHF: 1.12
+
+    formats:
+      date:
+        target: "YYYY-MM-DD"
+        sources:
+          - "DD/MM/YYYY"
+          - "MM/DD/YYYY"
+          - "DD-MMM-YYYY"
+          - "YYYY/MM/DD"
+          - "DD.MM.YYYY"
+
+      decimal:
+        decimal_separator: "."
+        thousands_separator: ","
+        precision: 2
+
+      currency:
+        position: "prefix"
+        symbol: "$"
+
+  # Validation workflow — vendor docs only, no BOE
+  workflow:
+    type: "sequential"
+
+    steps:
+      # Step 1: Required fields present on invoice and packing list
+      - name: "field_completeness"
+        description: "Verify all required fields are present on vendor documents"
+        validators:
+          - "required_fields_validator"
+        config:
+          required_fields:
+            invoice:
+              - "invoice_number"
+              - "total_invoice_value"
+              - "net_weight"
+              - "gross_weight"
+            packing_list:
+              - "net_weight"
+              - "gross_weight"
+              - "quantity"
+        on_failure: "flag_and_continue"
+        severity: "major"
+
+      # Step 2: Shipper and consignee consistent across invoice, packing list, BL
+      # Catches "IB Tech International Company Limited" vs "IBT International Ltd" etc.
+      - name: "party_consistency"
+        description: "Verify shipper and consignee match across vendor documents"
+        validators:
+          - "shipper_consignee_validator"
+        config:
+          parties:
+            - name: "consignee"
+              documents:
+                - "invoice"
+                - "packing_list"
+              field_mappings:
+                invoice: "consignee_name"
+                packing_list: "consignee_name"
+              match_type: "fuzzy"
+              fuzzy_threshold: 0.75
+
+          normalization:
+            remove_whitespace: true
+            remove_punctuation: true
+            lowercase: true
+            remove_company_suffixes: true  # handles Ltd/Limited/Inc/Corp
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 3: HS code consistent across invoice and packing list (per line item)
+      - name: "hs_code_consistency"
+        description: "HS codes must match across invoice and packing list line items"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "hs_code"
+          documents:
+            - "invoice"
+            - "packing_list"
+          match_type: "exact"
+          require_all: true
+          line_items: true
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 4: Net and gross weight consistent between invoice and packing list (±1%)
+      - name: "weight_consistency"
+        description: "Net and gross weights must match between invoice and packing list"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 1.0
+
+          validations:
+            - name: "net_weight_invoice_to_packing"
+              source: "invoice.net_weight"
+              target: "packing_list.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            - name: "gross_weight_invoice_to_packing"
+              source: "invoice.gross_weight"
+              target: "packing_list.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 5: Quantity consistent between invoice and packing list (±0.5%)
+      - name: "quantity_consistency"
+        description: "Quantities must match between invoice and packing list"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 0.5
+
+          validations:
+            - name: "quantity_invoice_to_packing"
+              source: "invoice.quantity"
+              target: "packing_list.quantity"
+              tolerance_percent: 0.5
+              operator: "equals"
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 6: HS code format validation (XXXX.XX)
+      - name: "hs_code_format"
+        description: "Validate HS Code format on invoice"
+        validators:
+          - "regex_validator"
+        config:
+          validations:
+            - field: "hs_code"
+              pattern: "^\\d{4}\\.\\d{2}$"
+              description: "HS Code format (XXXX.XX)"
+              required: true
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 7: Incoterm rules — freight/insurance required for CFR/CIF, absent for FOB
+      - name: "incoterm_validation"
+        description: "Validate freight and insurance values match the Incoterm on the invoice"
+        validators:
+          - "incoterm_validator"
+        config:
+          validations:
+            - incoterm_field: "invoice.incoterm"
+              freight_field: "invoice.freight_value"
+              insurance_field: "invoice.insurance_value"
+              fob_field: "invoice.total_fob_value"
+          tolerance: 0.01
+        on_failure: "continue"
+        severity: "major"
+
+  # Discrepancy handling
+  discrepancy_handling:
+    classification:
+      enabled: true
+
+      severity_rules:
+        critical:
+          - "hs_code mismatch across documents"
+          - "weight difference > 5%"
+          - "missing required field"
+
+        major:
+          - "shipper or consignee name mismatch"
+          - "weight difference > 1% and <= 5%"
+          - "quantity mismatch"
+          - "hs_code format invalid"
+          - "incoterm freight/insurance rule violation"
+
+        minor:
+          - "weight difference <= 1%"
+          - "quantity difference < 1%"
+          - "rounding differences"
+
+        info:
+          - "unit differences resolved by normalization"
+          - "date format differences"
+          - "synonym variations (EN/FR)"
+
+    auto_fix:
+      enabled: true
+      rules:
+        - type: "format_normalization"
+          issues:
+            - "date_format"
+            - "currency_format"
+            - "number_format"
+        - type: "unit_conversion"
+          issues:
+            - "weight_unit"
+            - "currency_unit"
+        - type: "synonym_resolution"
+          issues:
+            - "field_name_variation"
+
+    user_confirmation:
+      required_for:
+        - "critical"
+        - "major"
+      optional_for:
+        - "minor"
+      auto_approve:
+        - "info"
+
+  # Missing data handling
+  missing_data:
+    strategy: "continue_with_partial"
+
+    prompt_fields:
+      - field: "freight_value"
+        message: "Freight value not found on invoice. Please provide if applicable."
+        optional: true
+      - field: "insurance_value"
+        message: "Insurance value not found on invoice. Please provide if applicable."
+        optional: true
+
+    incomplete_if_missing:
+      - "invoice_number"
+      - "hs_code"
+      - "total_invoice_value"
+
+  # Version control
+  versioning:
+    enabled: true
+    track_changes: true
+
+  # Reporting
+  reporting:
+    enabled: true
+    export_formats:
+      - "json"
+      - "pdf"
+      - "csv"
+    include:
+      - "validation_results"
+      - "discrepancies_by_severity"
+      - "auto_fixes_applied"
+      - "user_confirmations"
+      - "audit_trail"
+
+  # Performance targets
+  performance:
+    max_processing_time_seconds: 30
+    target_accuracy: 0.98
+    false_positive_rate_max: 0.02
+
+  # Metadata
+  metadata:
+    created_by: "Nestle IMPEX Automation"
+    created_at: "2026-04-06"
+    use_case_category: "customs_clearance"
+    workflow_step: "step_2_pre_transmit"
+    business_impact: "high"

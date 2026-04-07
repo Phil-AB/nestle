@@ -1,0 +1,556 @@
+# Normalization Configuration
+# Handles field name variations, unit conversions, and format standardization
+
+normalization:
+  # Strategy for field name resolution
+  # - config_only: Use only predefined synonym mappings
+  # - llm_only: Use only LLM for semantic matching
+  # - hybrid: Try config first, fallback to LLM (recommended)
+  strategy: "hybrid"
+
+  # Synonym mapping for field names
+  synonym_mapping:
+    # Enable synonym resolution
+    enabled: true
+
+    # LLM fallback configuration
+    llm_fallback:
+      enabled: true
+      provider: "google"  # From llm.yaml
+      model: "default"
+      confidence_threshold: 0.8
+      cache_successful_mappings: true  # Add to config for future use
+      max_retries: 2
+
+    # Global synonym dictionary
+    # Format: canonical_name: [list of synonyms]
+    synonyms:
+      # Customs and trade
+      hs_code:
+        - "HS Code"
+        - "HSN Code"
+        - "Code SH"
+        - "Tariff Code"
+        - "Harmonized Code"
+        - "Commodity Code"
+        - "hs_code"
+        - "hsn_code"
+        - "tariff_code"
+        - "harmonized_code"
+        - "code_sh"
+        - "commodity_code"
+        - "hs_code_ref"
+
+      customs_value:
+        - "Customs Value"
+        - "Valeur en Douane"
+        - "Declared Value"
+        - "customs_value"
+        - "valeur_douane"
+        - "declared_value"
+
+      duty_rate:
+        - "Duty Rate"
+        - "Taux de Droits"
+        - "Tax Rate"
+        - "duty_rate"
+        - "taux_droits"
+        - "tax_rate"
+
+      duty_amount:
+        - "Duty Amount"
+        - "Montant des Droits"
+        - "Tax Amount"
+        - "duty_amount"
+        - "montant_droits"
+        - "tax_amount"
+
+      # Weight fields
+      net_weight:
+        - "Net Weight"
+        - "Poids Net"
+        - "Net Wt"
+        - "Poids net"
+        - "weight_net"
+        - "poids_net"
+        - "net_wt"
+        - "NetWeight"
+        - "Weight (Net)"
+        - "Poids (Net)"
+        - "Total Net Weight"
+        - "Total sent Net weight"
+        - "Total sent Net Weight"
+        - "Net Weight Total"
+        - "total_net_weight"
+        - "total_sent_net_weight"
+
+      gross_weight:
+        - "Gross Weight"
+        - "Poids Brut"
+        - "Gross Wt"
+        - "Poids brut"
+        - "weight_gross"
+        - "poids_brut"
+        - "gross_wt"
+        - "GrossWeight"
+        - "Weight (Gross)"
+        - "Poids (Brut)"
+        - "Total Gross Weight"
+        - "Total sent Gross weight"
+        - "Total sent Gross Weight"
+        - "Gross Weight Total"
+        - "total_gross_weight"
+        - "total_sent_gross_weight"
+
+      tare_weight:
+        - "Tare Weight"
+        - "Poids de Tare"
+        - "Tare"
+        - "tare_weight"
+        - "poids_tare"
+
+      # Quantity and pricing
+      quantity:
+        - "Quantity"
+        - "Quantité"
+        - "Qty"
+        - "Qté"
+        - "quantity"
+        - "quantite"
+        - "Amount"
+        - "Montant"
+        - "Total Units"
+        - "Total sent Units"
+        - "Total Quantity"
+        - "Total Qty"
+        - "total_units"
+        - "total_quantity"
+        - "total_sent_units"
+        - "quantity_unit"
+        - "Quantity & Unit"
+        - "No. of Units"
+
+      unit_price:
+        - "Unit Price"
+        - "Prix Unitaire"
+        - "Price per Unit"
+        - "Price/Unit"
+        - "unit_price"
+        - "prix_unitaire"
+        - "price_per_unit"
+
+      total_price:
+        - "Total Price"
+        - "Prix Total"
+        - "Total Amount"
+        - "Montant Total"
+        - "total_price"
+        - "prix_total"
+        - "total_amount"
+
+      # Product information
+      description:
+        - "Description"
+        - "Product Description"
+        - "Item Description"
+        - "Goods Description"
+        - "description"
+        - "product_description"
+        - "item_description"
+        - "goods_description"
+
+      product_name:
+        - "Product Name"
+        - "Nom du Produit"
+        - "Item Name"
+        - "product_name"
+        - "nom_produit"
+        - "item_name"
+
+      # Origin and shipping
+      origin:
+        - "Country of Origin"
+        - "Origin"
+        - "Pays d'Origine"
+        - "COO"
+        - "origin"
+        - "country_of_origin"
+        - "pays_origine"
+
+      destination:
+        - "Destination"
+        - "Country of Destination"
+        - "Pays de Destination"
+        - "destination"
+        - "country_of_destination"
+
+      port_of_loading:
+        - "Port of Loading"
+        - "Port d'Embarquement"
+        - "Loading Port"
+        - "POL"
+        - "port_of_loading"
+        - "port_embarquement"
+
+      port_of_discharge:
+        - "Port of Discharge"
+        - "Port de Déchargement"
+        - "Discharge Port"
+        - "POD"
+        - "port_of_discharge"
+        - "port_dechargement"
+
+      # Dates
+      invoice_date:
+        - "Invoice Date"
+        - "Date de Facture"
+        - "Date"
+        - "invoice_date"
+        - "date_facture"
+
+      shipment_date:
+        - "Shipment Date"
+        - "Date d'Expédition"
+        - "Shipping Date"
+        - "shipment_date"
+        - "date_expedition"
+
+      arrival_date:
+        - "Arrival Date"
+        - "Date d'Arrivée"
+        - "ETA"
+        - "arrival_date"
+        - "date_arrivee"
+
+      # Identifiers
+      invoice_number:
+        - "Invoice Number"
+        - "Numéro de Facture"
+        - "Invoice No"
+        - "Invoice #"
+        - "invoice_number"
+        - "numero_facture"
+
+      boe_number:
+        - "BOE Number"
+        - "Bill of Entry Number"
+        - "Entry Number"
+        - "BOE No"
+        - "boe_number"
+        - "bill_of_entry_number"
+
+      container_number:
+        - "Container Number"
+        - "Numéro de Conteneur"
+        - "Container No"
+        - "container_number"
+        - "numero_conteneur"
+
+      # Parties
+      shipper_name:
+        - "Shipper"
+        - "Exporter"
+        - "Exportateur"
+        - "Expéditeur"
+        - "Supplier"
+        - "Vendor"
+        - "Seller"
+        - "From"
+        - "Sold By"
+        - "Shipped By"
+        - "shipper_name"
+        - "exporter_name"
+        - "supplier_name"
+        - "exporter"
+        - "shipper"
+
+      consignee_name:
+        - "Consignee"
+        - "Consignataire"
+        - "Destinataire"
+        - "Importer"
+        - "Importateur"
+        - "Ship-to Address"
+        - "Ship-to"
+        - "Ship To"
+        - "Delivery Address"
+        - "Buyer"
+        - "To"
+        - "Sold To"
+        - "consignee_name"
+        - "importer_name"
+        - "consignee"
+        - "ship_to"
+        - "delivery_address"
+        - "ship_to_address"
+
+      # Financial totals
+      total_invoice_value:
+        - "Total Incl. VAT"
+        - "Total Invoice Value"
+        - "Invoice Total"
+        - "Total Amount"
+        - "Total Payable"
+        - "Grand Total"
+        - "Total Incl Tax"
+        - "Total Including VAT"
+        - "Montant Total TTC"
+        - "total_invoice_value"
+        - "invoice_total"
+        - "grand_total"
+        - "total_amount"
+        - "total_incl_vat"
+
+      currency:
+        - "Currency"
+        - "Devise"
+        - "Monnaie"
+        - "Währung"
+        - "currency"
+        - "devise"
+
+      # Incoterms
+      incoterm:
+        - "Incoterm"
+        - "Incoterms"
+        - "Delivery Terms"
+        - "Shipping Condition"
+        - "Trade Terms"
+        - "Delivery Condition"
+        - "Terms of Delivery"
+        - "Conditions de Livraison"
+        - "incoterm"
+        - "delivery_terms"
+        - "shipping_condition"
+        - "trade_terms"
+
+      # BOE-specific field names (GRA form)
+      boe_number:
+        - "bill_of_entryboe_no"
+        - "Bill of Entry No"
+        - "BOE No"
+        - "Entry Number"
+        - "Declaration Number"
+        - "boe_no"
+        - "entry_number"
+        - "declaration_number"
+
+      bill_of_lading:
+        - "bl_awb"
+        - "bl_awb_no"
+        - "bill_of_lading_airwaybill"
+        - "Bill of Lading"
+        - "BL/AWB"
+        - "AWB"
+        - "Airway Bill"
+        - "bill_of_lading_number"
+        - "awb_number"
+
+      customs_code:
+        - "container_nos_chassis_nos"
+        - "CPC"
+        - "Customs Procedure Code"
+        - "cpc_code"
+
+      # (quantity and hs_code duplicates removed — merged into primary entries above)
+
+  # Unit conversion configuration
+  unit_conversion:
+    enabled: true
+
+    # Weight units
+    weight:
+      target_unit: "KG"
+      conversions:
+        # To kilograms
+        LBS: 0.453592
+        LB: 0.453592
+        POUNDS: 0.453592
+        OZ: 0.0283495
+        OUNCES: 0.0283495
+        G: 0.001
+        GRAMS: 0.001
+        MG: 0.000001
+        MT: 1000
+        METRIC_TON: 1000
+        TON: 1000
+        TONS: 1000
+        T: 1000
+        TONNE: 1000
+        TONNES: 1000
+
+    # Volume units
+    volume:
+      target_unit: "M3"
+      conversions:
+        # To cubic meters
+        L: 0.001
+        LITERS: 0.001
+        LITRES: 0.001
+        ML: 0.000001
+        MILLILITERS: 0.000001
+        GAL: 0.00378541
+        GALLONS: 0.00378541
+        FT3: 0.0283168
+        CUBIC_FEET: 0.0283168
+        IN3: 0.0000163871
+        CUBIC_INCHES: 0.0000163871
+
+    # Length units
+    length:
+      target_unit: "M"
+      conversions:
+        # To meters
+        CM: 0.01
+        CENTIMETERS: 0.01
+        MM: 0.001
+        MILLIMETERS: 0.001
+        KM: 1000
+        KILOMETERS: 1000
+        IN: 0.0254
+        INCHES: 0.0254
+        FT: 0.3048
+        FEET: 0.3048
+        YD: 0.9144
+        YARDS: 0.9144
+        MI: 1609.34
+        MILES: 1609.34
+
+    # Currency conversion
+    currency:
+      target_unit: "USD"
+      source: "exchange_rate_api"  # Live exchange rates
+      api_endpoint: "https://api.exchangerate-api.com/v4/latest/USD"
+      cache_ttl: 86400  # 24 hours
+
+      # Fallback rates (used if API is unavailable)
+      fallback_rates:
+        EUR: 1.1
+        GBP: 1.3
+        JPY: 0.0091
+        CAD: 0.79
+        CHF: 1.12
+        AUD: 0.72
+        CNY: 0.15
+        INR: 0.012
+        MXN: 0.055
+        BRL: 0.19
+
+  # Format normalization
+  format_normalization:
+    enabled: true
+
+    # Date formats
+    date:
+      target_format: "YYYY-MM-DD"  # ISO 8601
+
+      supported_formats:
+        - "DD/MM/YYYY"
+        - "MM/DD/YYYY"
+        - "DD-MM-YYYY"
+        - "MM-DD-YYYY"
+        - "DD.MM.YYYY"
+        - "DD-MMM-YYYY"
+        - "YYYY/MM/DD"
+        - "YYYY-MM-DD"
+        - "DD MMM YYYY"
+        - "MMM DD, YYYY"
+        - "DD MMMM YYYY"
+        - "MMMM DD, YYYY"
+
+      # Language support for month names
+      languages:
+        - "en"
+        - "fr"
+
+    # Decimal number formatting
+    decimal:
+      decimal_separator: "."
+      thousands_separator: ","
+      precision: 2
+
+      # Handle both formats
+      input_separators:
+        decimal: [".", ","]
+        thousands: [",", ".", " "]
+
+    # Currency formatting
+    currency:
+      position: "prefix"  # $ before number
+      symbol: "$"
+      space_after_symbol: false
+
+      # Recognize both formats
+      input_positions: ["prefix", "suffix"]
+
+    # Boolean normalization
+    boolean:
+      true_values:
+        - "true"
+        - "True"
+        - "TRUE"
+        - "yes"
+        - "Yes"
+        - "YES"
+        - "oui"
+        - "Oui"
+        - "OUI"
+        - "1"
+        - "Y"
+        - "y"
+
+      false_values:
+        - "false"
+        - "False"
+        - "FALSE"
+        - "no"
+        - "No"
+        - "NO"
+        - "non"
+        - "Non"
+        - "NON"
+        - "0"
+        - "N"
+        - "n"
+
+  # Language detection
+  language_detection:
+    enabled: true
+
+    # Supported languages
+    languages:
+      - code: "en"
+        name: "English"
+      - code: "fr"
+        name: "French"
+
+    # Default language if detection fails
+    default_language: "en"
+
+  # Whitespace normalization
+  whitespace:
+    enabled: true
+
+    # Operations
+    trim: true  # Remove leading/trailing whitespace
+    collapse: true  # Multiple spaces to single space
+    normalize_line_breaks: true  # \r\n to \n
+
+  # Case normalization
+  case_normalization:
+    # Don't normalize by default (preserve original case)
+    # Only normalize when specifically needed (e.g., case_insensitive matching)
+    enabled: false
+    default_case: "original"  # original, lower, upper, title
+
+  # Caching
+  caching:
+    enabled: true
+    ttl_seconds: 3600  # 1 hour
+    max_size: 10000  # Maximum cached entries
+
+  # Performance
+  performance:
+    parallel_normalization: true  # Normalize fields in parallel
+    batch_size: 100  # Fields per batch
+    timeout_seconds: 30

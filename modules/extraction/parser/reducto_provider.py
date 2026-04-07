@@ -148,8 +148,9 @@ class ReductoProvider(IParserProvider):
             # The /extract endpoint doesn't return chunks, which breaks UI approve/save functionality
             # We'll apply schema filtering during normalization instead
             logger.info("Using /parse endpoint to ensure blocks are extracted")
+            input_ref = file_id if file_id.startswith("reducto://") else f"reducto://{file_id}"
             payload = {
-                "input": f"reducto://{file_id}"
+                "input": input_ref
             }
             endpoint = f"{self.base_url}/parse"
 
@@ -470,22 +471,24 @@ class ReductoProvider(IParserProvider):
         table_data: Dict[str, Any] | List[Any],
         block: Dict[str, Any],
         block_idx: int
-    ) -> List[Dict[str, Any]]:
+    ) -> tuple:
         """
         Extract items from Reducto's structured table_data format.
-        
+
         This format includes cell-level bounding boxes and structured row/cell data,
         which is more accurate than parsing HTML strings.
-        
+
         Args:
             table_data: Structured table data from Reducto (can be list of rows or dict with rows)
             block: Block object containing table
             block_idx: Index of the table block
-            
+
         Returns:
-            List of item dictionaries with column metadata and cell-level bbox
+            Tuple of (items, extra_fields) where extra_fields captures summary rows
+            (e.g. "Total sent Net weight: 189,000.00") from unnamed columns.
         """
         items = []
+        extra_fields = {}
         
         # Normalize table_data format (could be list or dict)
         if isinstance(table_data, dict):
@@ -580,8 +583,32 @@ class ReductoProvider(IParserProvider):
             
             if item:
                 items.append(item)
-        
-        return items
+
+            # --- Capture "Total sent X" rows from unnamed columns ---
+            # The packing list has summary rows where the label is in a named column
+            # but the numeric value is in a column with an empty header (col 4-6).
+            # We need to scan ALL cells including those in unnamed columns.
+            all_cell_values = []  # (col_idx, str_value)
+            for ci, cell in enumerate(cells):
+                if isinstance(cell, dict):
+                    v = (cell.get("value") or cell.get("text") or "").strip()
+                else:
+                    v = str(cell).strip() if cell else ""
+                if v:
+                    all_cell_values.append((ci, v))
+
+            for ci, val in all_cell_values:
+                labels = [ln.strip() for ln in val.split("\n") if ln.strip().lower().startswith("total sent")]
+                if not labels:
+                    continue
+                subsequent = [v for idx, v in all_cell_values if idx > ci]
+                for i, label in enumerate(labels):
+                    if i < len(subsequent):
+                        field_key = self._normalize_key(label)
+                        if field_key and field_key not in extra_fields:
+                            extra_fields[field_key] = subsequent[i]
+
+        return items, extra_fields
 
     def _extract_from_parse_chunks(self, parse_result: Dict[str, Any]) -> tuple:
         """
@@ -599,6 +626,10 @@ class ReductoProvider(IParserProvider):
         fields = {}
         items = []
         all_blocks = []  # NEW: Store ALL blocks for full document rendering
+        # Section-header carry-over: if a non-Table block is entirely a label
+        # (ends with ':' and no value on the same line), hold the normalized key
+        # so the *next* text block can be used as its value.
+        _pending_label: Optional[str] = None
 
         chunks = parse_result.get("chunks", [])
 
@@ -655,6 +686,7 @@ class ReductoProvider(IParserProvider):
 
                 # Extract tables as items (highest priority)
                 if block_type == "Table":
+                    _pending_label = None  # Tables never consume a section-header label
                     logger.info(f"Extracting table from block {block_idx}")
                     
                     # Check if Reducto provided structured table_data (preferred - has cell-level bbox)
@@ -663,8 +695,18 @@ class ReductoProvider(IParserProvider):
                     if table_data and isinstance(table_data, (list, dict)):
                         # Use structured table_data from Reducto (has cell-level info)
                         logger.info("Using structured table_data from Reducto (with cell-level metadata)")
-                        table_items = self._extract_from_structured_table(table_data, block, block_idx)
+                        table_items, table_extra_fields = self._extract_from_structured_table(table_data, block, block_idx)
                         items.extend(table_items)
+                        for k, v in table_extra_fields.items():
+                            if k not in fields:
+                                fields[k] = v
+                        # Supplement: colspan labels in structured table_data are
+                        # invisible to the parser — scan the raw HTML for totals.
+                        if block_content:
+                            html_totals = self._extract_totals_from_html(block_content)
+                            for k, v in html_totals.items():
+                                if k not in fields:
+                                    fields[k] = v
                     else:
                         # Fall back to parsing HTML/content string
                         logger.info("Parsing table from HTML/content (fallback)")
@@ -680,47 +722,123 @@ class ReductoProvider(IParserProvider):
 
                             logger.info(f"Extracted {len(table_rows)-1} rows with headers: {normalized_headers}")
 
-                            # Extract data rows with column metadata
-                            for row_idx, row in enumerate(table_rows[1:], start=1):
-                                if len(row) > 0:
-                                    item = {}
-                                    for col_idx, (original_header, normalized_header) in enumerate(zip(headers, normalized_headers)):
-                                        if col_idx < len(row) and normalized_header and row[col_idx]:
-                                            cell_value = row[col_idx].strip()
-                                            
-                                            # Store value with column metadata
-                                            item[normalized_header] = {
-                                                "value": cell_value,
-                                                "column_index": col_idx,  # 0-based column position
-                                                "column_number": col_idx + 1,  # 1-based column number
-                                                "original_header": original_header,  # Original header name
-                                                "normalized_header": normalized_header,  # Snake case header
-                                                "row_index": row_idx,  # Row number in table
-                                                "table_block_index": block_idx  # Which table block this came from
-                                            }
-                                            
-                                            # Also store bbox if available from block
-                                            if block.get("bbox"):
-                                                item[normalized_header]["table_bbox"] = block.get("bbox")
-                                            
-                                            # Remove None values
-                                            item[normalized_header] = {
-                                                k: v for k, v in item[normalized_header].items() 
-                                                if v is not None
-                                            }
-                                            
-                                            # If only value exists, store as simple value for backward compatibility
-                                            if len(item[normalized_header]) == 1:
-                                                item[normalized_header] = cell_value
-                                    
-                                    if item:  # Only add non-empty items
-                                        items.append(item)
+                            # Detect key-value tables: first column looks like labels (ends in ':')
+                            # These are document header tables (Invoice Number, Total Net Weight, etc.)
+                            # rather than line-item product tables.
+                            all_rows = [headers] + table_rows[1:]
+                            if self._is_key_value_table(headers, table_rows[1:]):
+                                logger.info("Detected key-value table — extracting as fields, not items")
+                                for row in all_rows:
+                                    # Scan column pairs: col 0+1, col 2+3, col 4+5, etc.
+                                    # Handle both "Label: Value" (colon suffix) and
+                                    # "Label  Value" (2-column tables without colons).
+                                    i = 0
+                                    import re as _re
+                                    while i < len(row) - 1:
+                                        raw_key = row[i].strip()
+                                        raw_val = row[i + 1].strip() if i + 1 < len(row) else ""
+                                        if not raw_key or not raw_val:
+                                            i += 1
+                                            continue
+                                        if raw_key.endswith(':') or self._looks_like_label(raw_key):
+                                            # If raw_val is a bare currency code (e.g. "EUR"),
+                                            # look one cell further for the actual numeric amount.
+                                            actual_val = raw_val
+                                            skip = 2
+                                            if _re.match(r'^[A-Z]{2,4}$', raw_val) and i + 2 < len(row):
+                                                next_cell = row[i + 2].strip()
+                                                if next_cell and _re.search(r'\d', next_cell):
+                                                    actual_val = next_cell
+                                                    skip = 3
+                                                    # Consume trailing currency code too
+                                                    if i + 3 < len(row) and _re.match(r'^[A-Z]{2,4}$', row[i + 3].strip()):
+                                                        skip = 4
+                                            # Skip inferred-label column-header rows: when the
+                                            # key doesn't have an explicit ':' suffix AND the value
+                                            # has no digits, it's likely a table column header pair
+                                            # ("Amount" → "VAT%", "Description" → "Unit").
+                                            # Keys that DO end with ':' are always explicit labels
+                                            # (e.g. "Ship-to Address:", "Shipping Condition:") and
+                                            # must never be skipped even if the value is text-only.
+                                            if (not raw_key.endswith(':') and
+                                                    actual_val == raw_val and
+                                                    not _re.search(r'[\d]', actual_val)):
+                                                i += 1
+                                                continue
+                                            field_key = self._normalize_key(raw_key)
+                                            if field_key and field_key not in fields:
+                                                fields[field_key] = actual_val
+                                            i += skip
+                                        else:
+                                            i += 1
+                            else:
+                                # Extract data rows with column metadata
+                                for row_idx, row in enumerate(table_rows[1:], start=1):
+                                    if len(row) > 0:
+                                        item = {}
+                                        for col_idx, (original_header, normalized_header) in enumerate(zip(headers, normalized_headers)):
+                                            if col_idx < len(row) and normalized_header and row[col_idx]:
+                                                cell_value = row[col_idx].strip()
+
+                                                # Store value with column metadata
+                                                item[normalized_header] = {
+                                                    "value": cell_value,
+                                                    "column_index": col_idx,
+                                                    "column_number": col_idx + 1,
+                                                    "original_header": original_header,
+                                                    "normalized_header": normalized_header,
+                                                    "row_index": row_idx,
+                                                    "table_block_index": block_idx
+                                                }
+
+                                                if block.get("bbox"):
+                                                    item[normalized_header]["table_bbox"] = block.get("bbox")
+
+                                                item[normalized_header] = {
+                                                    k: v for k, v in item[normalized_header].items()
+                                                    if v is not None
+                                                }
+
+                                                if len(item[normalized_header]) == 1:
+                                                    item[normalized_header] = cell_value
+
+                                        if item:
+                                            items.append(item)
+
+                                    # After item extraction, also scan HTML for
+                                    # "Total sent X" rows with colspan labels that
+                                    # table_data doesn't parse correctly.
+                                    if block_content:
+                                        html_totals = self._extract_totals_from_html(block_content)
+                                        for k, v in html_totals.items():
+                                            if k not in fields:
+                                                fields[k] = v
 
                 # Extract from ANY block with content (Text, Figure, Header, Key Value, Footer, Title, etc.)
                 # This makes it truly universal - we extract from EVERYTHING
                 else:
+                    # Section-header carry-over: if the previous block was a bare label
+                    # (e.g. "Delivery address:") with no value, use this block's first
+                    # non-empty line as the value for that label.
+                    if _pending_label and block_content.strip():
+                        first_line = block_content.strip().split("\n")[0].strip()
+                        if first_line and _pending_label not in fields:
+                            fields[_pending_label] = first_line
+                            logger.debug(f"Section-header carry-over: '{_pending_label}' = '{first_line}'")
+                        _pending_label = None
+
                     # Dynamic key:value extraction - handles any format
                     extracted_fields = self._extract_key_values_dynamic(block_content)
+
+                    # Check if this block is a bare section label (entire content is "Label:")
+                    # with no value extracted — carry it forward to the next block.
+                    stripped = block_content.strip()
+                    if not extracted_fields and stripped.endswith(":") and "\n" not in stripped:
+                        candidate_key = self._normalize_key(stripped)
+                        if candidate_key:
+                            _pending_label = candidate_key
+                    else:
+                        _pending_label = None
 
                     # Merge extracted fields (first occurrence wins)
                     # Also preserve layout info (bbox) for each field if available
@@ -777,13 +895,122 @@ class ReductoProvider(IParserProvider):
         key = re.sub(r'<[^>]+>', '', key)  # Remove HTML tags
         key = key.lower()
         key = key.replace(" ", "_").replace("-", "_").replace("/", "_")
-        key = key.replace("(", "").replace(")", "").replace(".", "").replace(",", "")
+        key = key.replace("(", "").replace(")", "").replace(".", "").replace(",", "").replace(":", "")
         key = key.replace("\n", "_").replace("\r", "")
 
         # Remove multiple underscores
         key = "_".join(filter(None, key.split("_")))
 
         return key
+
+    def _is_key_value_table(self, headers: list, data_rows: list) -> bool:
+        """
+        Return True if this table is a key-value document header table
+        (e.g. Invoice Number / 9400080882) rather than a line-item product table.
+
+        Signals:
+        1. The first header cell ends with ':' (label column as header)
+        2. At least half of first-column cells in data rows end with ':'
+        3. Only 1-2 non-empty columns
+        """
+        # Signal 1 – header row itself starts the KV pattern
+        if headers and str(headers[0]).strip().endswith(':'):
+            return True
+
+        # Signal 2 – majority of first-column cells end with ':'
+        if data_rows:
+            first_col = [str(r[0]).strip() for r in data_rows if r and str(r[0]).strip()]
+            if first_col:
+                colon_ratio = sum(1 for v in first_col if v.endswith(':')) / len(first_col)
+                if colon_ratio >= 0.5:
+                    return True
+
+        # Signal 3 – only 1 or 2 non-empty column headers (simple two-column layout)
+        non_empty = sum(1 for h in headers if str(h).strip())
+        if non_empty <= 2:
+            return True
+
+        return False
+
+    def _looks_like_label(self, text: str) -> bool:
+        """
+        Return True if text looks like a document field label rather than a data value.
+        Labels are word-based strings (no leading digits, no pure numbers/codes).
+        Examples that ARE labels: "Total Net Weight", "Shipping Condition", "Invoice Date"
+        Examples that are NOT labels: "9400080882", "E36001065", "189,000.000", "0.00 %"
+        """
+        t = text.strip()
+        if not t:
+            return False
+        # Reject pure numbers / codes that start with digits
+        import re
+        if re.match(r'^[\d,.\s%]+$', t):
+            return False
+        if re.match(r'^\d', t) and len(t.split()) == 1:
+            return False
+        # Must contain at least one letter
+        if not re.search(r'[A-Za-z]', t):
+            return False
+        # Short all-caps codes (article numbers etc.) are not labels
+        words = t.split()
+        if len(words) == 1 and t.isupper() and len(t) <= 12:
+            return False
+        # Multi-word strings starting with a capital letter are likely labels
+        return len(words) >= 2 or (len(words) == 1 and t[0].isupper() and len(t) > 5)
+
+    def _extract_totals_from_html(self, html_content: str) -> Dict[str, str]:
+        """
+        Extract "Total sent X" summary values from raw HTML table content.
+
+        Handles colspan labels and European number format (dot=thousands, comma=decimal).
+        Parses structures like:
+          <td colspan="3">Total sent Net weight</td><td>189.000,00 kg</td>
+          <td colspan="3">Total sent Gross weight\\nTotal sent Units</td><td>192.780,00 kg</td>
+          <tr>...<td>7.560</td></tr>   ← Units value in next row
+        """
+        import re
+        fields: Dict[str, str] = {}
+        pending_labels: List[str] = []  # labels that still need a value (from next row)
+
+        # Find each table cell containing "Total sent ..." text followed by a value cell
+        label_value_re = re.compile(
+            r'<td[^>]*>\s*(Total sent[^<]+?)\s*</td>\s*<td[^>]*>([^<]*)</td>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        for m in label_value_re.finditer(html_content):
+            raw_label_cell = m.group(1).strip()
+            raw_value = m.group(2).strip()
+
+            # A cell may contain multiple "\n"-separated "Total sent X" labels
+            sub_labels = [ln.strip() for ln in raw_label_cell.split('\n') if ln.strip()]
+            total_labels = [l for l in sub_labels if l.lower().startswith('total sent')]
+
+            for idx, lbl in enumerate(total_labels):
+                field_key = self._normalize_key(lbl)
+                if not field_key:
+                    continue
+                if idx == 0 and raw_value:
+                    # First label → inline value
+                    fields.setdefault(field_key, raw_value)
+                else:
+                    # Remaining labels → value comes from the next standalone row
+                    pending_labels.append(field_key)
+
+        # Resolve pending labels from the trailing row with only a bare value
+        # Pattern: <tr> with only empty <td>s and one final <td>VALUE</td></tr>
+        if pending_labels:
+            trailing_re = re.compile(
+                r'<tr[^>]*>(?:\s*<td[^>]*>\s*</td>\s*)*\s*<td[^>]*>([^<]+)</td>\s*</tr>',
+                re.IGNORECASE | re.DOTALL,
+            )
+            for m in trailing_re.finditer(html_content):
+                val = m.group(1).strip()
+                if val:
+                    for lbl_key in pending_labels:
+                        fields.setdefault(lbl_key, val)
+                    break  # only the first matching trailing row
+
+        return fields
 
     def _parse_table_dynamic(self, table_content: str) -> list:
         """
@@ -970,16 +1197,25 @@ class ReductoProvider(IParserProvider):
         """
         Calculate overall confidence score from Reducto response.
 
+        Averages block-level confidence values from all chunks in the result.
+
         Args:
             provider_response: Reducto API response
 
         Returns:
-            Confidence score between 0.0 and 1.0
+            Confidence score between 0.0 and 1.0, or 0.0 if unavailable
         """
-        # Reducto doesn't provide per-field confidence in extract endpoint
-        # We can add this later if Reducto adds confidence scores
-        # For now, return 0.0 to indicate unknown confidence
-        return 0.0
+        result = provider_response.get("result", {})
+        chunks = result.get("chunks", [])
+
+        scores = []
+        for chunk in chunks:
+            for block in chunk.get("blocks", []):
+                confidence = block.get("confidence")
+                if isinstance(confidence, (int, float)) and confidence is not None:
+                    scores.append(float(confidence))
+
+        return sum(scores) / len(scores) if scores else 0.0
 
     async def health_check(self) -> bool:
         """
@@ -1026,7 +1262,8 @@ class ReductoProvider(IParserProvider):
         Returns:
             Parse result from Reducto
         """
-        payload = {"input": f"reducto://{file_id}", **config}
+        input_ref = file_id if file_id.startswith("reducto://") else f"reducto://{file_id}"
+        payload = {"input": input_ref, **config}
 
         logger.debug(f"Parse payload: {payload}")
 

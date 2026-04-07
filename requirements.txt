@@ -19,6 +19,7 @@ langchain-openai
 langchain-anthropic
 langchain-google-genai  # Gemini integration for LangChain
 langgraph  # Modern agent framework for LangChain
+langgraph-checkpoint-postgres  # PostgreSQL-backed checkpointer for HITL resume
 openai
 anthropic
 google-generativeai  # Gemini API (Form Generator)
@@ -57,3 +58,5 @@ pytest-cov
 black
 mypy
 ruff
+boto3>=1.42.0
+langchain-aws>=1.4.0

@@ -21,7 +21,7 @@ echo "Working directory: $PROJECT_ROOT"
 # Activate conda environment for Python dependencies (if any)
 echo "Activating conda environment: nestle..."
 eval "$(conda shell.bash hook)"
-conda activate nestle 2>/dev/null || echo "Warning: Could not activate conda environment 'nestle'"
+conda activate ocr 2>/dev/null || echo "Warning: Could not activate conda environment 'nestle'"
 
 # Navigate to UI directory
 cd src/ui
@@ -49,21 +49,21 @@ if [ ! -f ".env.local" ]; then
     echo "Warning: .env.local not found"
     echo "Creating default .env.local file..."
 
-    # Detect public IP for cloud environments
-    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "")
-    API_URL=${NEXT_PUBLIC_API_URL:-"http://localhost:8000/api/v1"}
+    # API_BACKEND_URL is server-side only — the Next.js proxy forwards
+    # browser requests to this URL. The browser never connects directly,
+    # so port 8000 does not need to be publicly accessible.
+    BACKEND_URL=${API_BACKEND_URL:-"http://localhost:8000"}
 
-    # Use public IP if available and not overridden
-    if [ -n "$PUBLIC_IP" ] && [ "$API_URL" = "http://localhost:8000/api/v1" ]; then
-        API_URL="http://$PUBLIC_IP:8000/api/v1"
-        echo "Detected public IP: $PUBLIC_IP, using API URL: $API_URL"
-    fi
-
+    # If running on EC2 and the backend is on the same host, localhost is correct.
+    # If the backend is on a different host, set API_BACKEND_URL before running this script.
     cat > .env.local << EOF
-NEXT_PUBLIC_API_URL=$API_URL
+# Server-side only: backend URL used by the Next.js proxy rewrite.
+# The browser never sees this value — it uses relative paths (/api/v1/...).
+API_BACKEND_URL=$BACKEND_URL
+
 NEXT_PUBLIC_API_KEY=dev-key-12345
 EOF
-    echo "Created .env.local with API URL: $API_URL"
+    echo "Created .env.local with API_BACKEND_URL: $BACKEND_URL"
 fi
 
 echo ""

@@ -1,0 +1,216 @@
+# Customs Code Validator Configuration
+# Ghana Customs ICUMS System - BOE Validation Rules
+
+validator:
+  name: "customs_code_validator"
+  type: "rule_based"
+  description: "Validates customs code-specific duty and VAT calculations for Ghana BOE processing"
+  version: "1.0"
+
+# Ghana Customs Codes Configuration
+customs_codes:
+  # 40E68: Full VAT Payment
+  "40E68":
+    type: "full_vat_payment"
+    description: "Full Import VAT payment required (5% of customs value)"
+    vat_rate: 0.05  # 5%
+    duty_exempted: false
+    vat_exempted: false
+    taxes_payable: true
+    formula: "amount_payable = 5% * customs_value"
+    examples:
+      - customs_value: 10000
+        expected_amount_payable: 500
+        explanation: "5% of 10,000 = 500"
+
+  # 40V02: VAT Exempted
+  "40V02":
+    type: "vat_exempted"
+    description: "VAT exempted for payment later (concession)"
+    vat_rate: 0.05  # 5% (for calculation of exempted amount)
+    duty_exempted: false
+    vat_exempted: true
+    taxes_payable: false
+    formula: "amount_payable = 0.00; amount_exempted = 5% * customs_value"
+    examples:
+      - customs_value: 10000
+        expected_amount_payable: 0.00
+        expected_amount_exempted: 500
+        explanation: "VAT exempted, no payment now. Exempted amount = 5% of 10,000 = 500"
+
+  # 40U01: Import Duty Exempted
+  "40U01":
+    type: "duty_exempted"
+    description: "Import duty fully exempted (no duty payment)"
+    vat_rate: 0.05
+    duty_exempted: true
+    vat_exempted: false
+    taxes_payable: true
+    formula: "duty_amount = 0.00; VAT payable"
+    examples:
+      - duty_amount: 0.00
+        explanation: "Import duty is fully exempted"
+
+  # 40W01: Import Duty Exempted, Taxes Payable
+  "40W01":
+    type: "duty_exempted_tax_payable"
+    description: "Import duty exempted but taxes (VAT, etc.) are still payable"
+    vat_rate: 0.05
+    duty_exempted: true
+    vat_exempted: false
+    taxes_payable: true
+    formula: "duty_amount = 0.00; VAT payable"
+    examples:
+      - duty_amount: 0.00
+        vat_amount: "> 0"
+        explanation: "Duty exempted but VAT must be paid"
+
+# Default settings
+settings:
+  # Tolerance for amount comparison (for rounding differences)
+  tolerance: 0.01  # ±$0.01
+
+  # Fail validation if unrecognized customs code
+  fail_on_unknown_code: false
+
+  # Log warnings for unusual values
+  log_warnings: true
+
+  # Supported customs value currencies
+  supported_currencies:
+    - USD
+    - EUR
+    - GBP
+    - GHS  # Ghana Cedi
+
+# Field mappings (can be overridden in use case config)
+default_field_mappings:
+  customs_code_field: "bill_of_entry.customs_code"
+  customs_value_field: "bill_of_entry.customs_value"
+  amount_payable_field: "bill_of_entry.amount_payable"
+  amount_exempted_field: "bill_of_entry.amount_exempted"
+  duty_amount_field: "bill_of_entry.duty_amount"
+  vat_amount_field: "bill_of_entry.vat_amount"
+
+# Validation severity mappings
+severity_mappings:
+  incorrect_amount_payable:
+    difference_threshold_percent: 5  # 5%
+    below_threshold: "major"
+    above_threshold: "critical"
+
+  incorrect_amount_exempted:
+    difference_threshold_percent: 10  # 10%
+    below_threshold: "minor"
+    above_threshold: "major"
+
+  unrecognized_customs_code: "major"
+  missing_customs_code: "critical"
+
+# Known customs codes reference (for documentation)
+# Source: Ghana Customs ICUMS System
+known_codes:
+  - code: "40E68"
+    category: "Full VAT Payment"
+    usage: "Standard imports requiring full VAT payment"
+
+  - code: "40V02"
+    category: "VAT Exempted"
+    usage: "Concessions, duty-free imports, exempted goods"
+
+  - code: "40U01"
+    category: "Duty Exempted"
+    usage: "Diplomatic goods, aid shipments"
+
+  - code: "40W01"
+    category: "Duty Exempted with Taxes"
+    usage: "Special exemptions where duty waived but taxes apply"
+
+# Validation rules documentation
+validation_rules:
+  40E68:
+    rule: "Amount Payable MUST equal 5% of Customs Value"
+    calculation: "amount_payable = customs_value * 0.05"
+    rounding: "Round to 2 decimal places (HALF_UP)"
+    severity: "CRITICAL if difference > 5%"
+
+  40V02:
+    rules:
+      - rule: "Amount Payable MUST be 0.00"
+        severity: "CRITICAL if not zero"
+      - rule: "Amount Exempted MUST equal 5% of Customs Value"
+        calculation: "amount_exempted = customs_value * 0.05"
+        severity: "MAJOR if difference > 10%"
+
+  40U01:
+    rule: "Duty Amount MUST be 0.00"
+    severity: "CRITICAL if not zero"
+
+  40W01:
+    rules:
+      - rule: "Duty Amount MUST be 0.00"
+        severity: "CRITICAL if not zero"
+      - rule: "VAT Amount SHOULD be greater than 0"
+        severity: "MINOR if zero (warning only)"
+
+# Integration notes
+integration:
+  dependencies:
+    - "Requires customs_value field from BOE"
+    - "Requires customs_code field from BOE"
+    - "Validates amount_payable, amount_exempted, duty_amount, vat_amount"
+
+  caching:
+    enabled: true
+    ttl_seconds: 3600  # Cache customs code configs for 1 hour
+
+  llm_fallback:
+    enabled: false  # Pure rule-based, no LLM needed
+
+# Testing data
+test_cases:
+  - name: "40E68 - Correct calculation"
+    customs_code: "40E68"
+    customs_value: 10000
+    amount_payable: 500
+    expected_result: "PASS"
+
+  - name: "40E68 - Incorrect calculation"
+    customs_code: "40E68"
+    customs_value: 10000
+    amount_payable: 450
+    expected_result: "FAIL - Amount Payable incorrect"
+
+  - name: "40V02 - Correct (exempted)"
+    customs_code: "40V02"
+    customs_value: 10000
+    amount_payable: 0.00
+    amount_exempted: 500
+    expected_result: "PASS"
+
+  - name: "40V02 - Incorrect (non-zero payable)"
+    customs_code: "40V02"
+    customs_value: 10000
+    amount_payable: 500
+    amount_exempted: 0
+    expected_result: "FAIL - Amount Payable must be 0.00 for exemption"
+
+  - name: "40U01 - Correct (duty exempted)"
+    customs_code: "40U01"
+    duty_amount: 0.00
+    expected_result: "PASS"
+
+  - name: "40W01 - Correct (duty exempted, VAT payable)"
+    customs_code: "40W01"
+    duty_amount: 0.00
+    vat_amount: 250
+    expected_result: "PASS"
+
+# Metadata
+metadata:
+  author: "Nestle Customs Team"
+  created_at: "2026-02-10"
+  last_updated: "2026-02-10"
+  version: "1.0.0"
+  source: "Ghana Customs ICUMS System Documentation"
+  compliance_standard: "Ghana Customs Act 2015 (Act 891)"

@@ -477,3 +477,47 @@ class AuditLog(Base):
 
     def __repr__(self) -> str:
         return f"<AuditLog(id={self.id}, action={self.action})>"
+
+
+class ValidationSession(Base):
+    """
+    Persisted validation engine session.
+
+    Stores the full ValidationContext as JSONB so that in-progress workflows
+    survive server restarts. LangGraph checkpoints are stored separately by
+    the AsyncPostgresSaver; this table is the authoritative session registry.
+    """
+
+    __tablename__ = "validation_sessions"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=generate_uuid
+    )
+    use_case: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    workflow_status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="created", index=True
+    )  # created | running | awaiting_user | completed | failed
+
+    # Full serialised ValidationContext (fields, items, discrepancies, confirmations …)
+    context_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Optional link to the owning shipment (SET NULL on delete so sessions survive
+    # if the shipment is pruned)
+    shipment_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("shipments.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ValidationSession(id={self.id}, use_case={self.use_case}, "
+            f"status={self.workflow_status})>"
+        )

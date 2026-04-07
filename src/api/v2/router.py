@@ -5,7 +5,7 @@ Includes all v2 endpoints.
 """
 
 from fastapi import APIRouter
-from src.api.v2.endpoints import generation, population, insights, profiles, analytics, integration, automation
+from src.api.v2.endpoints import generation, population, insights, profiles, analytics, integration, automation, validation
 
 api_v2_router = APIRouter()
 
@@ -48,5 +48,11 @@ api_v2_router.include_router(
 # Include automation endpoints
 api_v2_router.include_router(
     automation.router,
+    prefix="/api/v2"
+)
+
+# Include validation engine endpoints (Step 2 & Step 6 pipeline)
+api_v2_router.include_router(
+    validation.router,
     prefix="/api/v2"
 )
