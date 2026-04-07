@@ -86,5 +86,27 @@ npm-debug.log*
 /src/ui/out/
 /src/ui/node_modules/
 /src/ui/.turbo/
+
+# Test PDFs (real documents, never commit)
 test-pdfs/
+
+# Runtime / PID files
+*.pid
+.api.pid
+.ui.pid
+
+# Test output artifacts
+*_output.json
+*_output.pdf
+test_*.pdf
+test_*.json
+
+# Office documents at root (keep only in docs/)
+/*.docx
+/*.pptx
+/*.doc
+
+# Screenshots / images at root
+/screenshots/
+*.png
 

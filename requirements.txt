@@ -1,62 +1,35 @@
-# Core Framework
-python-dotenv
-pydantic
-pydantic-settings
+# FastAPI and API dependencies for Nestle Document Processing System
 
-# Database
-sqlalchemy
-alembic
-psycopg2-binary
-asyncpg
+# Core FastAPI
+# Core FastAPI
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+python-multipart==0.0.6
 
-# HTTP Client
-httpx
+# Pydantic settings
+# Pydantic settings
+pydantic>=2.9.0
+pydantic-settings>=2.4.0
 
-# LangChain & LLM
-langchain>=0.1.0
-langchain-core
-langchain-openai
-langchain-anthropic
-langchain-google-genai  # Gemini integration for LangChain
-langgraph  # Modern agent framework for LangChain
-langgraph-checkpoint-postgres  # PostgreSQL-backed checkpointer for HITL resume
-openai
-anthropic
-google-generativeai  # Gemini API (Form Generator)
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
 
-# Utilities
-fuzzywuzzy
-python-Levenshtein
+# Background tasks (optional - for production)
+celery==5.3.4
+redis==5.0.1
 
-# Streamlit UI
-streamlit
-plotly
-pandas
-nest-asyncio
+# HTTP client for webhooks
+httpx==0.25.1
+aiofiles==23.2.1
 
-# Document Processing
-openpyxl
-xlrd
-python-docx
-weasyprint
-pypdf  # PDF form filling (Population Module)
-pdfplumber  # PDF layout analysis (Form Generator)
-reportlab  # PDF form field creation (Form Generator)
-Pillow  # Image processing (Form Generator)
-pdf2image  # PDF to image conversion (Form Generator)
-jinja2
+# Already in main requirements.txt (ensure these are installed):
+# - sqlalchemy
+# - asyncpg
+# - pyyaml
+# - python-dotenv
 
-# Date/Time
-python-dateutil
-
-# Testing
-pytest
-pytest-asyncio
-pytest-cov
-
-# Development
-black
-mypy
-ruff
-boto3>=1.42.0
-langchain-aws>=1.4.0
+# Development (optional)
+pytest-asyncio==0.21.1
+httpx==0.25.1  # For testing API endpoints
