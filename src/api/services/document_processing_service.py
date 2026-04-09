@@ -95,6 +95,181 @@ class DocumentProcessingService:
                 self._ai_enhancer = None
         return self._ai_enhancer
 
+    def _post_process_bol(self, fields: dict, blocks: list, raw_response: dict = None, items: list = None) -> None:
+        """
+        Deterministic post-processing for bill_of_lading fields.
+
+        Fills gaps that AI enhancement may miss due to LLM variability:
+        - bl_number: fall back to booking_number, or scan all content for BL labels
+        - container_numbers: scan all content for 4-letter+7-digit container ID pattern
+        """
+        import re
+
+        def _val(v):
+            """Unwrap Reducto dict-wrapped values."""
+            if isinstance(v, dict) and "value" in v:
+                return v["value"]
+            return v
+
+        def _block_text(b) -> str:
+            if isinstance(b, dict):
+                return str(b.get("text") or b.get("content") or b.get("value") or "")
+            return str(b)
+
+        # Build a comprehensive list of all text content from ALL Reducto blocks/chunks
+        all_content: list = list(blocks)  # start with the stored blocks
+        if raw_response:
+            result_data = raw_response.get("result", raw_response)
+            if isinstance(result_data, list):
+                result_data = result_data[0] if result_data else {}
+            for chunk in result_data.get("chunks", []):
+                for raw_block in chunk.get("blocks", []):
+                    content = raw_block.get("content", "")
+                    if content:
+                        all_content.append({"content": content})
+
+        logger.debug(f"BOL post-process: fields={len(fields)}, blocks={len(blocks)}, total_content={len(all_content)}, items={len(items) if items else 0}")
+
+        # ── bl_number fallback ────────────────────────────────────────────────
+        if not _val(fields.get("bl_number")):
+            # 1) Fall back to booking_number if present in fields
+            booking = _val(fields.get("booking_number"))
+            if booking:
+                fields["bl_number"] = booking
+                logger.info(f"BOL post-process: bl_number ← booking_number ({booking})")
+            else:
+                # 2) Scan ALL content (blocks + raw Reducto chunks) for BL/Booking label + value
+                bl_pattern = re.compile(
+                    r'(?:booking\s*no\.?|b/?l\s*no\.?|bill\s+of\s+lading\s+no\.?|bl\s+no\.?)\s*[:\-]?\s*([A-Z0-9\-\/]+)',
+                    re.IGNORECASE
+                )
+                for block in all_content:
+                    text = _block_text(block)
+                    m = bl_pattern.search(text)
+                    if m:
+                        val = m.group(1).strip()
+                        if val:
+                            fields["bl_number"] = val
+                            fields.setdefault("booking_number", val)
+                            logger.info(f"BOL post-process: bl_number ← block scan ({val})")
+                            break
+
+                # 3) Scan table items — BL/Booking ref may be split across cells in the same row
+                # (e.g. label cell: "Booking no." + value cell: "S328717359")
+                if not _val(fields.get("bl_number")) and items:
+                    _bl_label_cell_re = re.compile(
+                        r'^(?:booking\s*no\.?|b/?l\s*no\.?|bill\s+of\s+lading\s+no\.?|bl\s+no\.?)$',
+                        re.IGNORECASE
+                    )
+                    _bl_value_re = re.compile(r'^[A-Z0-9][A-Z0-9\-\/]{4,}$')
+                    for item in items:
+                        if isinstance(item, dict):
+                            cell_texts = [str(_val(v) or "").strip() for v in item.values()]
+                            # a) Inline: label+value in same cell text
+                            for text in cell_texts:
+                                m = bl_pattern.search(text)
+                                if m:
+                                    val = m.group(1).strip()
+                                    if val:
+                                        fields["bl_number"] = val
+                                        fields.setdefault("booking_number", val)
+                                        logger.info(f"BOL post-process: bl_number ← item inline ({val})")
+                                        break
+                            # b) Cross-cell: one cell is a BL label, another is the value
+                            if not _val(fields.get("bl_number")):
+                                has_label = any(_bl_label_cell_re.match(t) for t in cell_texts)
+                                if has_label:
+                                    for t in cell_texts:
+                                        if not _bl_label_cell_re.match(t) and _bl_value_re.match(t):
+                                            fields["bl_number"] = t
+                                            fields.setdefault("booking_number", t)
+                                            logger.info(f"BOL post-process: bl_number ← item cross-cell ({t})")
+                                            break
+                        if _val(fields.get("bl_number")):
+                            break
+
+                # 4) Scan text_block_* field values (label in one field, value in next)
+                if not _val(fields.get("bl_number")):
+                    # Match labels like "Bl. No.", "B/L No.", "Booking No.", "BL Number"
+                    _bl_label_re = re.compile(
+                        r'^(?:bl\.?\s*no\.?|b/?l\s*no\.?|bill\s+of\s+lading\s+no\.?'
+                        r'|booking\s*no\.?|booking\s+number|bl\s+number)$',
+                        re.IGNORECASE
+                    )
+                    sorted_keys = sorted(
+                        (k for k in fields if k.startswith("text_block_")),
+                        key=lambda k: float(k.split("_", 2)[-1]) if k.count("_") >= 2 else 0
+                    )
+                    for i, key in enumerate(sorted_keys):
+                        raw = str(_val(fields[key]) or "").strip()
+                        if _bl_label_re.match(raw):
+                            for next_key in sorted_keys[i + 1:i + 5]:
+                                candidate = str(_val(fields[next_key]) or "").strip()
+                                if candidate and not _bl_label_re.match(candidate):
+                                    fields["bl_number"] = candidate
+                                    fields.setdefault("booking_number", candidate)
+                                    logger.info(f"BOL post-process: bl_number ← {next_key} ({candidate})")
+                                    break
+                            break
+
+        # ── container_numbers fallback ────────────────────────────────────────
+        if not _val(fields.get("container_numbers")):
+            container_pattern = re.compile(r'\b[A-Z]{4}\d{7}\b')
+            found = []
+            seen: set = set()
+
+            # Scan fields
+            for val in fields.values():
+                raw = str(_val(val) or "")
+                for match in container_pattern.findall(raw):
+                    if match not in seen:
+                        seen.add(match)
+                        found.append(match)
+
+            # Scan all content (blocks + raw Reducto chunks)
+            for block in all_content:
+                raw = _block_text(block)
+                for match in container_pattern.findall(raw):
+                    if match not in seen:
+                        seen.add(match)
+                        found.append(match)
+
+            if found:
+                fields["container_numbers"] = ", ".join(found)
+                if not _val(fields.get("container_count")):
+                    fields["container_count"] = len(found)
+                logger.info(f"BOL post-process: container_numbers ← {fields['container_numbers']}")
+
+    def _derive_party_names(self, fields: dict) -> None:
+        """
+        Deterministic fallback: derive shipper_name / consignee_name from their
+        address fields when the name field is absent.
+
+        Even with structured outputs, the LLM may return null for shipper_name
+        on documents where the shipper block is redacted (XXXXXXXXXX) or missing.
+        When that happens, the first line of shipper_address is the company name.
+        """
+        def _val(v):
+            return v.get("value") if isinstance(v, dict) and "value" in v else v
+
+        def _is_empty(v) -> bool:
+            raw = _val(v)
+            return raw is None or str(raw).strip() in ("", "<empty>", "-", "—")
+
+        for name_field, addr_field in (
+            ("shipper_name", "shipper_address"),
+            ("consignee_name", "consignee_address"),
+        ):
+            if _is_empty(fields.get(name_field)) and not _is_empty(fields.get(addr_field)):
+                raw_addr = str(_val(fields[addr_field])).strip()
+                first_line = raw_addr.split("\n")[0].strip()
+                if first_line:
+                    fields[name_field] = first_line
+                    logger.info(
+                        f"Party name fallback: {name_field} ← first line of "
+                        f"{addr_field} ({first_line!r})"
+                    )
+
     async def process_document(
         self,
         file_path: Path,
@@ -200,19 +375,11 @@ class DocumentProcessingService:
                         if enhanced_fields:
                             original_field_count = len(result.get("fields", {}))
 
-                            # DEBUG: Log what we're merging
-                            logger.info(f"📊 Enhanced fields to merge: {list(enhanced_fields.keys())}")
-                            logger.info(f"📊 Sample enhanced field: {list(enhanced_fields.items())[0] if enhanced_fields else 'none'}")
-
                             # Merge: Enhanced fields take priority for richer semantic data
                             result["fields"].update(enhanced_fields)
 
                             new_field_count = len(result["fields"])
                             added_count = new_field_count - original_field_count
-
-                            # DEBUG: Verify merge worked
-                            logger.info(f"📊 Fields after merge: {list(result['fields'].keys())[:10]}...")
-                            logger.info(f"📊 Checking for exporter_name in fields: {'exporter_name' in result['fields']}")
 
                             logger.info(
                                 f"✅ AI Enhancement complete: "
@@ -226,6 +393,23 @@ class DocumentProcessingService:
                     except Exception as e:
                         logger.error(f"AI Enhancement failed (continuing with original extraction): {e}")
                         # Don't fail the whole process if AI enhancement fails
+
+            # BOL Post-Processing — deterministic fallback for bill_of_lading fields that
+            # AI enhancement may miss due to LLM variability.
+            if document_type.lower().replace("-", "_").replace(" ", "_") == "bill_of_lading":
+                raw_response = result.get("raw_provider_response") or {}
+                self._post_process_bol(
+                    result["fields"],
+                    result.get("blocks", []),
+                    raw_response,
+                    result.get("items", [])
+                )
+
+            # Party name fallback — for all document types.
+            # When structured output returns null for shipper_name / consignee_name
+            # but the address field is populated, extract the company name from
+            # the first line of the address.
+            self._derive_party_names(result["fields"])
 
             # BOE Section Extraction — runs for bill_of_entry documents after AI enhancement.
             # Extracts structured sections (16, 21, 25, 31, 40) from Ghana GRA BOE forms

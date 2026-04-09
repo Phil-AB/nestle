@@ -60,8 +60,12 @@ class ShipperConsigneeValidator(IValidator):
               bill_of_entry: "shipper_name"
               invoice: "shipper_name"
               bill_of_lading: "shipper_name"
+            address_mappings:          # optional — enables address cross-check
+              bill_of_entry: "shipper_address"
+              invoice: "shipper_address"
             match_type: "fuzzy"
             fuzzy_threshold: 0.8
+            check_address: false       # set true to also validate address fields
 
           - name: "consignee"
             documents:
@@ -70,7 +74,11 @@ class ShipperConsigneeValidator(IValidator):
             field_mappings:
               bill_of_entry: "consignee_name"
               invoice: "consignee_name"
+            address_mappings:
+              bill_of_entry: "consignee_address"
+              invoice: "consignee_address"
             match_type: "case_insensitive"
+            check_address: false
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -122,10 +130,12 @@ class ShipperConsigneeValidator(IValidator):
             party_name = party_config.get("name", "party")
             documents = party_config.get("documents", [])
             field_mappings = party_config.get("field_mappings", {})
+            address_mappings = party_config.get("address_mappings", {})
             match_type = party_config.get("match_type", "case_insensitive")
             fuzzy_threshold = party_config.get("fuzzy_threshold", 0.8)
+            check_address = party_config.get("check_address", False)
 
-            # Collect party values from all documents
+            # Collect party name values from all documents
             party_values = {}
 
             for doc_type in documents:
@@ -135,11 +145,9 @@ class ShipperConsigneeValidator(IValidator):
                     logger.warning(f"No field mapping for {doc_type} in party {party_name}")
                     continue
 
-                # Get value from document
                 value = self._get_field_from_documents(f"{doc_type}.{field_path}", context)
 
                 if value:
-                    # Normalize value
                     normalized_value = self._normalize_name(str(value))
                     party_values[doc_type] = {
                         "original": value,
@@ -170,15 +178,36 @@ class ShipperConsigneeValidator(IValidator):
                 ))
                 continue
 
-            # Validate party matches across documents
+            # Validate party name matches across documents
             result = self._validate_party_match(
                 party_name,
                 party_values,
                 match_type,
                 fuzzy_threshold
             )
-
             results.append(result)
+
+            # Optionally validate address fields
+            if check_address and address_mappings:
+                address_values = {}
+                for doc_type in documents:
+                    addr_field = address_mappings.get(doc_type)
+                    if not addr_field:
+                        continue
+                    addr_value = self._get_field_from_documents(
+                        f"{doc_type}.{addr_field}", context
+                    )
+                    if addr_value:
+                        address_values[doc_type] = {
+                            "original": addr_value,
+                            "normalized": self._normalize_address(str(addr_value))
+                        }
+
+                if len(address_values) >= 2:
+                    addr_result = self._validate_address_match(
+                        party_name, address_values, fuzzy_threshold
+                    )
+                    results.append(addr_result)
 
         return results
 
@@ -356,6 +385,118 @@ class ShipperConsigneeValidator(IValidator):
                         normalized = normalized[:-len(suffix_variant)].strip()
 
         return normalized.strip()
+
+    def _normalize_address(self, address: str) -> str:
+        """
+        Normalize an address for fuzzy comparison.
+
+        Strips accents, lowercases, removes common noise words (PO Box,
+        Private Mail Bag, etc.) and collapses whitespace so that minor
+        formatting differences don't cause false mismatches.
+        """
+        if not address:
+            return ""
+
+        # Strip accents
+        normalized = unicodedata.normalize("NFD", address)
+        normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+
+        # Lowercase
+        normalized = normalized.lower()
+
+        # Remove noise tokens that vary between documents
+        _NOISE = [
+            "private mail bag", "pmb", "p.o. box", "po box", "p o box",
+            "post box", "postbox", "mail bag", "postal bag", "gpo box",
+            "locked bag", "motorway extens", "motorway extension",
+        ]
+        for token in _NOISE:
+            normalized = normalized.replace(token, " ")
+
+        # Remove punctuation
+        for char in ".,;:!?()[]{}\"'-":
+            normalized = normalized.replace(char, " ")
+
+        # Collapse whitespace
+        normalized = " ".join(normalized.split())
+        return normalized
+
+    def _validate_address_match(
+        self,
+        party_name: str,
+        address_values: Dict[str, Dict[str, str]],
+        fuzzy_threshold: float
+    ) -> ValidationResult:
+        """
+        Validate that address values are consistent across documents.
+
+        Uses a relaxed fuzzy threshold (default 0.5) because addresses often
+        differ legitimately between documents (registered vs. delivery address).
+        """
+        # Addresses are inherently less consistent than names — use a softer threshold
+        address_threshold = max(fuzzy_threshold * 0.6, 0.4)
+
+        ref_doc = list(address_values.keys())[0]
+        ref_value = address_values[ref_doc]["normalized"]
+
+        mismatches = []
+        min_similarity = 1.0
+
+        for doc_type, values in address_values.items():
+            if doc_type == ref_doc:
+                continue
+
+            similarity = self._calculate_similarity(ref_value, values["normalized"])
+            match = similarity >= address_threshold
+            min_similarity = min(min_similarity, similarity)
+
+            if not match:
+                mismatches.append({
+                    "document": doc_type,
+                    "value": values["original"],
+                    "similarity": round(similarity, 3)
+                })
+
+        if not mismatches:
+            return self._create_result(
+                field_name=f"{party_name}_address",
+                passed=True,
+                message=f"{party_name.title()} address consistent across documents",
+                severity=Severity.INFO,
+                source_value=address_values[ref_doc]["original"],
+                target_value=None,
+                confidence=min_similarity,
+                metadata={
+                    "party": party_name,
+                    "check": "address",
+                    "documents_checked": list(address_values.keys())
+                }
+            )
+        else:
+            mismatch_str = "; ".join(
+                f"{m['document']}='{m['value']}' (sim={m['similarity']})"
+                for m in mismatches
+            )
+            return self._create_result(
+                field_name=f"{party_name}_address",
+                passed=False,
+                message=(
+                    f"{party_name.title()} address MISMATCH: "
+                    f"Reference ({ref_doc}): '{address_values[ref_doc]['original']}' | "
+                    f"Mismatches: {mismatch_str}"
+                ),
+                severity=Severity.MINOR,  # Address differences are often legitimate
+                source_value=address_values[ref_doc]["original"],
+                target_value={m["document"]: m["value"] for m in mismatches},
+                confidence=min_similarity,
+                metadata={
+                    "party": party_name,
+                    "check": "address",
+                    "reference_document": ref_doc,
+                    "mismatches": mismatches,
+                    "threshold_used": address_threshold
+                }
+            )
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """

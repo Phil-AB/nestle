@@ -2,15 +2,16 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Upload, Settings, LogOut, FileOutput, ShieldCheck } from "lucide-react"
+import { Upload, Settings, LogOut, FileOutput, ShieldCheck, FileSearch } from "lucide-react"
 
 export default function Sidebar() {
   const pathname = usePathname()
 
   const navItems = [
-    { href: "/upload", icon: Upload, label: "Upload" },
+    // { href: "/upload", icon: Upload, label: "Upload" },
     { href: "/validation/vendor-docs", icon: ShieldCheck, label: "Vendor Validation" },
-    { href: "/generation", icon: FileOutput, label: "Document Generation" },
+    { href: "/validation/boe", icon: FileSearch, label: "BOE Validation" },
+    // { href: "/generation", icon: FileOutput, label: "Document Generation" },
   ]
 
   const isActive = (href: string) => pathname === href

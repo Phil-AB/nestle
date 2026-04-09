@@ -68,14 +68,14 @@ fi
 
 echo ""
 echo "Starting Next.js development server..."
-echo "UI will be available at: http://localhost:3000"
+echo "UI will be available at: http://54.236.135.105:3000"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-# Start Next.js dev server
+# Start Next.js dev server bound to all interfaces so it is reachable via EC2 IP
 if command -v pnpm &> /dev/null; then
-    pnpm dev
+    pnpm dev --hostname 0.0.0.0
 else
-    npm run dev
+    npm run dev -- --hostname 0.0.0.0
 fi

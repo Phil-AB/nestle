@@ -246,6 +246,26 @@ normalization:
         - "container_number"
         - "numero_conteneur"
 
+      # Plural form — comma-separated list of container IDs from BOL / packing list
+      # Must be a separate canonical so the fuzzy matcher doesn't collapse it into
+      # container_number (singular).  Validators reference "container_numbers".
+      container_numbers:
+        - "container_numbers"
+        - "Container Numbers"
+        - "Container IDs"
+        - "Container List"
+
+      # Bill of Lading reference number (distinct from the BOE bl_awb field)
+      bl_number:
+        - "bl_number"
+        - "B/L No"
+        - "BL No"
+        - "BL Number"
+        - "Bill of Lading No"
+        - "Bill of Lading Number"
+        - "Bl. No."
+        - "B/L Number"
+
       # Parties
       shipper_name:
         - "Shipper"

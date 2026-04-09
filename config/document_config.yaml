@@ -47,6 +47,9 @@ invoice:
     - insurance_value
     - total_invoice_value
     - language
+    - po_number
+    - order_number
+    - contract_number
 
   item_required_fields:
     - line_number
@@ -92,11 +95,29 @@ boe:
     - consignee_address
     - shipper_name
     - shipper_address
+    - declarant_name
+    - declarant_address
+    - declarant_reg_number
     - fob_value
+    - fob_value_local
     - freight_value
     - insurance_value
     - cif_value
     - duty_value
+    - customs_value
+    - duty_rate
+    - duty_amount
+    - vat_amount
+    - nhil_amount
+    - vat_rate
+    - nhil_rate
+    - cpc_code
+    - exchange_rate
+    - entry_exit_code
+    - country_of_origin
+    - container_count
+    - container_numbers
+    - etls_approval_number
 
   item_required_fields:
     - line_number
@@ -140,6 +161,12 @@ packing_list:
     - total_packages
     - total_gross_weight
     - total_net_weight
+    - po_number
+    - order_number
+    - contract_number
+    - incoterm
+    - container_count
+    - container_numbers
 
   item_required_fields:
     - line_number
@@ -224,6 +251,47 @@ freight:
     - transport_mode
 
   # Freight documents don't have line items
+  item_required_fields: []
+  item_optional_fields: []
+
+  min_items: 0
+  has_items: false
+
+# ==============================================================================
+# BILL OF LADING CONFIGURATION
+# ==============================================================================
+bill_of_lading:
+  model_name: BillOfLading
+  items_model_name: null
+  table_name: bills_of_lading
+  items_table_name: null
+
+  unique_field: bl_number
+
+  parent_fk_field: null
+
+  required_fields: []
+
+  optional_fields:
+    - bl_number
+    - shipping_date
+    - shipper_name
+    - shipper_address
+    - consignee_name
+    - consignee_address
+    - notify_party
+    - port_of_loading
+    - port_of_discharge
+    - vessel_name
+    - incoterm
+    - order_number
+    - contract_number
+    - gross_weight
+    - net_weight
+    - total_packages
+    - container_count
+    - container_numbers
+
   item_required_fields: []
   item_optional_fields: []
 

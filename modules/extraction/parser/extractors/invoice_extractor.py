@@ -1,0 +1,143 @@
+"""
+Specialised extractor for Commercial Invoice documents.
+
+Invoice layout conventions (Nestlé Ghana import context, European supplier):
+- Header section: Exporter/Shipper block (name + address), Consignee/Invoice To block,
+  Invoice Number, Invoice Date, Shipping Condition (= Incoterm), Currency
+- Reference row: Our Order Number (= supplier's order), Your Order Number (= buyer's PO),
+  Contract No, Customer Reference
+- Line items table: article code, description, qty, unit price, total value, VAT%
+- Totals section at bottom: Total Excl. VAT, VAT Amount, Total Incl. VAT, Net Weight,
+  Gross Weight, Total Units
+
+Key extraction problems this extractor solves:
+1. "Shipping Condition: FCA ROTTERDAM PORT" must map to incoterm, not shipping_condition
+2. "Our Order Number" = supplier's internal order → order_number
+   "Your Order Number" = buyer's PO reference → po_number
+3. "Total Excl. VAT" = total_fob_value when incoterm is FCA/FOB and VAT = 0
+4. product_description is in the line items table, not in a header field
+   → promote first item description to top-level product_description
+5. Net/gross weights appear in the totals row of the line items table, not as header fields
+"""
+
+import logging
+from typing import Any, Dict, List
+
+from .base import BaseDocumentExtractor
+
+logger = logging.getLogger(__name__)
+
+
+class InvoiceExtractor(BaseDocumentExtractor):
+    """Specialised extractor for Commercial Invoice documents."""
+
+    async def extract(
+        self,
+        fields: Dict[str, Any],
+        items: List[Dict],
+        blocks: List[Dict],
+        document_type: str,
+    ) -> Dict[str, Any]:
+        """Single unified LLM pass over full invoice content."""
+        try:
+            table_text = self._serialize_items(items, max_rows=60)
+            block_text = self._serialize_blocks(blocks, max_blocks=80)
+            existing_summary = self._fields_summary(fields, max_fields=25)
+
+            prompt = self._build_invoice_prompt(
+                table_text=table_text,
+                block_text=block_text,
+                existing_summary=existing_summary,
+            )
+
+            result = await self.llm_extraction.ainvoke(prompt)
+            extracted = {k: v for k, v in result.model_dump().items() if v is not None}
+
+            logger.info(
+                f"InvoiceExtractor: extracted {len(extracted)} fields "
+                f"(items={len(items)}, blocks={len(blocks)})"
+            )
+            return extracted
+
+        except Exception as e:
+            logger.error(f"InvoiceExtractor.extract failed: {e}", exc_info=True)
+            return {}
+
+    def _build_invoice_prompt(
+        self,
+        table_text: str,
+        block_text: str,
+        existing_summary: str,
+    ) -> str:
+        return f"""You are a customs document expert specialised in Commercial Invoices.
+
+ALREADY EXTRACTED FIELDS (do not re-extract unless you can improve them):
+{existing_summary or "none"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TABLE ROWS (line items + header key-value pairs as extracted by OCR):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{table_text or "(no table rows)"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOCUMENT TEXT BLOCKS (free-text sections):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{block_text or "(no blocks)"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXTRACTION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PARTIES:
+- shipper_name    = COMPANY NAME ONLY of the exporter/seller (labels: "Exporter", "Shipper",
+                    "Seller", "Sold By", "From"). Do NOT include the address.
+- shipper_address = full postal address of the shipper (street, city, postcode, country).
+                    Separate from shipper_name. May be multi-line.
+- consignee_name  = COMPANY NAME ONLY of the consignee/buyer (labels: "Consignee",
+                    "Invoice To", "Bill To", "Sold To", "Importer"). No address.
+- consignee_address = full postal address of the consignee.
+
+REFERENCE NUMBERS — CRITICAL disambiguation:
+On a supplier invoice there are two perspectives:
+  "Our Order Number" / "Our Ref" = the SUPPLIER's internal order number → order_number
+  "Your Order Number" / "Customer Reference" / "Customer Ref" = the BUYER's PO → po_number
+  "Contract No" / "Contract Number" = supply contract reference → contract_number
+  "Invoice No" / "Invoice Number" = this document's identifier → invoice_number
+
+COMMERCIAL TERMS:
+- incoterm = delivery/trade term including place (e.g. "FCA ROTTERDAM PORT", "FOB TEMA").
+             Look for labels: "Shipping Condition", "Delivery Terms", "Trade Term", "Incoterm".
+             Extract the FULL value including the place name.
+- currency  = 3-letter currency code (EUR, USD, GBP, GHS, …)
+
+FINANCIAL VALUES:
+- total_fob_value    = FOB/FCA value. Logic:
+                       • If a field explicitly labelled "FOB Value" or "FCA Value" exists → use it.
+                       • Else if incoterm is FCA/FOB AND VAT = 0 → use "Total Excl. VAT".
+                       • Else use "Net Amount" or "Subtotal".
+- total_invoice_value = total amount billed (including all charges). Usually "Total Incl. VAT"
+                        or the final "Total" line at the bottom.
+- vat_amount          = VAT/tax amount if shown separately.
+
+WEIGHTS & GOODS:
+The invoice line items table typically has:
+  - description columns: article code, product description, batch
+  - quantity, unit, unit price, total price columns
+  - A TOTALS ROW at the bottom: total qty, total net weight, total gross weight
+
+- product_description = description of the goods. Look in:
+                        1. "Description" or "Article Description" column of line items
+                        2. A "Description of Goods" header field
+                        Use the most complete description found.
+- net_weight   = TOTAL shipment net weight. Look for a "Total Net Weight" or "Net Weight"
+                 TOTALS ROW at the bottom of the line items table, or a header field.
+                 Include the unit (e.g. "189000.00 KG" or "189,000 KG").
+- gross_weight = TOTAL shipment gross weight. Same approach as net_weight.
+                 Include the unit.
+- quantity     = TOTAL shipment quantity/units. From the totals row or header.
+- unit_of_measure = unit (BAG, KG, PCS, MT, etc.)
+- hs_code      = HS/HSN tariff code if present (usually in line items table).
+                 If not shown anywhere on the document, return null.
+- country_of_origin = country where goods were manufactured, if stated.
+
+Populate only the fields you find with confidence. Leave everything else as null."""

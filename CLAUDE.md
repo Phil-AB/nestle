@@ -5,6 +5,6 @@
 - remember to build for simplicity, very good abstraction, evolvability. reliability, scalability and maintainability. it is imperative you heed this rules.
 - this is a universal system, so it should be 100 percent dynamic, 100 percent use case based, no hardcoding, fully config driven.
 - before you make any changes or fix anything, investigate and verify first
-
+- when I ask you to run a test, i expect you to read the documents directly to know what to expect, before you run the docuemnts through the system so that if there is a mistake, you can easily catch it
 
 

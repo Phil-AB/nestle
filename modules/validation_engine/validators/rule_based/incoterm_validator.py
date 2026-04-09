@@ -3,11 +3,17 @@ Incoterm Validator
 
 Validates freight and insurance values based on Incoterm.
 
-Rules (from PPTX Slide 2):
+Rules:
 - CFR (Cost & Freight): Invoice should have freight value stated
 - CIF (Cost, Insurance, Freight): Invoice should have insurance + freight values stated
-- FCA/FOB (Free Carrier/Free on Board): No freight value needed on invoice
+- FCA/FOB (Free Carrier/Free on Board): No freight/insurance on invoice (seller ends at named place)
 - CIF Calculation: CIF = FOB + Insurance + Freight (all in same currency)
+
+Insurance rate rules (applied on BOE when check_insurance_rate = true):
+- Sea / Road shipments: Insurance = 0.875% of C&F (FOB + Freight)
+- Air shipments:        Insurance = 1.000% of C&F (FOB + Freight)
+Transport mode is determined from the BOE entry_exit_code:
+  KIA* → Air;  TMA* / land border → Sea or Road
 """
 
 from typing import Dict, Any, List, Optional
@@ -37,14 +43,25 @@ class IncotermValidator(IValidator):
         tolerance: Tolerance for CIF calculation (default 0.01)
     """
 
-    # Incoterms requiring freight
+    # Incoterms requiring freight on the invoice
     FREIGHT_REQUIRED = ["CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"]
 
-    # Incoterms requiring insurance
+    # Incoterms requiring insurance on the invoice
     INSURANCE_REQUIRED = ["CIF", "CIP"]
 
-    # Incoterms with no freight/insurance
+    # Incoterms where seller ends at named place — no freight/insurance on invoice
     NO_FREIGHT = ["EXW", "FCA", "FAS", "FOB"]
+
+    # Incoterms where insurance rate check applies on the BOE
+    # (buyer arranges insurance from seller's named place)
+    INSURANCE_RATE_APPLICABLE = ["FCA", "FOB", "CFR", "FAS", "EXW"]
+
+    # Ghana customs insurance rates
+    INSURANCE_RATE_SEA_ROAD = Decimal("0.00875")   # 0.875%
+    INSURANCE_RATE_AIR = Decimal("0.01")           # 1.000%
+
+    # Entry/exit code prefixes that indicate air transport
+    AIR_ENTRY_PREFIXES = ("KIA",)
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
@@ -53,6 +70,7 @@ class IncotermValidator(IValidator):
 
         self.validations = config.get("validations", [])
         self.tolerance = Decimal(str(config.get("tolerance", "0.01")))
+        self.check_insurance_rate = config.get("check_insurance_rate", False)
 
         logger.info(f"IncotermValidator initialized with {len(self.validations)} validations")
 
@@ -72,6 +90,10 @@ class IncotermValidator(IValidator):
             insurance_field = validation_config.get("insurance_field")
             fob_field = validation_config.get("fob_field")
             cif_field = validation_config.get("cif_field")
+            transport_mode_field = validation_config.get("transport_mode_field")
+            check_insurance_rate = validation_config.get(
+                "check_insurance_rate", self.check_insurance_rate
+            )
 
             # Get values
             incoterm = self._get_field_from_documents(incoterm_field, context)
@@ -79,6 +101,8 @@ class IncotermValidator(IValidator):
             insurance_value = self._get_field_from_documents(insurance_field, context)
             fob_value = self._get_field_from_documents(fob_field, context)
             cif_value = self._get_field_from_documents(cif_field, context)
+            transport_mode = self._get_field_from_documents(transport_mode_field, context) \
+                if transport_mode_field else None
 
             if not incoterm:
                 results.append(self._create_result(
@@ -111,11 +135,20 @@ class IncotermValidator(IValidator):
                     incoterm_upper, freight_value, insurance_value
                 ))
 
-            # CIF specific: validate calculation
+            # CIF specific: validate CIF = FOB + Freight + Insurance
             if incoterm_upper == "CIF" and all([fob_value, freight_value, insurance_value, cif_value]):
                 results.append(self._validate_cif_calculation(
                     fob_value, freight_value, insurance_value, cif_value
                 ))
+
+            # Insurance rate check for FCA/FOB/CFR on the BOE
+            # Rule: Sea/Road = 0.875% of C&F; Air = 1% of C&F
+            if check_insurance_rate and incoterm_upper in self.INSURANCE_RATE_APPLICABLE:
+                if fob_value and freight_value and insurance_value:
+                    results.append(self._validate_insurance_rate(
+                        fob_value, freight_value, insurance_value,
+                        incoterm_upper, transport_mode
+                    ))
 
         return results
 
@@ -276,6 +309,89 @@ class IncotermValidator(IValidator):
                     "freight": float(freight),
                     "insurance": float(insurance),
                     "calculated_cif": float(calculated_cif),
+                    "difference": float(difference)
+                }
+            )
+
+    def _validate_insurance_rate(
+        self,
+        fob_value: Any,
+        freight_value: Any,
+        insurance_value: Any,
+        incoterm: str,
+        transport_mode: Optional[str]
+    ) -> ValidationResult:
+        """
+        Validate insurance = correct % of C&F based on transport mode.
+
+        Ghana customs rules:
+        - Sea / Road: 0.875% of (FOB + Freight)
+        - Air:        1.000% of (FOB + Freight)
+
+        Transport mode is inferred from the BOE entry_exit_code prefix:
+        - Starts with 'KIA' → Air
+        - All others       → Sea / Road
+        """
+        fob = self._to_decimal(fob_value)
+        freight = self._to_decimal(freight_value)
+        insurance = self._to_decimal(insurance_value)
+
+        candf = fob + freight
+
+        # Determine rate from transport mode
+        is_air = False
+        if transport_mode:
+            is_air = str(transport_mode).upper().startswith(self.AIR_ENTRY_PREFIXES)
+
+        rate = self.INSURANCE_RATE_AIR if is_air else self.INSURANCE_RATE_SEA_ROAD
+        mode_label = "Air (1%)" if is_air else "Sea/Road (0.875%)"
+
+        expected_insurance = (candf * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        difference = abs(expected_insurance - insurance)
+
+        # Allow up to 0.5% relative tolerance for rounding
+        tolerance = (expected_insurance * Decimal("0.005")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        passed = difference <= max(tolerance, self.tolerance)
+
+        if passed:
+            return self._create_result(
+                field_name="insurance_rate",
+                passed=True,
+                message=(
+                    f"{incoterm} insurance rate correct ({mode_label}): "
+                    f"{insurance} ≈ {rate*100}% × C&F ({candf})"
+                ),
+                severity=Severity.INFO,
+                source_value=float(insurance),
+                target_value=float(expected_insurance),
+                confidence=1.0,
+                metadata={
+                    "incoterm": incoterm,
+                    "transport_mode": mode_label,
+                    "rate": float(rate),
+                    "candf": float(candf),
+                    "expected_insurance": float(expected_insurance)
+                }
+            )
+        else:
+            return self._create_result(
+                field_name="insurance_rate",
+                passed=False,
+                message=(
+                    f"{incoterm} insurance rate INCORRECT ({mode_label}). "
+                    f"Expected: {expected_insurance} ({rate*100}% × C&F {candf}), "
+                    f"Actual: {insurance}, Difference: {difference}"
+                ),
+                severity=Severity.MAJOR,
+                source_value=float(insurance),
+                target_value=float(expected_insurance),
+                confidence=1.0,
+                metadata={
+                    "incoterm": incoterm,
+                    "transport_mode": mode_label,
+                    "rate": float(rate),
+                    "candf": float(candf),
+                    "expected_insurance": float(expected_insurance),
                     "difference": float(difference)
                 }
             )

@@ -1257,6 +1257,65 @@ async def create_shipment(request: CreateShipmentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# --- List shipments --------------------------------------------------------
+
+@router.get("/shipments", tags=["pipeline"])
+async def list_shipments(limit: int = 50, offset: int = 0):
+    """Return a list of shipments from the database, newest first."""
+    try:
+        from src.database.connection import get_session as get_db_session
+        from src.database.schema import Shipment
+        from src.database.models.api_document import APIDocument
+        from sqlalchemy import select, desc, func
+
+        async with get_db_session() as db:
+            result = await db.execute(
+                select(Shipment)
+                .order_by(desc(Shipment.created_at))
+                .limit(limit)
+                .offset(offset)
+            )
+            shipments = result.scalars().all()
+
+            # Count vendor docs per shipment to show step 2 status
+            shipment_ids = [s.id for s in shipments]
+            doc_counts: dict = {}
+            if shipment_ids:
+                count_result = await db.execute(
+                    select(
+                        APIDocument.shipment_id,
+                        func.count(APIDocument.id).label("doc_count")
+                    )
+                    .where(APIDocument.shipment_id.in_(shipment_ids))
+                    .where(APIDocument.extraction_status == "complete")
+                    .group_by(APIDocument.shipment_id)
+                )
+                for row in count_result:
+                    doc_counts[row.shipment_id] = row.doc_count
+
+        return {
+            "shipments": [
+                {
+                    "shipment_id": s.id,
+                    "shipment_number": s.shipment_number,
+                    "supplier_name": s.supplier_name,
+                    "consignee_name": s.consignee_name,
+                    "incoterm": s.incoterm,
+                    "transport_mode": s.transport_mode,
+                    "status": s.status,
+                    "vendor_docs_count": doc_counts.get(s.id, 0),
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                }
+                for s in shipments
+            ],
+            "total": len(shipments),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list shipments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Step 2: Vendor document validation ------------------------------------
 
 @router.post("/shipments/{shipment_id}/validate-vendor-docs", tags=["pipeline"])
@@ -1264,6 +1323,7 @@ async def validate_vendor_docs(
     shipment_id: str,
     invoice_file: UploadFile = File(...),
     packing_list_file: UploadFile = File(...),
+    bill_of_lading_file: Optional[UploadFile] = File(None),
     freight_manifest_file: Optional[UploadFile] = File(None),
     certificate_of_origin_file: Optional[UploadFile] = File(None),
 ):
@@ -1294,6 +1354,8 @@ async def validate_vendor_docs(
             "invoice": invoice_file,
             "packing_list": packing_list_file,
         }
+        if bill_of_lading_file:
+            file_map["bill_of_lading"] = bill_of_lading_file
         if freight_manifest_file:
             file_map["freight_manifest"] = freight_manifest_file
         if certificate_of_origin_file:

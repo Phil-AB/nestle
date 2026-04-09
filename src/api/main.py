@@ -4,6 +4,11 @@ FastAPI main application.
 Production-grade REST API for the Nestle Agentic Document Processing System.
 """
 
+# Load .env before any module that reads environment variables
+from pathlib import Path as _Path
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(_Path(__file__).parent.parent.parent / ".env")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware

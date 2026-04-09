@@ -416,14 +416,18 @@ export interface InsightsHealthResponse {
 export interface ValidationDiscrepancy {
   id: string
   severity: "critical" | "major" | "minor"
-  field: string
+  field?: string
+  field_name?: string       // API returns field_name; field is legacy alias
   source_document?: string
   target_document?: string
   source_value?: any
   target_value?: any
+  discrepancy_type?: string
+  likely_cause?: string
   description?: string
   message?: string
   status?: string
+  resolution_status?: string
 }
 
 export interface VendorValidationResponse {
@@ -438,10 +442,13 @@ export interface VendorValidationResponse {
 
 export interface BOEValidationResponse {
   session_id?: string
+  shipment_id?: string
   workflow_status: "completed" | "awaiting_user" | "failed" | "running"
   final_status?: "passed" | "failed" | "requires_attention"
   summary?: Record<string, any>
   discrepancies?: ValidationDiscrepancy[]
+  critical_discrepancies?: ValidationDiscrepancy[]
+  validation_results?: any[]
 }
 
 // ============================================================================
@@ -2192,6 +2199,26 @@ class APIClient {
   // ========================================================================
 
   /**
+   * List shipments from the database, newest first.
+   */
+  async listShipments(limit = 50): Promise<{
+    shipments: Array<{
+      shipment_id: string
+      shipment_number: string
+      supplier_name?: string
+      consignee_name?: string
+      incoterm?: string
+      transport_mode?: string
+      status: string
+      vendor_docs_count: number
+      created_at?: string
+    }>
+    total: number
+  }> {
+    return this.request(`/validation/shipments?limit=${limit}`, {}, true)
+  }
+
+  /**
    * Create a new shipment record (Step 2 prerequisite)
    */
   async createShipment(data: {
@@ -2217,14 +2244,16 @@ class APIClient {
     files: {
       invoice?: File
       packing_list?: File
+      bill_of_lading?: File
       freight_manifest?: File
       certificate_of_origin?: File
     }
   ): Promise<VendorValidationResponse> {
     const form = new FormData()
-    if (files.invoice)              form.append("invoice_file", files.invoice)
-    if (files.packing_list)         form.append("packing_list_file", files.packing_list)
-    if (files.freight_manifest)     form.append("freight_manifest_file", files.freight_manifest)
+    if (files.invoice)               form.append("invoice_file", files.invoice)
+    if (files.packing_list)          form.append("packing_list_file", files.packing_list)
+    if (files.bill_of_lading)        form.append("bill_of_lading_file", files.bill_of_lading)
+    if (files.freight_manifest)      form.append("freight_manifest_file", files.freight_manifest)
     if (files.certificate_of_origin) form.append("certificate_of_origin_file", files.certificate_of_origin)
 
     const controller = new AbortController()

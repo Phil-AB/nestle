@@ -37,6 +37,8 @@ class RequiredFieldsValidator(IValidator):
         self.required_fields = config.get("required_fields", {})
         self.allow_empty = config.get("allow_empty", False)
         self.check_nested = config.get("check_nested", True)
+        # Documents listed here are skipped entirely when absent (no failure emitted)
+        self.optional_documents = set(config.get("optional_documents", []))
 
         logger.debug(
             f"RequiredFieldsValidator initialized for "
@@ -70,7 +72,11 @@ class RequiredFieldsValidator(IValidator):
             if doc_data is None and doc_type == context.primary_document:
                 doc_data = source_data
             if not doc_data:
-                # Document not present — mark every required field as missing
+                if doc_type in self.optional_documents:
+                    # Optional document not provided — skip silently
+                    logger.debug(f"Optional document '{doc_type}' not present — skipping required field checks")
+                    continue
+                # Required document not present — mark every field as missing
                 for field_name in fields:
                     results.append(ValidationResult(
                         validator_name=self.validator_name,

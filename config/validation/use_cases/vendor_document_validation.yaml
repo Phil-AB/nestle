@@ -1,16 +1,35 @@
 # Vendor Document Pre-Validation Use Case (Step 2)
+#
 # Validates vendor documents against each other BEFORE the BOE exists.
-# This runs after documents arrive from the vendor/supplier (Step 1) and
-# before transmitting the package to the clearing agent (Step 3).
-# No BOE fields are referenced anywhere in this config.
+# Runs after documents arrive from the vendor/supplier and before transmitting
+# to the clearing agent.  No BOE fields are referenced anywhere in this config.
+#
+# Checklist coverage (ground-truth from actual Nestlé Ghana documents):
+#   ✅ Shipper's Address        — invoice only (BOL shipper is redacted; packing list omits it)
+#   ✅ Consignee Address        — invoice + packing list + BOL (fuzzy; billing vs delivery differ)
+#   ❌ Declarant Address        — not on vendor docs; belongs to BOE (Step 6)
+#   ✅ PO Number                — invoice + packing list + BOL
+#   ✅ Product Description      — invoice + packing list + BOL (fuzzy cross-check)
+#   ❌ HS Code                  — not on vendor docs; customs-assigned on BOE (Step 6)
+#   ❌ Import Duty              — BOE only (Step 6)
+#   ❌ VAT/NHIL                 — BOE only (Step 6)
+#   ❌ CPC (Commodity Code)     — BOE only (Step 6)
+#   ✅ FOB Value & Currency     — invoice only (FCA = FOB-equivalent; required field)
+#   ✅ Incoterm                 — invoice + packing list (cross-validated)
+#   ✅ Insurance                — incoterm rule: FCA/FOB → no insurance expected
+#   ✅ Freight                  — incoterm rule: FCA → freight not on invoice (Freight Collect on BOL)
+#   ✅ Gross & Net Weight       — invoice + packing list + BOL (tolerance cross-check)
+#   ✅ Country of Origin        — certificate of origin when provided
+#   ✅ Quantity                 — invoice + packing list + BOL (cross-validated)
+#   ✅ Number of Containers     — packing list + BOL (exact match)
 
 use_case:
   name: "vendor_document_validation"
   display_name: "Vendor Document Pre-Validation"
   description: "Step 2: validate vendor documents for completeness and cross-document consistency before transmitting to the clearing agent"
-  version: "1.0"
+  version: "2.0"
 
-  # Documents involved — all vendor-originated, no BOE
+  # ── Documents involved ──────────────────────────────────────────────────────
   documents:
     primary:
       type: "invoice"
@@ -22,7 +41,7 @@ use_case:
       - type: "packing_list"
         role: "source"
         required: true
-        description: "Packing List with shipment details"
+        description: "Packing List with per-container shipment details"
 
       - type: "bill_of_lading"
         role: "source"
@@ -35,13 +54,116 @@ use_case:
       - type: "certificate_of_origin"
         role: "source"
         required: false
-        description: "Certificate of Origin"
+        description: "Certificate of Origin — required for concessionary duty claims"
 
-  # Normalization — same EN/FR synonym mapping and unit conversions as BOE validation
+  # ── Normalization ───────────────────────────────────────────────────────────
   normalization:
     enabled: true
 
     synonyms:
+      # Shipper / Exporter
+      shipper_name:
+        - "Shipper"
+        - "Exporter"
+        - "Exportateur"
+        - "Expéditeur"
+        - "shipper_name"
+        - "exporter_name"
+
+      shipper_address:
+        - "Shipper Address"
+        - "Exporter Address"
+        - "Shipper's Address"
+        - "Exporter's Address"
+        - "shipper_address"
+        - "exporter_address"
+
+      # Consignee
+      consignee_name:
+        - "Consignee"
+        - "Destinataire"
+        - "Consignataire"
+        - "consignee_name"
+
+      consignee_address:
+        - "Consignee Address"
+        - "Ship-to Address"
+        - "Delivery Address"
+        - "Destination Address"
+        - "consignee_address"
+        - "ship_to_address"
+        - "delivery_address"
+
+      # Invoice identifiers
+      invoice_number:
+        - "Invoice No"
+        - "Invoice Number"
+        - "Facture No"
+        - "Numéro de Facture"
+        - "invoice_number"
+        - "facture_number"
+
+      total_invoice_value:
+        - "Total Invoice Value"
+        - "Total Amount"
+        - "Invoice Total"
+        - "Total Incl. VAT"
+        - "Total Excl. VAT"
+        - "total_invoice_value"
+        - "invoice_total"
+
+      currency:
+        - "Currency"
+        - "Invoice Currency"
+        - "Devise"
+        - "currency"
+
+      # Trade references
+      order_number:
+        - "Order No"
+        - "Order Number"
+        - "Our Order Number"
+        - "Purchase Order"
+        - "order_number"
+        - "order_no"
+
+      po_number:
+        - "PO Number"
+        - "Your Order Number"
+        - "Customer Reference"
+        - "Customer Ref"
+        - "Customer PO"
+        - "po_number"
+        - "customer_reference"
+        - "customer_ref"
+
+      contract_number:
+        - "Contract No"
+        - "Contract Number"
+        - "contract_number"
+        - "contract_no"
+
+      bl_number:
+        - "BL No"
+        - "B/L Number"
+        - "Bill of Lading No"
+        - "Bill of Lading Number"
+        - "Booking No"
+        - "bl_number"
+        - "bl_no"
+        - "booking_number"
+
+      # Goods
+      product_description:
+        - "Description"
+        - "Product Description"
+        - "Description of Goods"
+        - "Item Description"
+        - "Goods Description"
+        - "description"
+        - "product_description"
+        - "goods_description"
+
       hs_code:
         - "HS Code"
         - "HSN Code"
@@ -52,76 +174,88 @@ use_case:
         - "hsn_code"
         - "tariff_code"
 
-      net_weight:
-        - "Net Weight"
-        - "Poids Net"
-        - "Net Wt"
-        - "Poids net"
-        - "weight_net"
-        - "poids_net"
-        - "net_wt"
-        - "NetWeight"
-
-      gross_weight:
-        - "Gross Weight"
-        - "Poids Brut"
-        - "Gross Wt"
-        - "Poids brut"
-        - "weight_gross"
-        - "poids_brut"
-        - "gross_wt"
-        - "GrossWeight"
+      country_of_origin:
+        - "Country of Origin"
+        - "Origin"
+        - "Origin Country"
+        - "Pays d'Origine"
+        - "country_of_origin"
+        - "origin"
+        - "origin_country"
 
       quantity:
         - "Quantity"
         - "Quantité"
         - "Qty"
         - "Qté"
+        - "Total Units"
         - "quantity"
         - "quantite"
+        - "total_units"
 
-      unit_price:
-        - "Unit Price"
-        - "Prix Unitaire"
-        - "Price per Unit"
-        - "unit_price"
-        - "prix_unitaire"
+      unit_of_measure:
+        - "Unit"
+        - "UOM"
+        - "Unit of Measure"
+        - "unit_of_measure"
+        - "unit"
 
-      description:
-        - "Description"
-        - "Product Description"
-        - "Item Description"
-        - "description"
-        - "product_description"
+      net_weight:
+        - "Net Weight"
+        - "Poids Net"
+        - "Net Wt"
+        - "Nett Weight"
+        - "Total Net Weight"
+        - "net_weight"
+        - "weight_net"
+        - "nett_weight"
 
-      origin:
-        - "Country of Origin"
-        - "Origin"
-        - "Pays d'Origine"
-        - "origin"
-        - "country_of_origin"
+      gross_weight:
+        - "Gross Weight"
+        - "Poids Brut"
+        - "Gross Wt"
+        - "Total Gross Weight"
+        - "gross_weight"
+        - "weight_gross"
+        - "poids_brut"
 
-      shipper_name:
-        - "Shipper"
-        - "Exporter"
-        - "Exportateur"
-        - "Expéditeur"
-        - "shipper_name"
-        - "exporter_name"
+      # Transport
+      incoterm:
+        - "Incoterm"
+        - "Shipping Condition"
+        - "Delivery Terms"
+        - "Trade Term"
+        - "incoterm"
+        - "shipping_condition"
+        - "delivery_terms"
 
-      consignee_name:
-        - "Consignee"
-        - "Destinataire"
-        - "Consignataire"
-        - "consignee_name"
+      freight_value:
+        - "Freight"
+        - "Freight Value"
+        - "Fret"
+        - "freight_value"
+        - "freight"
 
-      invoice_number:
-        - "Invoice No"
-        - "Invoice Number"
-        - "Facture No"
-        - "Numéro de Facture"
-        - "invoice_number"
-        - "facture_number"
+      insurance_value:
+        - "Insurance"
+        - "Insurance Value"
+        - "Assurance"
+        - "insurance_value"
+        - "insurance"
+
+      container_count:
+        - "No of Containers"
+        - "Number of Containers"
+        - "Total No. of Containers"
+        - "Container Count"
+        - "container_count"
+
+      container_numbers:
+        - "Container No"
+        - "Container Numbers"
+        - "Marks and Nos"
+        - "container_numbers"
+        - "container_no"
 
     units:
       weight:
@@ -159,38 +293,105 @@ use_case:
         thousands_separator: ","
         precision: 2
 
-      currency:
-        position: "prefix"
-        symbol: "$"
-
-  # Validation workflow — vendor docs only, no BOE
+  # ── Validation workflow ─────────────────────────────────────────────────────
   workflow:
     type: "sequential"
 
     steps:
-      # Step 1: Required fields present on invoice and packing list
+
+      # ── 1. Field completeness ───────────────────────────────────────────────
+      # Verifies every checklist field that is present on that document type.
+      # Add new field names here when new document fields become relevant —
+      # no code changes required.
       - name: "field_completeness"
-        description: "Verify all required fields are present on vendor documents"
+        description: "Verify all required fields are present on each vendor document"
         validators:
           - "required_fields_validator"
         config:
+          # Documents listed here are skipped silently when not uploaded.
+          # Add a document type here when it is optional at Step 2.
+          optional_documents:
+            - "bill_of_lading"
+            - "certificate_of_origin"
+
           required_fields:
             invoice:
-              - "invoice_number"
-              - "total_invoice_value"
-              - "net_weight"
-              - "gross_weight"
+              - "invoice_number"         # document identifier
+              - "total_invoice_value"    # FOB value
+              - "currency"               # FOB currency (checklist: FOB value & currency)
+              - "incoterm"               # trade term
+              - "net_weight"             # cargo weight
+              - "gross_weight"           # cargo weight
+              - "quantity"               # quantity of goods
+              - "shipper_name"           # shipper identity
+              - "shipper_address"        # shipper's address
+              - "consignee_name"         # consignee identity
+              - "consignee_address"      # consignee address
+              - "product_description"    # product description
+
             packing_list:
-              - "net_weight"
-              - "gross_weight"
-              - "quantity"
+              - "net_weight"             # cargo weight
+              - "gross_weight"           # cargo weight
+              - "quantity"               # quantity of goods
+              - "consignee_name"         # consignee identity
+              - "consignee_address"      # consignee address
+              - "product_description"    # product description
+              - "container_count"        # number of containers
+
+            bill_of_lading:
+              - "consignee_name"         # consignee identity
+              - "container_count"        # number of containers
+              - "bl_number"              # BL reference
+              # gross_weight / net_weight / quantity intentionally excluded:
+              # multi-page BOL per-container layout causes unreliable extraction
+              # of the shipment total. Weights are validated invoice↔packing_list.
+
+            certificate_of_origin:
+              - "country_of_origin"      # origin of goods (checklist item)
+              - "consignee_name"         # consignee identity
+
         on_failure: "flag_and_continue"
         severity: "major"
 
-      # Step 2: Shipper and consignee consistent across invoice, packing list, BL
-      # Catches "IB Tech International Company Limited" vs "IBT International Ltd" etc.
-      - name: "party_consistency"
-        description: "Verify shipper and consignee match across vendor documents"
+      # ── 2. Shipper identity (name + address) ────────────────────────────────
+      # Shipper address is only on the invoice; BOL shipper is redacted.
+      # This step checks presence (completeness) — no cross-doc comparison
+      # possible for shipper address since only one source carries it.
+      - name: "shipper_identity"
+        description: "Verify shipper name and address are present on invoice"
+        validators:
+          - "shipper_consignee_validator"
+        config:
+          parties:
+            - name: "shipper"
+              documents:
+                - "invoice"
+                - "packing_list"
+                - "bill_of_lading"
+              field_mappings:
+                invoice: "shipper_name"
+                packing_list: "shipper_name"
+                bill_of_lading: "shipper_name"
+              match_type: "fuzzy"
+              fuzzy_threshold: 0.75
+              min_documents: 1   # BOL shipper is redacted — skip if missing
+
+          normalization:
+            remove_whitespace: true
+            remove_punctuation: true
+            lowercase: true
+            remove_company_suffixes: true
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 3. Consignee identity ───────────────────────────────────────────────
+      # Consignee name must match across all 3 docs (fuzzy — "Nestlé Ghana Limited"
+      # vs "Nestle Ghana Ltd").
+      # Consignee address differs legitimately (BOL: billing/registered at KIA, Accra;
+      # invoice/packing list: delivery at Sanyo Rd, Tema) — cross-doc address check
+      # is therefore informational only.
+      - name: "consignee_identity"
+        description: "Verify consignee name matches across invoice, packing list, and BOL"
         validators:
           - "shipper_consignee_validator"
         config:
@@ -199,9 +400,11 @@ use_case:
               documents:
                 - "invoice"
                 - "packing_list"
+                - "bill_of_lading"
               field_mappings:
                 invoice: "consignee_name"
                 packing_list: "consignee_name"
+                bill_of_lading: "consignee_name"
               match_type: "fuzzy"
               fuzzy_threshold: 0.75
 
@@ -209,85 +412,68 @@ use_case:
             remove_whitespace: true
             remove_punctuation: true
             lowercase: true
-            remove_company_suffixes: true  # handles Ltd/Limited/Inc/Corp
+            remove_company_suffixes: true
         on_failure: "continue"
         severity: "major"
 
-      # Step 3: HS code consistent across invoice and packing list (per line item)
-      - name: "hs_code_consistency"
-        description: "HS codes must match across invoice and packing list line items"
+      # ── 4. Product description consistency ─────────────────────────────────
+      # "FFP 28% MQAV004F-1" (invoice) must be semantically consistent with
+      # "Instant Fat Filled Powder 28% MQAV004F-1" (packing list / BOL).
+      # Fuzzy match tolerates different but equivalent descriptions.
+      - name: "product_description_consistency"
+        description: "Product description must be consistent across invoice, packing list, and BOL"
         validators:
           - "n_way_matcher"
         config:
-          field_name: "hs_code"
+          field_name: "product_description"
           documents:
             - "invoice"
             - "packing_list"
+            - "bill_of_lading"
+          match_type: "fuzzy"
+          require_all: false   # BOL may omit description; flag only when 2+ docs disagree
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 5. FOB value & currency presence ───────────────────────────────────
+      # The invoice is the single source of FOB value and currency.
+      # Both fields are already required in field_completeness (step 1);
+      # this step validates the value is non-zero.
+      - name: "fob_value_check"
+        description: "Invoice FOB value must be a positive non-zero amount"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "total_invoice_value"
+          documents:
+            - "invoice"
           match_type: "exact"
-          require_all: true
-          line_items: true
+          require_all: false
         on_failure: "continue"
         severity: "critical"
 
-      # Step 4: Net and gross weight consistent between invoice and packing list (±1%)
-      - name: "weight_consistency"
-        description: "Net and gross weights must match between invoice and packing list"
+      # ── 6. Incoterm consistency ─────────────────────────────────────────────
+      # Must match between invoice and packing list.
+      # BOL does not explicitly state incoterm (uses "Freight Collect" notation).
+      - name: "incoterm_consistency"
+        description: "Incoterm must match between invoice and packing list"
         validators:
-          - "tolerance_validator"
+          - "n_way_matcher"
         config:
-          tolerance_type: "percentage"
-          default_tolerance: 1.0
-
-          validations:
-            - name: "net_weight_invoice_to_packing"
-              source: "invoice.net_weight"
-              target: "packing_list.net_weight"
-              tolerance_percent: 1.0
-              operator: "equals"
-
-            - name: "gross_weight_invoice_to_packing"
-              source: "invoice.gross_weight"
-              target: "packing_list.gross_weight"
-              tolerance_percent: 1.0
-              operator: "equals"
-        on_failure: "continue"
-        severity: "critical"
-
-      # Step 5: Quantity consistent between invoice and packing list (±0.5%)
-      - name: "quantity_consistency"
-        description: "Quantities must match between invoice and packing list"
-        validators:
-          - "tolerance_validator"
-        config:
-          tolerance_type: "percentage"
-          default_tolerance: 0.5
-
-          validations:
-            - name: "quantity_invoice_to_packing"
-              source: "invoice.quantity"
-              target: "packing_list.quantity"
-              tolerance_percent: 0.5
-              operator: "equals"
+          field_name: "incoterm"
+          documents:
+            - "invoice"
+            - "packing_list"
+          match_type: "fuzzy"
+          require_all: false
         on_failure: "continue"
         severity: "major"
 
-      # Step 6: HS code format validation (XXXX.XX)
-      - name: "hs_code_format"
-        description: "Validate HS Code format on invoice"
-        validators:
-          - "regex_validator"
-        config:
-          validations:
-            - field: "hs_code"
-              pattern: "^\\d{4}\\.\\d{2}$"
-              description: "HS Code format (XXXX.XX)"
-              required: true
-        on_failure: "continue"
-        severity: "major"
-
-      # Step 7: Incoterm rules — freight/insurance required for CFR/CIF, absent for FOB
-      - name: "incoterm_validation"
-        description: "Validate freight and insurance values match the Incoterm on the invoice"
+      # ── 7. Incoterm freight/insurance rules ─────────────────────────────────
+      # FCA/FOB: freight and insurance must NOT appear on the invoice.
+      # CFR/CIF: freight (and insurance for CIF) must be present on the invoice.
+      - name: "incoterm_rules"
+        description: "Validate freight and insurance values match the incoterm"
         validators:
           - "incoterm_validator"
         config:
@@ -300,33 +486,215 @@ use_case:
         on_failure: "continue"
         severity: "major"
 
-  # Discrepancy handling
+      # ── 8. Net & gross weight consistency: invoice ↔ packing list ──────────
+      - name: "weight_consistency_invoice_packing"
+        description: "Net and gross weights must match between invoice and packing list (±1%)"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 1.0
+          validations:
+            - name: "net_weight_invoice_to_packing"
+              source: "invoice.net_weight"
+              target: "packing_list.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+            - name: "gross_weight_invoice_to_packing"
+              source: "invoice.gross_weight"
+              target: "packing_list.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # ── 9. Net & gross weight consistency: invoice ↔ BOL ──────────────────
+      # The BOL-specialised extractor (BOLExtractor) targets the shipment TOTALS
+      # from the page-2 summary block, not the per-container table values.
+      - name: "weight_consistency_bol"
+        description: "Net and gross weights must match between invoice and BOL (±1%)"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 1.0
+          validations:
+            - name: "net_weight_invoice_to_bol"
+              source: "invoice.net_weight"
+              target: "bill_of_lading.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+            - name: "gross_weight_invoice_to_bol"
+              source: "invoice.gross_weight"
+              target: "bill_of_lading.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # ── 10. Quantity consistency: invoice ↔ packing list ↔ BOL ────────────
+      - name: "quantity_consistency"
+        description: "Quantity must match across invoice, packing list, and BOL (±0.5%)"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 0.5
+          validations:
+            - name: "quantity_invoice_to_packing"
+              source: "invoice.quantity"
+              target: "packing_list.quantity"
+              tolerance_percent: 0.5
+              operator: "equals"
+            - name: "quantity_invoice_to_bol"
+              source: "invoice.quantity"
+              target: "bill_of_lading.quantity"
+              tolerance_percent: 0.5
+              operator: "equals"
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 11. Trade reference consistency ────────────────────────────────────
+      # The BOL extractor is explicitly taught to distinguish the shipping-line's
+      # own reference (Booking No → bl_number) from the trade references
+      # (Order No → order_number, Contract No → contract_number,
+      # Customer Ref → po_number) that should match invoice and packing list.
+      - name: "order_number_consistency"
+        description: "Supplier order number must match across invoice, packing list, and BOL"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "order_number"
+          documents:
+            - "invoice"
+            - "packing_list"
+            - "bill_of_lading"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      - name: "contract_number_consistency"
+        description: "Contract number must match across invoice, packing list, and BOL"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "contract_number"
+          documents:
+            - "invoice"
+            - "packing_list"
+            - "bill_of_lading"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      - name: "customer_reference_consistency"
+        description: "Customer PO reference must match across invoice, packing list, and BOL"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "po_number"
+          documents:
+            - "invoice"
+            - "packing_list"
+            - "bill_of_lading"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 12. Container count consistency ────────────────────────────────────
+      - name: "container_count_consistency"
+        description: "Container count must match between packing list and BOL"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "container_count"
+          documents:
+            - "packing_list"
+            - "bill_of_lading"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 13. Container numbers consistency ──────────────────────────────────
+      # Container IDs in packing list must match those on the BOL.
+      - name: "container_numbers_consistency"
+        description: "Container IDs must match between packing list and BOL"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "container_numbers"
+          documents:
+            - "packing_list"
+            - "bill_of_lading"
+          match_type: "normalized"
+          require_all: false
+        on_failure: "continue"
+        severity: "critical"
+
+      # ── 14. Country of origin ───────────────────────────────────────────────
+      # Only validated when a Certificate of Origin is provided.
+      # Field presence is already enforced in field_completeness (step 1).
+      # No cross-doc comparison — COO is the authoritative single source.
+      - name: "country_of_origin_check"
+        description: "Country of origin must be present on the Certificate of Origin when provided"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "country_of_origin"
+          documents:
+            - "certificate_of_origin"
+          match_type: "exact"
+          require_all: false   # COO is optional; skip gracefully if not uploaded
+        on_failure: "continue"
+        severity: "major"
+
+      # ── 15. HS Code — intentionally not validated at Step 2 ─────────────────
+      # Neither the commercial invoice nor the packing list carries an HS code
+      # (confirmed by manual document review).  HS classification is declared
+      # by the customs broker on the BOE at Step 6.
+      # This note is preserved so the absence of the check is intentional and
+      # visible. Add HS code checks to boe_validation.yaml, not here.
+
+  # ── Discrepancy handling ────────────────────────────────────────────────────
   discrepancy_handling:
     classification:
       enabled: true
 
       severity_rules:
         critical:
-          - "hs_code mismatch across documents"
+          - "missing required field on invoice"
           - "weight difference > 5%"
-          - "missing required field"
+          - "container number mismatch"
+          - "quantity mismatch > 5%"
 
         major:
           - "shipper or consignee name mismatch"
           - "weight difference > 1% and <= 5%"
-          - "quantity mismatch"
-          - "hs_code format invalid"
+          - "quantity mismatch <= 5%"
           - "incoterm freight/insurance rule violation"
+          - "order number mismatch across documents"
+          - "contract number mismatch across documents"
+          - "customer reference mismatch across documents"
+          - "incoterm mismatch across documents"
+          - "container count mismatch"
+          - "product description mismatch"
+          - "missing currency on invoice"
 
         minor:
           - "weight difference <= 1%"
           - "quantity difference < 1%"
           - "rounding differences"
+          - "product description wording differs but semantically equivalent"
 
         info:
           - "unit differences resolved by normalization"
           - "date format differences"
           - "synonym variations (EN/FR)"
+          - "consignee address differs (billing vs delivery — expected)"
 
     auto_fix:
       enabled: true
@@ -353,29 +721,28 @@ use_case:
       auto_approve:
         - "info"
 
-  # Missing data handling
+  # ── Missing data handling ───────────────────────────────────────────────────
   missing_data:
     strategy: "continue_with_partial"
 
     prompt_fields:
       - field: "freight_value"
-        message: "Freight value not found on invoice. Please provide if applicable."
+        message: "Freight value not found on invoice. Required for CFR/CIF incoterms."
         optional: true
       - field: "insurance_value"
-        message: "Insurance value not found on invoice. Please provide if applicable."
+        message: "Insurance value not found on invoice. Required for CIF incoterm."
+        optional: true
+      - field: "country_of_origin"
+        message: "Country of origin not found. Please upload a Certificate of Origin."
         optional: true
 
     incomplete_if_missing:
       - "invoice_number"
-      - "hs_code"
       - "total_invoice_value"
+      - "currency"
+      - "incoterm"
 
-  # Version control
-  versioning:
-    enabled: true
-    track_changes: true
-
-  # Reporting
+  # ── Reporting ───────────────────────────────────────────────────────────────
   reporting:
     enabled: true
     export_formats:
@@ -389,16 +756,11 @@ use_case:
       - "user_confirmations"
       - "audit_trail"
 
-  # Performance targets
-  performance:
-    max_processing_time_seconds: 30
-    target_accuracy: 0.98
-    false_positive_rate_max: 0.02
-
-  # Metadata
+  # ── Metadata ────────────────────────────────────────────────────────────────
   metadata:
     created_by: "Nestle IMPEX Automation"
-    created_at: "2026-04-06"
+    created_at: "2026-04-09"
     use_case_category: "customs_clearance"
     workflow_step: "step_2_pre_transmit"
     business_impact: "high"
+    checklist_version: "Ghana Customs — vendor doc checklist v1"

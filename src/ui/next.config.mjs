@@ -10,7 +10,7 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-    domains: ['localhost'],
+    domains: ['localhost', '54.236.135.105'],
   },
 
   // API Proxy Configuration — forwards /api/* to FastAPI backend.

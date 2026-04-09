@@ -151,6 +151,11 @@ class CustomsCodeValidator(IValidator):
         # Tolerance for amount comparisons (default 0.01 for rounding)
         self.tolerance = Decimal(str(config.get("tolerance", "0.01")))
 
+        # Whether each code requires an ETLS approval number when duty = 0
+        for code, code_cfg in self.customs_codes.items():
+            if "require_etls_approval" not in code_cfg:
+                code_cfg["require_etls_approval"] = False
+
         logger.info(
             f"CustomsCodeValidator initialized with {len(self.customs_codes)} customs codes, "
             f"{len(self.validations)} validations"
@@ -183,6 +188,7 @@ class CustomsCodeValidator(IValidator):
             duty_amount_field = validation_config.get("duty_amount_field")
             vat_amount_field = validation_config.get("vat_amount_field")
             customs_code_field = validation_config.get("customs_code_field")
+            etls_approval_field = validation_config.get("etls_approval_field")
 
             # Get values from documents
             customs_code = self._get_field_from_documents(customs_code_field, context)
@@ -191,6 +197,8 @@ class CustomsCodeValidator(IValidator):
             actual_amount_exempted = self._get_field_from_documents(amount_exempted_field, context)
             actual_duty_amount = self._get_field_from_documents(duty_amount_field, context)
             actual_vat_amount = self._get_field_from_documents(vat_amount_field, context)
+            etls_approval_number = self._get_field_from_documents(etls_approval_field, context) \
+                if etls_approval_field else None
 
             # Validate customs code exists
             if not customs_code:
@@ -237,11 +245,19 @@ class CustomsCodeValidator(IValidator):
                 results.extend(self._validate_40U01(
                     actual_duty_amount, code_config, customs_code_field
                 ))
+                if code_config.get("require_etls_approval"):
+                    results.append(self._validate_etls_approval(
+                        customs_code, etls_approval_number
+                    ))
 
             elif customs_code == "40W01":
                 results.extend(self._validate_40W01(
                     actual_duty_amount, actual_vat_amount, code_config, customs_code_field
                 ))
+                if code_config.get("require_etls_approval"):
+                    results.append(self._validate_etls_approval(
+                        customs_code, etls_approval_number
+                    ))
 
         return results
 
@@ -530,6 +546,47 @@ class CustomsCodeValidator(IValidator):
             ))
 
         return results
+
+    def _validate_etls_approval(
+        self,
+        customs_code: str,
+        etls_approval_number: Optional[Any]
+    ) -> ValidationResult:
+        """
+        Validate that an ETLS Approval Number is present when duty is exempted.
+
+        ECOWAS Trade Liberalisation Scheme (ETLS) allows zero import duty on
+        qualifying goods from ECOWAS member states. Ghana Customs requires the
+        ETLS Approval Number to be referenced on the BOE whenever duty = 0 under
+        codes 40U01 or 40W01.
+        """
+        has_approval = bool(etls_approval_number and str(etls_approval_number).strip())
+
+        if has_approval:
+            return self._create_result(
+                field_name="etls_approval_number",
+                passed=True,
+                message=f"{customs_code}: ETLS Approval Number present ({etls_approval_number})",
+                severity=Severity.INFO,
+                source_value=str(etls_approval_number),
+                target_value=None,
+                confidence=1.0,
+                metadata={"customs_code": customs_code}
+            )
+        else:
+            return self._create_result(
+                field_name="etls_approval_number",
+                passed=False,
+                message=(
+                    f"{customs_code}: Import duty is zero/exempted but no ETLS Approval Number "
+                    f"found on BOE. An ETLS Approval Number is required to justify zero duty."
+                ),
+                severity=Severity.MAJOR,
+                source_value=None,
+                target_value="ETLS Approval Number required",
+                confidence=1.0,
+                metadata={"customs_code": customs_code}
+            )
 
     def _get_field_from_documents(self, field_path: str, context: ValidationContext) -> Any:
         """

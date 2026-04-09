@@ -98,6 +98,54 @@ use_case:
         - "origin"
         - "country_of_origin"
 
+      incoterm:
+        - "Incoterm"
+        - "Shipping Condition"
+        - "Delivery Terms"
+        - "Trade Term"
+        - "incoterm"
+        - "shipping_condition"
+        - "delivery_terms"
+
+      order_number:
+        - "Order No"
+        - "Order Number"
+        - "Our Order Number"
+        - "order_number"
+        - "order_no"
+
+      po_number:
+        - "PO Number"
+        - "Your Order Number"
+        - "Customer Reference"
+        - "po_number"
+        - "customer_reference"
+
+      contract_number:
+        - "Contract No"
+        - "Contract Number"
+        - "contract_number"
+
+      cpc_code:
+        - "CPC"
+        - "CPC Concess"
+        - "Customs Procedure Code"
+        - "cpc_code"
+        - "customs_code"
+
+      declarant_name:
+        - "Declarant"
+        - "Representative"
+        - "Customs Agent"
+        - "Clearing Agent"
+        - "declarant_name"
+
+      container_count:
+        - "No of Containers"
+        - "Number of Containers"
+        - "Container Count"
+        - "container_count"
+
     # Unit conversions
     units:
       weight:
@@ -253,6 +301,18 @@ use_case:
               target: "bill_of_entry.gross_weight"
               tolerance_percent: 1.0
               operator: "equals"
+
+            - name: "gross_weight_bol_to_invoice"
+              source: "bill_of_lading.gross_weight"
+              target: "invoice.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            - name: "net_weight_bol_to_invoice"
+              source: "bill_of_lading.net_weight"
+              target: "invoice.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
         on_failure: "continue"
         severity: "critical"
 
@@ -311,17 +371,18 @@ use_case:
         on_failure: "continue"
         severity: "major"
 
-      # Step 7: HS Code format validation
+      # Step 7: HS Code format validation — accepts 6-digit (1901.90), 10-digit (1901902000)
+      # Ghana uses full 10-digit tariff codes; standard HS is 6 digits.
       - name: "hs_code_format"
-        description: "Validate HS Code format (XXXX.XX)"
+        description: "Validate HS Code format — XXXX.XX or 6-10 digit numeric"
         validators:
           - "regex_validator"
         config:
           validations:
             - field: "hs_code"
-              pattern: "^\\d{4}\\.\\d{2}$"
-              description: "HS Code format (XXXX.XX)"
-              required: true
+              pattern: "^(\\d{4}\\.\\d{2}(\\.\\d{2}(\\.\\d{2})?)?|\\d{6,10})$"
+              description: "HS Code format (XXXX.XX or 6-10 digit numeric)"
+              required: false
         on_failure: "continue"
         severity: "major"
 
@@ -403,6 +464,171 @@ use_case:
         on_failure: "continue"
         severity: "critical"
 
+      # Step 13: Declarant must be present and have a registration number
+      - name: "declarant_check"
+        description: "Verify declarant (clearing agent) is identified with a valid registration number"
+        validators:
+          - "required_fields_validator"
+        config:
+          required_fields:
+            bill_of_entry:
+              - "declarant_name"
+              - "declarant_reg_number"
+        on_failure: "flag_and_continue"
+        severity: "major"
+
+      # Step 14: FOB value on BOE must match invoice total (within 0.5%)
+      - name: "fob_value_crosscheck"
+        description: "BOE FOB value must match invoice total FOB value"
+        validators:
+          - "tolerance_validator"
+        config:
+          tolerance_type: "percentage"
+          default_tolerance: 0.5
+
+          validations:
+            - name: "fob_boe_to_invoice"
+              source: "bill_of_entry.fob_value"
+              target: "invoice.total_fob_value"
+              tolerance_percent: 0.5
+              operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 15: Incoterm must match between BOE and invoice
+      - name: "incoterm_cross_doc"
+        description: "Incoterm on BOE must match incoterm on invoice"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "incoterm"
+          documents:
+            - "bill_of_entry"
+            - "invoice"
+          match_type: "fuzzy"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 16: Currency must match between BOE and invoice
+      - name: "currency_consistency"
+        description: "Currency code must match between BOE and invoice"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "currency"
+          documents:
+            - "bill_of_entry"
+            - "invoice"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 17: Country of origin must be present on BOE
+      - name: "country_of_origin_check"
+        description: "Country of origin must be declared on BOE"
+        validators:
+          - "required_fields_validator"
+        config:
+          required_fields:
+            bill_of_entry:
+              - "country_of_origin"
+        on_failure: "flag_and_continue"
+        severity: "major"
+
+      # Step 18: Container count must match between BOE description and bill of lading
+      - name: "container_count_consistency"
+        description: "Container count must match between BOE and bill of lading"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "container_count"
+          documents:
+            - "bill_of_entry"
+            - "bill_of_lading"
+          match_type: "exact"
+          require_all: false
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 19: ETLS approval number required when import duty rate is zero
+      # When duty_rate = 0 and CPC code is 40U01/40W01, an ETLS approval
+      # number must be referenced. This is validated by customs_code_validator.
+      - name: "etls_approval_check"
+        description: "ETLS approval number required when import duty is zero (40U01/40W01)"
+        validators:
+          - "customs_code_validator"
+        config:
+          customs_codes:
+            "40U01":
+              vat_rate: 0.05
+              require_etls_approval: true
+            "40W01":
+              vat_rate: 0.05
+              require_etls_approval: true
+
+          validations:
+            - customs_value_field: "bill_of_entry.customs_value"
+              amount_payable_field: "bill_of_entry.amount_payable"
+              amount_exempted_field: "bill_of_entry.amount_exempted"
+              duty_amount_field: "bill_of_entry.duty_amount"
+              vat_amount_field: "bill_of_entry.vat_amount"
+              customs_code_field: "bill_of_entry.cpc_code"
+              etls_approval_field: "bill_of_entry.etls_approval_number"
+
+          tolerance: 0.01
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 20: VAT and NHIL rate verification
+      # VAT base = customs_value + duty_amount
+      # VAT (Tax 02) = 15% of base; NHIL (Tax 47) = 2.5% of base; GET Fund (Tax 88) = 2.5% of base
+      - name: "vat_nhil_rate_check"
+        description: "Verify VAT (15%) and NHIL (2.5%) amounts are correctly calculated"
+        validators:
+          - "calculation_validator"
+        config:
+          calculations:
+            - name: "vat_amount_check"
+              formula: "(customs_value + duty_amount) * 0.15"
+              fields:
+                customs_value: "bill_of_entry.customs_value"
+                duty_amount: "bill_of_entry.duty_amount"
+              target: "bill_of_entry.vat_amount"
+              tolerance_percent: 0.5
+              description: "VAT = 15% × (Customs Value + Duty Amount)"
+
+            - name: "nhil_amount_check"
+              formula: "(customs_value + duty_amount) * 0.025"
+              fields:
+                customs_value: "bill_of_entry.customs_value"
+                duty_amount: "bill_of_entry.duty_amount"
+              target: "bill_of_entry.nhil_amount"
+              tolerance_percent: 0.5
+              description: "NHIL = 2.5% × (Customs Value + Duty Amount)"
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 21: Insurance rate verification for FCA/CFR shipments
+      # Sea/Road: insurance = 0.875% of C&F; Air: insurance = 1% of C&F
+      - name: "insurance_rate_check"
+        description: "Verify insurance amount matches 0.875% (sea/road) or 1% (air) of C&F value"
+        validators:
+          - "incoterm_validator"
+        config:
+          validations:
+            - incoterm_field: "invoice.incoterm"
+              freight_field: "bill_of_entry.freight_value"
+              insurance_field: "bill_of_entry.insurance_value"
+              fob_field: "bill_of_entry.fob_value"
+              cif_field: "bill_of_entry.customs_value"
+              transport_mode_field: "bill_of_entry.entry_exit_code"
+              check_insurance_rate: true
+          tolerance: 0.01
+        on_failure: "continue"
+        severity: "major"
+
   # Discrepancy handling
   discrepancy_handling:
     classification:
@@ -429,6 +655,15 @@ use_case:
           - "customs code amount exempted incorrect"
           - "unrecognized customs code"
           - "description does not match CET"
+          - "declarant name or registration number missing"
+          - "incoterm mismatch between BOE and invoice"
+          - "currency mismatch between BOE and invoice"
+          - "country of origin missing on BOE"
+          - "container count mismatch"
+          - "etls approval number missing for zero duty"
+          - "vat amount incorrect"
+          - "nhil amount incorrect"
+          - "insurance rate calculation incorrect"
 
         minor:
           - "weight difference <= 1%"

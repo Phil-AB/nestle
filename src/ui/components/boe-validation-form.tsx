@@ -15,132 +15,25 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
-  Settings2,
-  Copy,
-  ArrowRight,
+  FileSearch,
+  RefreshCw,
 } from "lucide-react"
-import { apiClient, type ValidationDiscrepancy, type VendorValidationResponse } from "@/lib/api-client"
+import { useSearchParams } from "next/navigation"
+import { apiClient, type ValidationDiscrepancy, type BOEValidationResponse } from "@/lib/api-client"
 
-// ─── Document Slot Definition ─────────────────────────────────────────────────
+// ─── Shipment type ────────────────────────────────────────────────────────────
 
-interface DocSlot {
-  key: "invoice" | "packing_list" | "bill_of_lading" | "freight_manifest" | "certificate_of_origin"
-  label: string
-  required: boolean
-  description: string
+interface ShipmentOption {
+  shipment_id: string
+  shipment_number: string
+  supplier_name?: string
+  consignee_name?: string
+  status: string
+  vendor_docs_count: number
+  created_at?: string
 }
 
-const DOC_SLOTS: DocSlot[] = [
-  {
-    key: "invoice",
-    label: "Commercial Invoice",
-    required: true,
-    description: "Supplier's invoice showing goods, quantities, and values",
-  },
-  {
-    key: "packing_list",
-    label: "Packing List",
-    required: true,
-    description: "Itemised list of goods shipped with weights and dimensions",
-  },
-  {
-    key: "bill_of_lading",
-    label: "Bill of Lading",
-    required: false,
-    description: "Carrier's receipt — confirms shipment details, containers, and routing",
-  },
-  {
-    key: "freight_manifest",
-    label: "Freight Manifest",
-    required: false,
-    description: "Full cargo manifest from the freight forwarder",
-  },
-  {
-    key: "certificate_of_origin",
-    label: "Certificate of Origin",
-    required: false,
-    description: "Certifies the country of manufacture for customs purposes",
-  },
-]
-
-function autoShipmentNumber() {
-  const now = new Date()
-  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
-  return `SHP-${ymd}-${rand}`
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function FileSlot({
-  slot,
-  file,
-  onSelect,
-  onRemove,
-}: {
-  slot: DocSlot
-  file: File | null
-  onSelect: (file: File) => void
-  onRemove: () => void
-}) {
-  const inputId = `file-slot-${slot.key}`
-
-  return (
-    <div className="flex items-start gap-4 p-4 rounded-lg border border-border bg-muted/30">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="font-semibold text-foreground text-sm">{slot.label}</span>
-          {slot.required ? (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-destructive">Required</span>
-          ) : (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Optional</span>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">{slot.description}</p>
-
-        {file ? (
-          <div className="flex items-center gap-3 p-2 bg-primary/5 border border-primary/20 rounded-lg">
-            <FileUp className="w-4 h-4 text-primary flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-              <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
-            </div>
-            <button
-              onClick={onRemove}
-              className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-              aria-label="Remove file"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <>
-            <input
-              id={inputId}
-              type="file"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) onSelect(f)
-                e.target.value = ""
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => document.getElementById(inputId)?.click()}
-              className="text-xs"
-            >
-              <FileUp className="w-3 h-3 mr-1.5" />
-              Select File
-            </Button>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
+// ─── Discrepancy Review Card ──────────────────────────────────────────────────
 
 function DiscrepancyCard({
   disc,
@@ -152,6 +45,7 @@ function DiscrepancyCard({
   onToggle: (id: string, value: boolean) => void
 }) {
   const [expanded, setExpanded] = useState(true)
+
   const severityClass =
     disc.severity === "critical"
       ? "border-destructive/40 bg-destructive/5"
@@ -159,12 +53,12 @@ function DiscrepancyCard({
       ? "border-amber-400/40 bg-amber-50/30 dark:bg-amber-900/10"
       : "border-border bg-muted/20"
 
+  const fieldName = (disc as any).field_name ?? disc.field ?? "—"
+  const message = (disc as any).message ?? disc.description
+
   return (
     <div className={`rounded-lg border p-4 ${severityClass}`}>
-      <div
-        className="flex items-start gap-3 cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
+      <div className="flex items-start gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <AlertTriangle
           className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
             disc.severity === "critical" ? "text-destructive" : "text-amber-500"
@@ -172,9 +66,7 @@ function DiscrepancyCard({
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-foreground">
-              {disc.field_name ?? disc.field ?? "—"}
-            </span>
+            <span className="font-semibold text-sm text-foreground">{fieldName}</span>
             <span
               className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
                 disc.severity === "critical"
@@ -185,7 +77,7 @@ function DiscrepancyCard({
               {disc.severity}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">{disc.message ?? disc.description}</p>
+          {message && <p className="text-xs text-muted-foreground mt-0.5">{message}</p>}
         </div>
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -196,17 +88,33 @@ function DiscrepancyCard({
 
       {expanded && (
         <div className="mt-3 pl-7 space-y-3">
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-2 bg-card rounded border border-border">
-              <p className="text-muted-foreground mb-0.5">{disc.source_document}</p>
-              <p className="font-medium text-foreground truncate">{String(disc.source_value ?? "—")}</p>
+          {/* Source vs Target values */}
+          {((disc as any).source_value !== undefined || (disc as any).target_value !== undefined) && (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-2 bg-card rounded border border-border">
+                <p className="text-muted-foreground mb-0.5 text-[10px] uppercase font-semibold">
+                  {disc.source_document ?? "BOE"}
+                </p>
+                <code className="font-mono text-foreground break-all">
+                  {String((disc as any).source_value ?? "—")}
+                </code>
+              </div>
+              <div className="p-2 bg-card rounded border border-border">
+                <p className="text-muted-foreground mb-0.5 text-[10px] uppercase font-semibold">
+                  {disc.target_document ?? "Vendor Docs"}
+                </p>
+                <code className="font-mono text-foreground break-all">
+                  {typeof (disc as any).target_value === "object" && (disc as any).target_value !== null
+                    ? Object.entries((disc as any).target_value)
+                        .map(([doc, val]) => `${doc}: ${val}`)
+                        .join(", ")
+                    : String((disc as any).target_value ?? "—")}
+                </code>
+              </div>
             </div>
-            <div className="p-2 bg-card rounded border border-border">
-              <p className="text-muted-foreground mb-0.5">{disc.target_document}</p>
-              <p className="font-medium text-foreground truncate">{String(disc.target_value ?? "—")}</p>
-            </div>
-          </div>
+          )}
 
+          {/* Accept / Reject */}
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -215,7 +123,7 @@ function DiscrepancyCard({
               onClick={() => onToggle(disc.id, true)}
             >
               <CheckCircle className="w-3 h-3 mr-1.5" />
-              Accept Discrepancy
+              Accept
             </Button>
             <Button
               size="sm"
@@ -237,29 +145,24 @@ function DiscrepancyCard({
 
 type Step = "upload" | "processing" | "review" | "complete"
 
-export default function VendorValidationForm() {
+export default function BOEValidationForm() {
+  const searchParams = useSearchParams()
+  const prefilledShipmentId = searchParams.get("shipment_id") ?? ""
+
   const [step, setStep] = useState<Step>("upload")
 
-  // Optional shipment details — collapsed by default
-  const [showShipmentDetails, setShowShipmentDetails] = useState(false)
-  const [shipmentNumber, setShipmentNumber] = useState("")
-  const [supplierName, setSupplierName] = useState("")
-  const [consigneeName, setConsigneeName] = useState("")
-  const [incoterm, setIncoterm] = useState("")
-  const [transportMode, setTransportMode] = useState("")
+  // Shipment selector
+  const [shipments, setShipments] = useState<ShipmentOption[]>([])
+  const [shipmentsLoading, setShipmentsLoading] = useState(false)
+  const [shipmentsError, setShipmentsError] = useState<string | null>(null)
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentOption | null>(null)
+  const [manualId, setManualId] = useState(prefilledShipmentId)
 
-  // Files
-  const [files, setFiles] = useState<Record<DocSlot["key"], File | null>>({
-    invoice: null,
-    packing_list: null,
-    bill_of_lading: null,
-    freight_manifest: null,
-    certificate_of_origin: null,
-  })
+  // Inputs
+  const [shipmentId, setShipmentId] = useState("")
+  const [boeFile, setBoeFile] = useState<File | null>(null)
 
   // Results
-  const [shipmentId, setShipmentId] = useState<string | null>(null)
-  const [generatedShipmentNumber, setGeneratedShipmentNumber] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [discrepancies, setDiscrepancies] = useState<ValidationDiscrepancy[]>([])
   const [validationResults, setValidationResults] = useState<any[]>([])
@@ -272,7 +175,6 @@ export default function VendorValidationForm() {
   const [elapsed, setElapsed] = useState(0)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Start/stop elapsed timer whenever submitting changes
   useEffect(() => {
     if (submitting) {
       setElapsed(0)
@@ -283,12 +185,35 @@ export default function VendorValidationForm() {
     return () => { if (elapsedRef.current) clearInterval(elapsedRef.current) }
   }, [submitting])
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // Derive active shipment ID from selection or manual input
+  const activeShipmentId = selectedShipment?.shipment_id ?? manualId.trim()
 
-  const setFile = (key: DocSlot["key"], file: File | null) =>
-    setFiles((prev) => ({ ...prev, [key]: file }))
+  const canSubmit = activeShipmentId.length > 0 && boeFile !== null
 
-  const requiredFilled = files.invoice !== null && files.packing_list !== null
+  // ── Fetch shipments on mount ──────────────────────────────────────────────
+
+  const fetchShipments = async () => {
+    setShipmentsLoading(true)
+    setShipmentsError(null)
+    try {
+      const data = await apiClient.listShipments(50)
+      setShipments(data.shipments)
+      // Auto-select shipment if prefilled from vendor validation deep link
+      if (prefilledShipmentId) {
+        const match = data.shipments.find((s) => s.shipment_id === prefilledShipmentId)
+        if (match) {
+          setSelectedShipment(match)
+          setManualId("")
+        }
+      }
+    } catch (e) {
+      setShipmentsError("Could not load shipments.")
+    } finally {
+      setShipmentsLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchShipments() }, [])
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -298,49 +223,32 @@ export default function VendorValidationForm() {
     setStep("processing")
 
     try {
-      // Create shipment — use user-provided number or auto-generate
-      const number = shipmentNumber.trim() || autoShipmentNumber()
-      setGeneratedShipmentNumber(number)
-
-      const shipment = await apiClient.createShipment({
-        shipment_number: number,
-        supplier_name: supplierName.trim() || undefined as any,
-        consignee_name: consigneeName.trim() || undefined as any,
-        incoterm: incoterm.trim() || undefined,
-        transport_mode: transportMode.trim() || undefined,
-      })
-      setShipmentId(shipment.shipment_id)
-
-      // Validate vendor docs
-      const result: VendorValidationResponse = await apiClient.validateVendorDocs(
-        shipment.shipment_id,
-        {
-          invoice: files.invoice ?? undefined,
-          packing_list: files.packing_list ?? undefined,
-          bill_of_lading: files.bill_of_lading ?? undefined,
-          freight_manifest: files.freight_manifest ?? undefined,
-          certificate_of_origin: files.certificate_of_origin ?? undefined,
-        }
+      const result: BOEValidationResponse = await apiClient.validateBOE(
+        activeShipmentId,
+        boeFile!
       )
 
-      if (result.workflow_status === "awaiting_user" && result.discrepancies?.length) {
+      const discs = result.discrepancies ?? []
+      const vResults = (result as any).validation_results ?? []
+
+      if (result.workflow_status === "awaiting_user" && discs.length > 0) {
         setSessionId(result.session_id ?? null)
-        setDiscrepancies(result.discrepancies)
-        setValidationResults((result as any).validation_results ?? [])
+        setDiscrepancies(discs)
+        setValidationResults(vResults)
         setSummary(result.summary ?? null)
         const initial: Record<string, boolean | null> = {}
-        result.discrepancies.forEach((d) => { initial[d.id] = null })
+        discs.forEach((d) => { initial[d.id] = null })
         setConfirmations(initial)
         setStep("review")
       } else {
         setFinalStatus(result.final_status ?? null)
         setSummary(result.summary ?? null)
-        setDiscrepancies(result.discrepancies ?? [])
-        setValidationResults((result as any).validation_results ?? [])
+        setDiscrepancies(discs)
+        setValidationResults(vResults)
         setStep("complete")
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Validation failed. Please try again.")
+      setError(e instanceof Error ? e.message : "BOE validation failed. Please try again.")
       setStep("upload")
     } finally {
       setSubmitting(false)
@@ -362,6 +270,8 @@ export default function VendorValidationForm() {
       const result = await apiClient.resumeValidationSession(sessionId, payload)
       setFinalStatus((result as any).final_status ?? null)
       setSummary((result as any).summary ?? null)
+      setDiscrepancies((result as any).discrepancies ?? discrepancies)
+      setValidationResults((result as any).validation_results ?? validationResults)
       setStep("complete")
     } catch (e) {
       setError(e instanceof Error ? e.message : "Resume failed. Please try again.")
@@ -375,22 +285,23 @@ export default function VendorValidationForm() {
 
   const handleReset = () => {
     setStep("upload")
-    setShipmentNumber("")
-    setSupplierName("")
-    setConsigneeName("")
-    setIncoterm("")
-    setTransportMode("")
-    setShowShipmentDetails(false)
-    setFiles({ invoice: null, packing_list: null, bill_of_lading: null, freight_manifest: null, certificate_of_origin: null })
-    setShipmentId(null)
-    setGeneratedShipmentNumber(null)
+    setSelectedShipment(null)
+    setManualId("")
+    setShipmentId("")
+    setBoeFile(null)
     setSessionId(null)
     setDiscrepancies([])
+    setValidationResults([])
     setFinalStatus(null)
     setSummary(null)
     setConfirmations({})
     setError(null)
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const validatorLabel = (name: string) =>
+    name.replace(/_validator$/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -400,9 +311,9 @@ export default function VendorValidationForm() {
     <div className="p-8 max-w-3xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-foreground mb-2">Vendor Document Validation</h1>
+        <h1 className="text-4xl font-bold text-foreground mb-2">BOE Validation</h1>
         <p className="text-muted-foreground">
-          Step 2 — Upload and cross-validate vendor documents before transmitting to the clearing agent.
+          Step 6 — Cross-verify the Bill of Entry against stored vendor documents before customs filing.
         </p>
       </div>
 
@@ -419,120 +330,193 @@ export default function VendorValidationForm() {
         </Card>
       )}
 
-      {/* ── Upload ──────────────────────────────────────────────────────────── */}
+      {/* ── Upload ────────────────────────────────────────────────────────────── */}
       {step === "upload" && (
         <div className="space-y-4">
-          {/* Optional shipment details toggle */}
-          <Card className="overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors text-left"
-              onClick={() => setShowShipmentDetails(!showShipmentDetails)}
-            >
-              <div className="flex items-center gap-2">
-                <Settings2 className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">Shipment Details</span>
-                <span className="text-xs text-muted-foreground">(optional)</span>
+          {/* Shipment selector */}
+          <Card className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold text-foreground">
+                  Shipment <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Select a shipment from Step 2, or enter an ID manually.
+                </p>
               </div>
-              {showShipmentDetails ? (
-                <ChevronUp className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-              )}
-            </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchShipments}
+                disabled={shipmentsLoading}
+                className="text-xs text-muted-foreground"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${shipmentsLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
 
-            {showShipmentDetails && (
-              <div className="px-4 pb-4 border-t border-border pt-4 grid grid-cols-2 gap-4">
-                <div className="col-span-2 md:col-span-1">
-                  <Label htmlFor="shipment-number" className="text-xs font-medium text-muted-foreground">
-                    Shipment Number
-                  </Label>
-                  <Input
-                    id="shipment-number"
-                    value={shipmentNumber}
-                    onChange={(e) => setShipmentNumber(e.target.value)}
-                    placeholder="Auto-generated if empty"
-                    className="mt-1 text-sm"
-                  />
-                </div>
-                <div className="col-span-2 md:col-span-1">
-                  <Label htmlFor="incoterm" className="text-xs font-medium text-muted-foreground">
-                    Incoterm
-                  </Label>
-                  <Input
-                    id="incoterm"
-                    value={incoterm}
-                    onChange={(e) => setIncoterm(e.target.value)}
-                    placeholder="e.g. CIF, FOB, DDP"
-                    className="mt-1 text-sm"
-                  />
-                </div>
-                <div className="col-span-2 md:col-span-1">
-                  <Label htmlFor="supplier-name" className="text-xs font-medium text-muted-foreground">
-                    Supplier Name
-                  </Label>
-                  <Input
-                    id="supplier-name"
-                    value={supplierName}
-                    onChange={(e) => setSupplierName(e.target.value)}
-                    placeholder="Extracted from invoice if empty"
-                    className="mt-1 text-sm"
-                  />
-                </div>
-                <div className="col-span-2 md:col-span-1">
-                  <Label htmlFor="transport-mode" className="text-xs font-medium text-muted-foreground">
-                    Transport Mode
-                  </Label>
-                  <Input
-                    id="transport-mode"
-                    value={transportMode}
-                    onChange={(e) => setTransportMode(e.target.value)}
-                    placeholder="e.g. Sea, Air, Road"
-                    className="mt-1 text-sm"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <Label htmlFor="consignee-name" className="text-xs font-medium text-muted-foreground">
-                    Consignee Name
-                  </Label>
-                  <Input
-                    id="consignee-name"
-                    value={consigneeName}
-                    onChange={(e) => setConsigneeName(e.target.value)}
-                    placeholder="Extracted from invoice if empty"
-                    className="mt-1 text-sm"
-                  />
-                </div>
+            {shipmentsError && (
+              <p className="text-xs text-destructive">{shipmentsError}</p>
+            )}
+
+            {/* Shipment list */}
+            {shipmentsLoading ? (
+              <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                <Loader className="w-4 h-4 animate-spin" />
+                Loading shipments...
+              </div>
+            ) : shipments.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {shipments.map((s) => {
+                  const isSelected = selectedShipment?.shipment_id === s.shipment_id
+                  const hasVendorDocs = s.vendor_docs_count > 0
+                  return (
+                    <button
+                      key={s.shipment_id}
+                      onClick={() => {
+                        setSelectedShipment(isSelected ? null : s)
+                        setManualId("")
+                      }}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-muted/20 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-foreground truncate">
+                              {s.shipment_number}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                hasVendorDocs
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              }`}
+                            >
+                              {hasVendorDocs ? `${s.vendor_docs_count} docs` : "no docs"}
+                            </span>
+                            {isSelected && (
+                              <CheckCircle className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                            )}
+                          </div>
+                          {(s.supplier_name || s.consignee_name) && (
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              {[s.supplier_name, s.consignee_name].filter(Boolean).join(" → ")}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0 mt-0.5">
+                          {s.created_at ? new Date(s.created_at).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-mono text-muted-foreground/60 mt-1 truncate">
+                        {s.shipment_id}
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground py-2">No shipments found.</p>
+            )}
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or enter manually</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Manual ID input */}
+            <div>
+              <Input
+                value={manualId}
+                onChange={(e) => {
+                  setManualId(e.target.value)
+                  if (e.target.value) setSelectedShipment(null)
+                }}
+                placeholder="Paste shipment ID..."
+                className="font-mono text-sm"
+                disabled={!!selectedShipment}
+              />
+            </div>
+
+            {/* Active selection indicator */}
+            {activeShipmentId && (
+              <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                <CheckCircle className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <code className="text-xs font-mono text-foreground truncate">{activeShipmentId}</code>
               </div>
             )}
           </Card>
 
-          {/* Document slots */}
-          <Card className="p-6 space-y-3">
-            <h2 className="text-base font-semibold text-foreground mb-2">Documents</h2>
-            {DOC_SLOTS.map((slot) => (
-              <FileSlot
-                key={slot.key}
-                slot={slot}
-                file={files[slot.key]}
-                onSelect={(f) => setFile(slot.key, f)}
-                onRemove={() => setFile(slot.key, null)}
-              />
-            ))}
+          {/* BOE upload */}
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-1">
+              Bill of Entry <span className="text-destructive">*</span>
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              The draft BOE from the clearing agent (GRA Ghana form, PDF)
+            </p>
+
+            {boeFile ? (
+              <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <FileUp className="w-4 h-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{boeFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{(boeFile.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <button
+                  onClick={() => setBoeFile(null)}
+                  className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                  aria-label="Remove file"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor="boe-file-input"
+                className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/30 hover:border-primary/40 transition-colors"
+              >
+                <FileSearch className="w-8 h-8 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Click to select BOE PDF
+                </span>
+                <span className="text-xs text-muted-foreground/60">.pdf supported</span>
+                <input
+                  id="boe-file-input"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.tiff"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) setBoeFile(f)
+                    e.target.value = ""
+                  }}
+                />
+              </label>
+            )}
           </Card>
 
           <div className="flex justify-end">
             <Button
               onClick={handleValidate}
-              disabled={!requiredFilled || submitting}
+              disabled={!canSubmit || submitting}
               className="bg-primary hover:bg-primary/90"
             >
-              Validate Documents
+              <FileSearch className="w-4 h-4 mr-2" />
+              Validate BOE
             </Button>
           </div>
         </div>
       )}
 
-      {/* ── Processing ───────────────────────────────────────────────────────── */}
+      {/* ── Processing ──────────────────────────────────────────────────────────── */}
       {step === "processing" && (
         <Card className="p-12 text-center">
           <div className="flex justify-center mb-6">
@@ -540,9 +524,9 @@ export default function VendorValidationForm() {
               <Loader className="w-8 h-8 text-primary animate-spin" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Extracting & Validating</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Extracting & Cross-Verifying</h2>
           <p className="text-muted-foreground">
-            AI is extracting and cross-validating your documents. This typically takes 3–5 minutes.
+            AI is extracting the BOE and cross-checking against stored vendor documents. This typically takes 3–5 minutes.
           </p>
           <p className="text-sm text-muted-foreground mt-3 font-mono">
             {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} elapsed — please keep this tab open
@@ -550,17 +534,34 @@ export default function VendorValidationForm() {
         </Card>
       )}
 
-      {/* ── HITL Review ──────────────────────────────────────────────────────── */}
+      {/* ── HITL Review ─────────────────────────────────────────────────────────── */}
       {step === "review" && (
         <div className="space-y-4">
+          {/* Summary bar */}
+          {summary && (
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: "Total Checks", value: summary.total_checks ?? 0, color: "text-foreground" },
+                { label: "Passed", value: summary.passed_checks ?? 0, color: "text-green-600" },
+                { label: "Failed", value: summary.failed_checks ?? 0, color: "text-destructive" },
+                { label: "Discrepancies", value: summary.total_discrepancies ?? discrepancies.length, color: "text-amber-500" },
+              ].map(({ label, value, color }) => (
+                <Card key={label} className="p-3 text-center">
+                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                </Card>
+              ))}
+            </div>
+          )}
+
           <Card className="p-5 border-l-4 border-amber-400 bg-amber-50/30 dark:bg-amber-900/10">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-foreground">Discrepancies Detected</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {discrepancies.length} discrepanc{discrepancies.length !== 1 ? "ies" : "y"} found. Review
-                  each one and choose to accept or reject before proceeding.
+                  {discrepancies.length} discrepanc{discrepancies.length !== 1 ? "ies" : "y"} found between the BOE
+                  and vendor documents. Review each one and accept or reject before proceeding.
                 </p>
               </div>
             </div>
@@ -579,7 +580,7 @@ export default function VendorValidationForm() {
 
           <div className="flex justify-between pt-2">
             <Button variant="outline" onClick={() => setStep("upload")}>
-              Re-upload Documents
+              Re-upload BOE
             </Button>
             <Button
               onClick={handleResume}
@@ -591,14 +592,14 @@ export default function VendorValidationForm() {
               }
               className="bg-primary hover:bg-primary/90"
             >
-              {submitting ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {submitting && <Loader className="w-4 h-4 mr-2 animate-spin" />}
               Submit Decisions
             </Button>
           </div>
         </div>
       )}
 
-      {/* ── Complete ──────────────────────────────────────────────────────────── */}
+      {/* ── Complete ────────────────────────────────────────────────────────────── */}
       {step === "complete" && (
         <div className="space-y-4">
           {/* Status banner */}
@@ -632,23 +633,21 @@ export default function VendorValidationForm() {
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-bold text-foreground">
                   {finalStatus === "passed"
-                    ? "Validation Passed"
+                    ? "BOE Validated — Cleared for Filing"
                     : finalStatus === "failed"
-                    ? "Validation Failed"
-                    : "Requires Attention"}
+                    ? "BOE Validation Failed"
+                    : "BOE Requires Attention"}
                 </h2>
                 <p className="text-muted-foreground text-sm mt-0.5">
                   {finalStatus === "passed"
-                    ? "All vendor documents are consistent. You may transmit to the clearing agent."
+                    ? "The BOE is consistent with all vendor documents. You may proceed to customs filing."
                     : finalStatus === "failed"
-                    ? "Critical discrepancies remain unresolved. Please correct the documents and retry."
-                    : "Some discrepancies were found. Review the details below before proceeding."}
+                    ? "Critical discrepancies remain. The BOE must be corrected before filing."
+                    : "Some discrepancies were found. Review the details below before filing."}
                 </p>
-                {(generatedShipmentNumber || shipmentNumber) && (
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    Shipment: <code className="font-mono">{shipmentNumber || generatedShipmentNumber}</code>
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground mt-1.5 font-mono">
+                  {selectedShipment?.shipment_number ?? activeShipmentId}
+                </p>
               </div>
             </div>
           </Card>
@@ -670,9 +669,9 @@ export default function VendorValidationForm() {
             </div>
           )}
 
-          {/* Severity breakdown */}
+          {/* Severity badges */}
           {summary && (summary.critical > 0 || summary.major > 0 || summary.minor > 0) && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {[
                 { label: "Critical", count: summary.critical, bg: "bg-destructive/10", text: "text-destructive" },
                 { label: "Major", count: summary.major, bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600 dark:text-amber-400" },
@@ -687,17 +686,14 @@ export default function VendorValidationForm() {
             </div>
           )}
 
-          {/* Checks breakdown table */}
-          {validationResults && validationResults.length > 0 && (() => {
-            // Group checks by validator name
+          {/* Checks breakdown */}
+          {validationResults.length > 0 && (() => {
             const groups: Record<string, any[]> = {}
             for (const r of validationResults) {
               const key = r.validator_name ?? "other"
               if (!groups[key]) groups[key] = []
               groups[key].push(r)
             }
-            const validatorLabel = (name: string) =>
-              name.replace(/_validator$/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
             return (
               <Card className="p-0 overflow-hidden">
@@ -714,7 +710,6 @@ export default function VendorValidationForm() {
 
                 {Object.entries(groups).map(([validatorName, checks]) => (
                   <div key={validatorName} className="border-b border-border last:border-b-0">
-                    {/* Validator group header */}
                     <div className="px-4 py-2 bg-muted/30 flex items-center gap-2">
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         {validatorLabel(validatorName)}
@@ -736,7 +731,6 @@ export default function VendorValidationForm() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              {/* Field name + document */}
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-semibold text-foreground">
                                   {r.field_name ?? r.field ?? "—"}
@@ -746,14 +740,17 @@ export default function VendorValidationForm() {
                                     {r.source_document}
                                   </span>
                                 )}
+                                {r.target_document && (
+                                  <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                    → {r.target_document}
+                                  </span>
+                                )}
                               </div>
-                              {/* Message */}
                               {r.message && (
                                 <p className="text-xs text-muted-foreground mt-1">{r.message}</p>
                               )}
-                              {/* Values */}
                               {r.passed && r.source_value !== null && r.source_value !== undefined && (
-                                <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                                <div className="mt-1.5 flex items-center gap-1.5 text-xs flex-wrap">
                                   <span className="text-muted-foreground">Value:</span>
                                   <code className="font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
                                     {String(r.source_value)}
@@ -762,13 +759,14 @@ export default function VendorValidationForm() {
                                     <>
                                       <span className="text-muted-foreground">→</span>
                                       <code className="font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
-                                        {String(r.target_value)}
+                                        {typeof r.target_value === "object"
+                                          ? JSON.stringify(r.target_value)
+                                          : String(r.target_value)}
                                       </code>
                                     </>
                                   )}
                                 </div>
                               )}
-                              {/* Failed: show source vs target comparison */}
                               {!r.passed && (r.source_value !== null || r.target_value !== null) && (
                                 <div className="mt-2 grid grid-cols-2 gap-2">
                                   <div className="p-2 bg-card rounded border border-border text-xs">
@@ -787,7 +785,9 @@ export default function VendorValidationForm() {
                                         {r.target_document ?? "Target"}
                                       </p>
                                       <code className="font-mono text-foreground break-all">
-                                        {String(r.target_value)}
+                                        {typeof r.target_value === "object"
+                                          ? JSON.stringify(r.target_value)
+                                          : String(r.target_value)}
                                       </code>
                                     </div>
                                   )}
@@ -813,18 +813,22 @@ export default function VendorValidationForm() {
             )
           })()}
 
-          {/* Discrepancy list */}
-          {discrepancies && discrepancies.length > 0 && (
+          {/* Remaining discrepancies (post-HITL) */}
+          {discrepancies.length > 0 && (
             <Card className="p-0 overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <h3 className="font-semibold text-sm text-foreground">Discrepancies ({discrepancies.length})</h3>
+                <h3 className="font-semibold text-sm text-foreground">
+                  Discrepancies ({discrepancies.length})
+                </h3>
               </div>
               <div className="divide-y divide-border">
-                {discrepancies.map((d: ValidationDiscrepancy) => (
+                {discrepancies.map((d: any) => (
                   <div key={d.id} className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-foreground">{d.field_name ?? d.field ?? "—"}</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {d.field_name ?? d.field ?? "—"}
+                      </span>
                       <span
                         className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
                           d.severity === "critical"
@@ -836,25 +840,32 @@ export default function VendorValidationForm() {
                       >
                         {d.severity}
                       </span>
-                      {d.status && (
-                        <span className="text-[10px] text-muted-foreground uppercase">{d.status}</span>
+                      {confirmations[d.id] === true && (
+                        <span className="text-[10px] text-green-600 font-semibold uppercase">Accepted</span>
+                      )}
+                      {confirmations[d.id] === false && (
+                        <span className="text-[10px] text-destructive font-semibold uppercase">Rejected</span>
                       )}
                     </div>
-                    {d.message && (
-                      <p className="text-xs text-muted-foreground">{d.message}</p>
+                    {(d.message ?? d.description) && (
+                      <p className="text-xs text-muted-foreground">{d.message ?? d.description}</p>
                     )}
                     {(d.source_value !== undefined || d.target_value !== undefined) && (
-                      <div className="flex gap-4 text-xs mt-1">
+                      <div className="flex gap-4 text-xs mt-1 flex-wrap">
                         {d.source_value !== undefined && (
                           <div>
-                            <span className="text-muted-foreground">{d.source_document ?? "Source"}: </span>
+                            <span className="text-muted-foreground">{d.source_document ?? "BOE"}: </span>
                             <code className="font-mono text-foreground">{String(d.source_value)}</code>
                           </div>
                         )}
                         {d.target_value !== undefined && (
                           <div>
-                            <span className="text-muted-foreground">{d.target_document ?? "Target"}: </span>
-                            <code className="font-mono text-foreground">{String(d.target_value)}</code>
+                            <span className="text-muted-foreground">{d.target_document ?? "Vendor Docs"}: </span>
+                            <code className="font-mono text-foreground">
+                              {typeof d.target_value === "object"
+                                ? Object.entries(d.target_value).map(([doc, val]) => `${doc}: ${val}`).join(", ")
+                                : String(d.target_value)}
+                            </code>
                           </div>
                         )}
                       </div>
@@ -865,7 +876,7 @@ export default function VendorValidationForm() {
             </Card>
           )}
 
-          {/* Messages from workflow */}
+          {/* Workflow messages */}
           {summary?.messages && summary.messages.length > 0 && (
             <Card className="p-4">
               <h3 className="font-semibold text-sm text-foreground mb-2">Workflow Notes</h3>
@@ -880,42 +891,8 @@ export default function VendorValidationForm() {
             </Card>
           )}
 
-          {/* Shipment reference + next step */}
-          <Card className="p-4 space-y-3">
-            {shipmentId && (
-              <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 rounded-lg border border-border">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">
-                    Shipment ID
-                  </p>
-                  <code className="text-sm font-mono text-foreground break-all">{shipmentId}</code>
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(shipmentId)}
-                  className="flex-shrink-0 p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                  title="Copy shipment ID"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-
-            {finalStatus !== "failed" ? (
-              <a href={`/validation/boe${shipmentId ? `?shipment_id=${shipmentId}` : ""}`}>
-                <Button className="w-full bg-primary hover:bg-primary/90">
-                  Proceed to Step 6 — BOE Validation
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </a>
-            ) : (
-              <Button variant="outline" onClick={handleReset} className="w-full">
-                Fix Documents &amp; Retry
-              </Button>
-            )}
-          </Card>
-
           <Button variant="outline" onClick={handleReset} className="w-full">
-            New Validation
+            New BOE Validation
           </Button>
         </div>
       )}
