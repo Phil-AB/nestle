@@ -62,6 +62,7 @@ class Shipment(Base):
     freight_documents: Mapped[List["FreightDocument"]] = relationship("FreightDocument", back_populates="shipment", cascade="all, delete-orphan")
     validation_results: Mapped[List["ValidationResult"]] = relationship("ValidationResult", back_populates="shipment", cascade="all, delete-orphan")
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="shipment", cascade="all, delete-orphan")
+    token_usages: Mapped[List["ShipmentTokenUsage"]] = relationship("ShipmentTokenUsage", back_populates="shipment", cascade="save-update, merge")
 
     def __repr__(self) -> str:
         return f"<Shipment(id={self.id}, number={self.shipment_number}, status={self.status})>"
@@ -520,4 +521,62 @@ class ValidationSession(Base):
         return (
             f"<ValidationSession(id={self.id}, use_case={self.use_case}, "
             f"status={self.workflow_status})>"
+        )
+
+
+class ShipmentTokenUsage(Base):
+    """
+    Token usage record for a single validation step on a shipment.
+
+    One row is written per validation run:
+    - validation_type="vendor_validation"  → Step 2 (vendor docs)
+    - validation_type="boe_validation"     → Step 6 (BOE cross-check)
+
+    FK uses SET NULL so rows survive if the shipment is pruned.
+    """
+
+    __tablename__ = "shipment_token_usage"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=generate_uuid
+    )
+    shipment_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("shipments.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    # "vendor_validation" | "boe_validation"
+    validation_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )
+
+    # Aggregate token counts
+    total_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), default=0.0)
+    call_count: Mapped[int] = mapped_column(Integer, default=0)
+    documents_processed: Mapped[int] = mapped_column(Integer, default=1)
+
+    # Per-model breakdown — list of {provider, model, input_tokens, output_tokens, …}
+    by_model: Mapped[list | None] = mapped_column(JSONB)
+
+    # Full per-call breakdown (optional, for deep audit)
+    breakdown: Mapped[list | None] = mapped_column(JSONB)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+
+    # Relationship
+    shipment: Mapped["Shipment | None"] = relationship(
+        "Shipment", back_populates="token_usages"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ShipmentTokenUsage(id={self.id}, shipment={self.shipment_id}, "
+            f"type={self.validation_type}, tokens={self.total_tokens})>"
         )

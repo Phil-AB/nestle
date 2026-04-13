@@ -5,7 +5,7 @@
 # ACTIVE PROVIDER SELECTION
 # ==============================================================================
 # Change this to switch providers (reducto, google_document_ai)
-active_provider: reducto
+active_provider: claude
 
 # ==============================================================================
 # PROVIDER CREDENTIALS AND CONFIGURATION
@@ -25,6 +25,35 @@ providers:
       accurate_clustering: true
       # Return structured JSON with schema
       structured_output: true
+
+  # Anthropic Claude Configuration
+  # Uses Claude's native vision/document API for zero-OCR extraction
+  claude:
+    enabled: true
+    api_key_env: ANTHROPIC_API_KEY
+
+    # Model to use for extraction
+    model: "claude-opus-4-5"
+    max_tokens: 8192
+    timeout: 300
+
+    # AWS Bedrock (alternative to direct API)
+    bedrock:
+      enabled: true                              # Set true to route via Bedrock
+      region: "us-east-1"
+      model_id: "global.anthropic.claude-sonnet-4-6"  # Bedrock model ID
+
+    # Claude-specific options
+    options:
+      # Supported input formats
+      supported_formats:
+        - pdf
+        - png
+        - jpg
+        - jpeg
+        - gif
+        - webp
+        - tiff
 
   # Google Document AI Configuration
   google_document_ai:
@@ -59,6 +88,21 @@ providers:
 # This helps the system understand what each provider can do
 
 capabilities:
+  claude:
+    supports_schema_extraction: true
+    supports_tables: true
+    supports_handwriting: true
+    supports_forms: true
+    max_file_size_mb: 32
+    supported_formats:
+      - pdf
+      - png
+      - jpg
+      - jpeg
+      - gif
+      - webp
+      - tiff
+
   reducto:
     # What features does Reducto support?
     supports_schema_extraction: true

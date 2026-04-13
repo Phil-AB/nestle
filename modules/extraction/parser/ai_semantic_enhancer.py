@@ -46,14 +46,18 @@ class DocumentExtractionFields(BaseModel):
             "or dispatched the goods (labelled 'Exporter', 'Shipper', 'Seller', 'From', 'Sold By'). "
             "Do NOT include street/city/postal address here. "
             "Do NOT use the ocean carrier or shipping line as the shipper. "
-            "Example: 'utriPro B.V.' or 'Vreugdenhil Dairy Foods B.V.'"
+            "Do NOT extract names from page footer fine print, legal disclaimers, "
+            "or subsidiary lists at the bottom of the page. "
+            "The shipper is the MAIN company in the document HEADER / letterhead. "
+            "Example: 'Acme Dairy Foods Ltd.' or 'Global Exports Inc.'"
         )
     )
     shipper_address: Optional[str] = Field(
         None,
         description=(
-            "Full postal address of the shipper/exporter — street, city, postcode, country. "
-            "This is the address block that follows the company name. "
+            "Full postal address of the shipper/exporter — street, PO Box, postcode, city, country. "
+            "This is the address block that follows the company name in the header/letterhead. "
+            "Capture ALL address components (street, PO Box, postal code, city, country). "
             "May be multi-line (use \\n as separator). "
             "Do NOT put the company name here; that belongs in shipper_name."
         )

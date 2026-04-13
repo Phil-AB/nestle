@@ -95,6 +95,125 @@ class ValidationReportResponse(BaseModel):
 
 # Endpoints
 
+# ---------------------------------------------------------------------------
+# Pipeline Dashboard Stats
+# ---------------------------------------------------------------------------
+
+@router.get("/pipeline/stats", tags=["pipeline"])
+async def get_pipeline_stats():
+    """
+    Return aggregate statistics for the validation pipeline dashboard.
+
+    Reads from the dedicated shipment_token_usage table:
+    - Step 2 (vendor_validation): one row per vendor-doc validation run
+    - Step 6 (boe_validation):    one row per BOE cross-verification run
+
+    Each shipment can appear in the table twice — once per validation type —
+    allowing the dashboard to show both step tokens individually and in total.
+    """
+    from src.database.connection import get_session as get_db_session
+    from src.database.schema import ShipmentTokenUsage as ShipmentTokenUsageModel
+    from sqlalchemy import select as sa_select, func as sa_func, distinct
+
+    async with get_db_session() as db:
+        # --- Step 2 distinct shipments ------------------------------------
+        step2_q = await db.execute(
+            sa_select(sa_func.count(distinct(ShipmentTokenUsageModel.shipment_id))).where(
+                ShipmentTokenUsageModel.validation_type == "vendor_validation",
+                ShipmentTokenUsageModel.shipment_id.isnot(None),
+            )
+        )
+        step2_count = step2_q.scalar() or 0
+
+        # --- Step 6 distinct shipments ------------------------------------
+        step6_q = await db.execute(
+            sa_select(sa_func.count(distinct(ShipmentTokenUsageModel.shipment_id))).where(
+                ShipmentTokenUsageModel.validation_type == "boe_validation",
+                ShipmentTokenUsageModel.shipment_id.isnot(None),
+            )
+        )
+        step6_count = step6_q.scalar() or 0
+
+        # --- All token usage rows, newest first ---------------------------
+        all_rows_q = await db.execute(
+            sa_select(ShipmentTokenUsageModel).order_by(
+                ShipmentTokenUsageModel.created_at.desc()
+            )
+        )
+        all_rows = all_rows_q.scalars().all()
+
+    # --- Build per-row shipment list (one entry per validation run) -------
+    shipments: list = []
+    total_tokens        = 0
+    total_input_tokens  = 0
+    total_output_tokens = 0
+    total_cost          = 0.0
+    total_calls         = 0
+
+    for row in all_rows:
+        t_in     = row.total_input_tokens  or 0
+        t_out    = row.total_output_tokens or 0
+        t_tot    = row.total_tokens        or 0
+        t_cost   = float(row.estimated_cost_usd or 0.0)
+        t_calls  = row.call_count          or 0
+
+        total_tokens        += t_tot
+        total_input_tokens  += t_in
+        total_output_tokens += t_out
+        total_cost          += t_cost
+        total_calls         += t_calls
+
+        step = "step2" if row.validation_type == "vendor_validation" else "step6"
+        shipments.append({
+            "shipment_id":        row.shipment_id or "unknown",
+            "step":               step,
+            "validation_type":    row.validation_type,
+            "document_type":      "invoice" if step == "step2" else "bill_of_entry",
+            "documents_processed": row.documents_processed or 1,
+            "total_tokens":       t_tot,
+            "input_tokens":       t_in,
+            "output_tokens":      t_out,
+            "estimated_cost_usd": round(t_cost, 6),
+            "call_count":         t_calls,
+            "by_model":           row.by_model or [],
+            "created_at":         row.created_at.isoformat() if row.created_at else None,
+        })
+
+    # --- Aggregate by model across all rows --------------------------------
+    model_totals: dict = {}
+    for s in shipments:
+        for m in s.get("by_model", []):
+            key = f"{m.get('provider','?')}/{m.get('model','?')}"
+            if key not in model_totals:
+                model_totals[key] = {
+                    "provider":      m.get("provider"),
+                    "model":         m.get("model"),
+                    "input_tokens":  0,
+                    "output_tokens": 0,
+                    "total_tokens":  0,
+                    "cost_usd":      0.0,
+                    "calls":         0,
+                }
+            model_totals[key]["input_tokens"]  += m.get("input_tokens", 0)
+            model_totals[key]["output_tokens"] += m.get("output_tokens", 0)
+            model_totals[key]["total_tokens"]  += m.get("total_tokens", 0)
+            model_totals[key]["cost_usd"]      += m.get("cost_usd", 0.0)
+            model_totals[key]["calls"]         += m.get("calls", 0)
+
+    return {
+        "step2_shipments":           step2_count,
+        "step6_shipments":           step6_count,
+        "total_shipments_processed": step2_count + step6_count,
+        "total_tokens":              total_tokens,
+        "total_input_tokens":        total_input_tokens,
+        "total_output_tokens":       total_output_tokens,
+        "total_estimated_cost_usd":  round(total_cost, 4),
+        "total_llm_calls":           total_calls,
+        "by_model":                  list(model_totals.values()),
+        "shipments":                 shipments,
+    }
+
+
 @router.post("/sessions", response_model=CreateValidationSessionResponse)
 async def create_validation_session(request: CreateValidationSessionRequest):
     """
@@ -162,6 +281,11 @@ async def run_validation(
     try:
         logger.info(f"Running validation for session {session_id}")
 
+        # Create request-scoped token tracker for this validation run
+        from shared.utils.token_tracker import create_tracker, set_step
+        token_tracker = create_tracker()
+        set_step("validation_normalization")
+
         # Get workflow
         workflow = get_validation_workflow()
         engine = get_validation_engine()
@@ -172,6 +296,7 @@ async def run_validation(
         context = await session_manager.get_session(session_id)
 
         # Run workflow
+        set_step("validation_workflow")
         final_state = await workflow.run(
             session_id=session_id,
             documents=context.documents,
@@ -204,7 +329,8 @@ async def run_validation(
             "final_status": final_state.get("final_status"),
             "summary": summary.dict(),
             "completed_steps": final_state.get("completed_steps", []),
-            "messages": final_state.get("messages", [])
+            "messages": final_state.get("messages", []),
+            "token_usage": token_tracker.get_summary(),
         }
 
     except Exception as e:
@@ -1342,12 +1468,16 @@ async def validate_vendor_docs(
     import asyncio
     import tempfile
     from pathlib import Path
-    from src.api.services.document_processing_service import get_processing_service
+    from src.api.services.document_processing_service import DocumentProcessingService
     from src.database.connection import get_session as get_db_session
     from src.database.models.api_document import APIDocument
 
     try:
-        processing_service = get_processing_service(use_database=False)
+        # AI semantic enhancement is disabled here — the active extraction provider
+        # (Claude) already produces semantically rich, structured output.
+        # The enhancer was designed for Reducto's raw-text output and adds an
+        # unnecessary second LLM pass that doubles per-document latency.
+        processing_service = DocumentProcessingService(use_database=False, use_ai_enhancement=False)
 
         # --- Extract all uploaded files concurrently ----------------------
         file_map = {
@@ -1380,8 +1510,15 @@ async def validate_vendor_docs(
             *[_extract_one(dt, f) for dt, f in file_map.items()]
         )
 
+        # Collect token usage from each extraction
+        from shared.utils.token_tracker import create_tracker, set_step, aggregate_token_usages
+        extraction_token_usages = [r.get("token_usage") for _, r in extraction_results]
+
         # --- Persist extracted documents to DB (linked to shipment) -------
         extracted_docs: Dict[str, Dict[str, Any]] = {}
+        # Carries fields + document_id per doc_type for the field-review UI step
+        extracted_documents_meta: Dict[str, Dict[str, Any]] = {}
+        invoice_doc_id: Optional[str] = None
         async with get_db_session() as db:
             for doc_type, result in extraction_results:
                 if result.get("status") != "complete":
@@ -1390,19 +1527,31 @@ async def validate_vendor_docs(
                         detail=f"Extraction failed for {doc_type}: "
                                f"{result.get('metadata', {}).get('error', 'unknown error')}",
                     )
-                extracted_docs[doc_type] = {
-                    **result.get("fields", {}),
-                    "items": result.get("items", []),
+                doc_id = str(uuid4())
+                fields = result.get("fields", {})
+                items  = result.get("items", [])
+                extracted_docs[doc_type] = {**fields, "items": items}
+                extracted_documents_meta[doc_type] = {
+                    "document_id": doc_id,
+                    "fields": fields,
+                    "items": items,
                 }
+                if doc_type == "invoice":
+                    invoice_doc_id = doc_id
+                # Store per-doc extraction token usage in metadata
+                doc_meta = result.get("metadata", {}) or {}
+                doc_token_usage = result.get("token_usage")
+                if doc_token_usage:
+                    doc_meta["extraction_token_usage"] = doc_token_usage
                 api_doc = APIDocument(
-                    document_id=str(uuid4()),
+                    document_id=doc_id,
                     document_type=doc_type,
                     shipment_id=shipment_id,
-                    fields=result.get("fields", {}),
-                    items=result.get("items", []),
+                    fields=fields,
+                    items=items,
                     blocks=result.get("blocks", []),
                     extraction_status="complete",
-                    metadata=result.get("metadata", {}),
+                    doc_metadata=doc_meta,
                 )
                 db.add(api_doc)
             await db.commit()
@@ -1410,6 +1559,10 @@ async def validate_vendor_docs(
         # --- Run validation workflow ---------------------------------------
         from modules.validation_engine.core.session_manager import get_session_manager
         from modules.validation_engine.orchestration import get_validation_workflow
+
+        # Create tracker for the validation phase
+        validation_tracker = create_tracker()
+        set_step("validation_workflow")
 
         session_manager = get_session_manager()
         workflow = get_validation_workflow()
@@ -1429,6 +1582,42 @@ async def validate_vendor_docs(
             primary_document="invoice",
             supporting_documents=context.supporting_documents,
         )
+
+        # Aggregate token usage: extraction (per doc) + validation
+        shipment_token_usage = aggregate_token_usages(
+            extraction_token_usages + [validation_tracker.get_summary()]
+        )
+
+        # Persist full shipment token_usage on the invoice record (legacy metadata)
+        # and write a dedicated ShipmentTokenUsage row linked to the shipment
+        if invoice_doc_id and shipment_token_usage:
+            from sqlalchemy import select as sa_select
+            from src.database.schema import ShipmentTokenUsage as ShipmentTokenUsageModel
+            async with get_db_session() as db:
+                result_row = await db.execute(
+                    sa_select(APIDocument).where(APIDocument.document_id == invoice_doc_id)
+                )
+                inv_doc = result_row.scalar_one_or_none()
+                if inv_doc:
+                    merged = dict(inv_doc.doc_metadata or {})
+                    merged["shipment_token_usage"] = shipment_token_usage
+                    inv_doc.doc_metadata = merged
+
+                # Write dedicated token usage row for vendor validation
+                token_row = ShipmentTokenUsageModel(
+                    shipment_id=shipment_id,
+                    validation_type="vendor_validation",
+                    total_input_tokens=shipment_token_usage.get("total_input_tokens", 0),
+                    total_output_tokens=shipment_token_usage.get("total_output_tokens", 0),
+                    total_tokens=shipment_token_usage.get("total_tokens", 0),
+                    estimated_cost_usd=shipment_token_usage.get("estimated_cost_usd", 0.0),
+                    call_count=shipment_token_usage.get("call_count", 0),
+                    documents_processed=len(file_map),
+                    by_model=shipment_token_usage.get("by_model", []),
+                    breakdown=shipment_token_usage.get("breakdown", []),
+                )
+                db.add(token_row)
+                await db.commit()
 
         workflow_status = final_state.get("workflow_status")
         discrepancies   = final_state.get("discrepancies", []) or []
@@ -1473,6 +1662,8 @@ async def validate_vendor_docs(
                 "discrepancies": discrepancies,
                 "critical_discrepancies": critical,
                 "validation_results": validation_results,
+                "extracted_documents": extracted_documents_meta,
+                "token_usage": shipment_token_usage,
             }
 
         return {
@@ -1483,6 +1674,8 @@ async def validate_vendor_docs(
             "summary": summary,
             "discrepancies": discrepancies,
             "validation_results": validation_results,
+            "extracted_documents": extracted_documents_meta,
+            "token_usage": shipment_token_usage,
         }
 
     except HTTPException:
@@ -1510,13 +1703,15 @@ async def validate_boe(
     """
     import tempfile
     from pathlib import Path
-    from src.api.services.document_processing_service import get_processing_service
+    from src.api.services.document_processing_service import DocumentProcessingService
     from src.database.connection import get_session as get_db_session
     from src.database.repositories.api_document_repository import APIDocumentRepository
     from src.database.models.api_document import APIDocument
 
     try:
-        processing_service = get_processing_service(use_database=False)
+        # AI semantic enhancement disabled — Claude provider already returns
+        # semantically structured output; second pass only adds latency.
+        processing_service = DocumentProcessingService(use_database=False, use_ai_enhancement=False)
 
         # --- Retrieve stored vendor documents for this shipment -----------
         async with get_db_session() as db:
@@ -1546,6 +1741,7 @@ async def validate_boe(
             )
 
         # --- Extract BOE file ---------------------------------------------
+        from shared.utils.token_tracker import create_tracker, set_step, aggregate_token_usages
         boe_content = await boe_file.read()
         with tempfile.NamedTemporaryFile(
             suffix=Path(boe_file.filename).suffix, delete=False
@@ -1567,6 +1763,27 @@ async def validate_boe(
                        f"{boe_result.get('metadata', {}).get('error', 'unknown error')}",
             )
 
+        boe_extraction_token_usage = boe_result.get("token_usage")
+
+        # --- Persist BOE document to DB -----------------------------------
+        boe_doc_id = str(uuid4())
+        boe_doc_meta = boe_result.get("metadata", {}) or {}
+        if boe_extraction_token_usage:
+            boe_doc_meta["extraction_token_usage"] = boe_extraction_token_usage
+        async with get_db_session() as db:
+            boe_api_doc = APIDocument(
+                document_id=boe_doc_id,
+                document_type="bill_of_entry",
+                shipment_id=shipment_id,
+                fields=boe_result.get("fields", {}),
+                items=boe_result.get("items", []),
+                blocks=boe_result.get("blocks", []),
+                extraction_status="complete",
+                doc_metadata=boe_doc_meta,
+            )
+            db.add(boe_api_doc)
+            await db.commit()
+
         # --- Build documents dict and run validation ----------------------
         documents = {
             **vendor_docs,
@@ -1578,6 +1795,10 @@ async def validate_boe(
 
         from modules.validation_engine.core.session_manager import get_session_manager
         from modules.validation_engine.orchestration import get_validation_workflow
+
+        # Track tokens for the validation phase
+        boe_validation_tracker = create_tracker()
+        set_step("boe_validation_workflow")
 
         session_manager = get_session_manager()
         workflow = get_validation_workflow()
@@ -1597,6 +1818,42 @@ async def validate_boe(
             primary_document="bill_of_entry",
             supporting_documents=context.supporting_documents,
         )
+
+        # Aggregate: BOE extraction + validation
+        boe_token_usage = aggregate_token_usages(
+            [boe_extraction_token_usage, boe_validation_tracker.get_summary()]
+        )
+
+        # Persist full shipment token_usage on the BOE document record (legacy metadata)
+        # and write a dedicated ShipmentTokenUsage row linked to the shipment
+        if boe_token_usage:
+            from sqlalchemy import select as sa_select
+            from src.database.schema import ShipmentTokenUsage as ShipmentTokenUsageModel
+            async with get_db_session() as db:
+                result_row = await db.execute(
+                    sa_select(APIDocument).where(APIDocument.document_id == boe_doc_id)
+                )
+                boe_doc = result_row.scalar_one_or_none()
+                if boe_doc:
+                    merged = dict(boe_doc.doc_metadata or {})
+                    merged["shipment_token_usage"] = boe_token_usage
+                    boe_doc.doc_metadata = merged
+
+                # Write dedicated token usage row for BOE validation
+                token_row = ShipmentTokenUsageModel(
+                    shipment_id=shipment_id,
+                    validation_type="boe_validation",
+                    total_input_tokens=boe_token_usage.get("total_input_tokens", 0),
+                    total_output_tokens=boe_token_usage.get("total_output_tokens", 0),
+                    total_tokens=boe_token_usage.get("total_tokens", 0),
+                    estimated_cost_usd=boe_token_usage.get("estimated_cost_usd", 0.0),
+                    call_count=boe_token_usage.get("call_count", 0),
+                    documents_processed=1,
+                    by_model=boe_token_usage.get("by_model", []),
+                    breakdown=boe_token_usage.get("breakdown", []),
+                )
+                db.add(token_row)
+                await db.commit()
 
         workflow_status = final_state.get("workflow_status")
         discrepancies      = final_state.get("discrepancies", []) or []
@@ -1636,6 +1893,13 @@ async def validate_boe(
             "analyzing", "WorkflowStatus.ANALYZING",
         ) or (critical or discrepancies)
 
+        # Build extracted BOE document meta for field review step
+        extracted_boe = {
+            "document_id": boe_result.get("document_id", ""),
+            "fields": boe_result.get("fields", {}),
+            "items": boe_result.get("items", []),
+        }
+
         if needs_review and (critical or discrepancies):
             return {
                 "session_id": str(context.session_id),
@@ -1646,6 +1910,8 @@ async def validate_boe(
                 "discrepancies": discrepancies,
                 "critical_discrepancies": critical,
                 "validation_results": validation_results,
+                "extracted_boe": extracted_boe,
+                "token_usage": boe_token_usage,
             }
 
         return {
@@ -1656,6 +1922,8 @@ async def validate_boe(
             "summary": summary,
             "discrepancies": discrepancies,
             "validation_results": validation_results,
+            "extracted_boe": extracted_boe,
+            "token_usage": boe_token_usage,
         }
 
     except HTTPException:

@@ -110,6 +110,7 @@ class NormalizationStrategy:
 class MatchType:
     EXACT = "exact"
     FUZZY = "fuzzy"
+    CASE_INSENSITIVE = "case_insensitive"
     SEMANTIC = "semantic"
     TOLERANCE = "tolerance"
 

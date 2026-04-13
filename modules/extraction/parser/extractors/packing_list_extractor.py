@@ -87,12 +87,20 @@ EXTRACTION RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 PARTIES:
-- shipper_name    = COMPANY NAME ONLY of the exporter/shipper. No address.
-                    Labels: "Exporter", "Shipper", "Seller", "From".
-- shipper_address = full postal address of the shipper.
-- consignee_name  = COMPANY NAME ONLY of the consignee/delivered-to party.
-                    Labels: "Consignee", "Delivered To", "Invoice To".
-- consignee_address = full postal address of the consignee.
+- shipper_name    = COMPANY NAME ONLY of the EXPORTER / SUPPLIER who ISSUED this packing list.
+                    This is the company whose letterhead or name appears at the TOP of the document
+                    as the document author/sender — NOT the buyer or consignee.
+                    Labels to look for: "Exporter", "Shipper", "Seller", "From", "Issued by",
+                    or simply the company name in the document letterhead.
+                    CRITICAL: "Bill To", "Invoice To", "Consignee", "Delivered To" are the BUYER,
+                    NOT the shipper. Never use the "Bill To" party as shipper_name.
+                    If no explicit "Shipper" label exists, use the company name shown as the
+                    document issuer (e.g. the company whose address is at the top, NOT the Bill-To address).
+- shipper_address = full postal address of the shipper (same company as shipper_name above).
+                    CRITICAL: Do NOT use the "Bill To" address here — that belongs in consignee_address.
+- consignee_name  = COMPANY NAME ONLY of the consignee / buyer / delivered-to party.
+                    Labels: "Consignee", "Delivered To", "Invoice To", "Bill To", "Ship To".
+- consignee_address = full postal address of the consignee (the "Bill To" or "Delivery" address).
 
 REFERENCE NUMBERS:
 - order_number    = supplier's internal order (labels: "Our Order No", "Order No", "Order Number")
@@ -128,6 +136,12 @@ GOODS:
 - product_description = description of the goods from the "Description" column of the container
                         table. Use the most complete description. If all containers have the same
                         description, use it.
+                        FORMATTING RULES for product codes:
+                        • Alphanumeric model/batch codes (e.g. "MQAV004F-1") must keep the hyphen
+                          attached to the adjacent characters — no spaces around the hyphen.
+                        • Commas separating the model code from the bag size belong AFTER the code,
+                          not inside it: correct → "MQAV004F-1, 25kg bag"; wrong → "MQAV004F - 1,25 kg bag".
+                        • Copy the description faithfully; do not reformat or reorder the words.
 - hs_code             = HS tariff code if shown anywhere on the document.
 - country_of_origin   = country of manufacture if stated.
 

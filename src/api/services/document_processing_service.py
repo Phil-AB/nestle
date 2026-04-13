@@ -5,11 +5,29 @@ Integrates with the existing parser and storage services.
 """
 
 import logging
+from decimal import Decimal
 from typing import Dict, Any, Optional
 from pathlib import Path
 import os
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_for_json(obj: Any) -> Any:
+    """
+    Recursively convert types that are not JSON-serializable to safe equivalents.
+
+    - decimal.Decimal  → float
+    - bytes            → base64 string (shouldn't appear, but safe to handle)
+    - Everything else passes through unchanged.
+    """
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, Decimal):
+        return float(obj)
+    return obj
 
 
 class DocumentProcessingService:
@@ -307,6 +325,10 @@ class DocumentProcessingService:
                 f"(type: {document_type}, mode: {extraction_mode})"
             )
 
+            # Create request-scoped token tracker
+            from shared.utils.token_tracker import create_tracker, set_step
+            token_tracker = create_tracker()
+
             # Get components
             parser = self._get_parser_provider()
             schema_gen = self._get_schema_generator()
@@ -349,6 +371,7 @@ class DocumentProcessingService:
 
             # Extract fields using parser
             logger.info(f"Extracting fields from {file_name}")
+            set_step("document_extraction")
             result = await parser.extract_fields(
                 file_bytes=file_bytes,
                 schema=schema,
@@ -364,6 +387,7 @@ class DocumentProcessingService:
                 enhancer = self._get_ai_enhancer()
                 if enhancer:
                     logger.info("🤖 Running AI Semantic Enhancement...")
+                    set_step("ai_semantic_enhancement")
                     try:
                         enhancement_result = await enhancer.enhance_extraction(
                             result,
@@ -421,7 +445,10 @@ class DocumentProcessingService:
                     # Use the flat-field extractor first — it handles GRA BOE key-name
                     # encoding and multi-value strings.  Then also build the legacy
                     # structured object for metadata storage.
-                    flat_fields = boe_extractor.extract_flat_fields(result.get("fields", {}))
+                    flat_fields = boe_extractor.extract_flat_fields(
+                        result.get("fields", {}),
+                        items=result.get("items", []),
+                    )
                     boe_data = boe_extractor.extract_sections(result.get("fields", {}))
 
                     # Merge flat fields into result["fields"].
@@ -456,6 +483,57 @@ class DocumentProcessingService:
                             if _is_empty(result["fields"].get(field)):
                                 result["fields"][field] = value
 
+                    # ── Derive duty_rate / duty_amount from CET if not extracted ──
+                    # The tax computation table is dense on GRA BOE PDFs and the
+                    # AI extractor may not always capture Tax-01 (Import Duty) values.
+                    # As a reliable fallback, look up the duty rate from the CET file
+                    # using the already-extracted HS code, then compute duty_amount.
+                    fields_now = result["fields"]
+
+                    def _unwrap_num(v: Any) -> Optional[float]:
+                        """Return a float from a raw or envelope field value."""
+                        if v is None:
+                            return None
+                        if isinstance(v, dict) and "value" in v:
+                            v = v["value"]
+                        if v is None:
+                            return None
+                        try:
+                            return float(str(v).replace(",", "").split()[0])
+                        except (ValueError, IndexError):
+                            return None
+
+                    if "duty_rate" not in fields_now or fields_now.get("duty_rate") is None:
+                        hs_code_raw = fields_now.get("hs_code") or fields_now.get("hs_code_full")
+                        hs_code = (
+                            hs_code_raw["value"]
+                            if isinstance(hs_code_raw, dict)
+                            else hs_code_raw
+                        ) if hs_code_raw else None
+
+                        if hs_code:
+                            try:
+                                from modules.validation_engine.services.cet_file_service import CETFileService
+                                cet = CETFileService()
+                                cet_rate = cet.get_duty_rate(str(hs_code))
+                                if cet_rate is not None:
+                                    duty_rate = float(cet_rate) / 100.0
+                                    fields_now["duty_rate"] = duty_rate
+                                    logger.info(
+                                        f"BOE duty_rate derived from CET for HS {hs_code}: {duty_rate}"
+                                    )
+
+                                    # Compute duty_amount if customs_value is available
+                                    if "duty_amount" not in fields_now or fields_now.get("duty_amount") is None:
+                                        cv = _unwrap_num(fields_now.get("customs_value"))
+                                        if cv is not None:
+                                            fields_now["duty_amount"] = round(cv * duty_rate, 2)
+                                            logger.info(
+                                                f"BOE duty_amount computed: {fields_now['duty_amount']}"
+                                            )
+                            except Exception as e:
+                                logger.warning(f"CET duty_rate lookup failed for {hs_code}: {e}")
+
                     # Store full structured BOE data in metadata for downstream use
                     result.setdefault("metadata", {})["boe_sections"] = boe_data.dict()
 
@@ -486,10 +564,19 @@ class DocumentProcessingService:
                         result["metadata"]["save_error"] = storage_result.error_response.error_message
 
             result["status"] = "complete"
-            return result
+            result["token_usage"] = token_tracker.get_summary()
+            # Sanitize before returning — Decimal values (from BOE section extractor,
+            # CET lookups, Pydantic .dict() calls) are not JSON-serializable and will
+            # cause JSONB insert failures in PostgreSQL.
+            return _sanitize_for_json(result)
 
         except Exception as e:
             logger.error(f"Document processing failed: {e}", exc_info=True)
+            # Still return any tokens consumed before the failure
+            try:
+                partial_usage = token_tracker.get_summary()
+            except Exception:
+                partial_usage = {}
             return {
                 "fields": {},
                 "items": [],
@@ -497,6 +584,7 @@ class DocumentProcessingService:
                     "error": str(e),
                     "error_type": type(e).__name__
                 },
+                "token_usage": partial_usage,
                 "status": "failed"
             }
 

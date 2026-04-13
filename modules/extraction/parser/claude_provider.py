@@ -1,0 +1,879 @@
+"""
+Anthropic Claude implementation of the parser provider interface.
+
+Uses Claude's native vision/document understanding to extract structured
+data from PDFs and images without any intermediate OCR step.
+
+Supports both direct Anthropic API and AWS Bedrock (bearer token auth).
+"""
+
+import base64
+import json
+import os
+import time
+from typing import Dict, Any, Optional, List
+from pathlib import Path
+
+from .base import (
+    IParserProvider,
+    ParsedDocument,
+    ParserException,
+    ParserConnectionError,
+    ParserTimeoutError,
+)
+from shared.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+# Supported file formats and their MIME types
+_MIME_TYPES = {
+    ".pdf":  "application/pdf",
+    ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif":  "image/gif",
+    ".webp": "image/webp",
+    ".tiff": "image/tiff",
+    ".tif":  "image/tiff",
+}
+
+# Maximum document size for direct base64 embedding (32 MB)
+_MAX_INLINE_BYTES = 32 * 1024 * 1024
+
+
+class ClaudeProvider(IParserProvider):
+    """
+    Anthropic Claude provider for document parsing and field extraction.
+
+    Sends documents (PDFs, images) directly to Claude using the native
+    vision / document API — no intermediate OCR layer required.
+
+    Supports:
+    - PDF documents   → ``document`` content block (native PDF understanding)
+    - Images          → ``image`` content block  (vision)
+
+    Authentication (in priority order):
+    1. AWS Bedrock via bearer token  (``bedrock_enabled=True`` + ``AWS_BEARER_TOKEN_BEDROCK``)
+    2. Direct Anthropic API          (``ANTHROPIC_API_KEY``)
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "claude-opus-4-5",
+        max_tokens: int = 8192,
+        timeout: int = 300,
+        bedrock_enabled: bool = False,
+        aws_region: str = "us-east-1",
+        bedrock_model_id: Optional[str] = None,
+    ):
+        """
+        Initialise the Claude provider.
+
+        Args:
+            api_key: Anthropic API key (falls back to ANTHROPIC_API_KEY env var).
+            model: Claude model ID for direct API calls.
+            max_tokens: Maximum tokens in Claude's response.
+            timeout: HTTP request timeout in seconds.
+            bedrock_enabled: Route requests through AWS Bedrock instead of direct API.
+            aws_region: AWS region for Bedrock (default: us-east-1).
+            bedrock_model_id: Bedrock model ID override (e.g. "global.anthropic.claude-sonnet-4-6").
+        """
+        self.model = model
+        self.max_tokens = max_tokens
+        self.timeout = timeout
+        self.bedrock_enabled = bedrock_enabled
+        self.aws_region = aws_region
+
+        self._client = self._build_client(api_key, bedrock_enabled, aws_region, bedrock_model_id)
+
+        logger.info(
+            f"ClaudeProvider initialised: model={self.model}, "
+            f"bedrock={bedrock_enabled}, region={aws_region}"
+        )
+
+    # ------------------------------------------------------------------
+    # Client construction
+    # ------------------------------------------------------------------
+
+    def _build_client(
+        self,
+        api_key: Optional[str],
+        bedrock_enabled: bool,
+        aws_region: str,
+        bedrock_model_id: Optional[str],
+    ):
+        """
+        Build and return the appropriate Anthropic client.
+
+        Returns either an ``anthropic.Anthropic`` (direct API) or an
+        ``anthropic.AnthropicBedrock`` client (AWS Bedrock).
+        """
+        try:
+            import anthropic as _anthropic
+        except ImportError as exc:
+            raise ImportError(
+                "The 'anthropic' package is required for ClaudeProvider. "
+                "Install it with: pip install anthropic"
+            ) from exc
+
+        if bedrock_enabled:
+            bearer_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK")
+            if not bearer_token:
+                raise ValueError(
+                    "AWS_BEARER_TOKEN_BEDROCK is not set. "
+                    "This system uses Bedrock API key authentication exclusively."
+                )
+
+            import boto3
+            from botocore import UNSIGNED
+            from botocore.config import Config as BotocoreConfig
+
+            bedrock_client = boto3.client(
+                "bedrock-runtime",
+                region_name=aws_region,
+                aws_access_key_id="bedrock-api-key",
+                aws_secret_access_key="not-used",
+                config=BotocoreConfig(
+                    signature_version=UNSIGNED,
+                    read_timeout=self.timeout,
+                    connect_timeout=30,
+                    retries={"max_attempts": 2, "mode": "standard"},
+                ),
+            )
+
+            _token = bearer_token
+
+            def _inject_bearer(request, **kwargs):
+                request.headers["Authorization"] = f"Bearer {_token}"
+
+            bedrock_client.meta.events.register(
+                "before-send.bedrock-runtime.*", _inject_bearer
+            )
+
+            if bedrock_model_id:
+                self.model = bedrock_model_id
+
+            logger.info(
+                f"ClaudeProvider using AWS Bedrock: model={self.model}, region={aws_region}"
+            )
+
+            # Use AnthropicBedrock wrapper if available, else fall back to direct SDK
+            # by monkey-patching the boto3 client through _anthropic.AnthropicBedrock
+            # Note: we store the raw bedrock client for direct invocation
+            self._bedrock_client = bedrock_client
+            return None  # Bedrock calls made via self._bedrock_client
+
+        # Direct Anthropic API
+        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        if not resolved_key:
+            raise ValueError(
+                "Anthropic API key not found. Set ANTHROPIC_API_KEY env var "
+                "or pass api_key to ClaudeProvider."
+            )
+        return _anthropic.Anthropic(api_key=resolved_key, timeout=self.timeout)
+
+    # ------------------------------------------------------------------
+    # IParserProvider interface
+    # ------------------------------------------------------------------
+
+    async def parse_document(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        document_type: str,
+        **options,
+    ) -> ParsedDocument:
+        """
+        Parse a document using Claude's vision / document understanding.
+
+        Args:
+            file_bytes: Raw document bytes.
+            file_name: Original file name (used for MIME-type detection).
+            document_type: Semantic document type (invoice, boe, packing_list, …).
+            **options: Additional options (``model``, ``max_tokens``, …).
+
+        Returns:
+            ParsedDocument with all extracted content.
+        """
+        try:
+            logger.info(f"Parsing document with Claude: {file_name} (type={document_type})")
+            start = time.monotonic()
+
+            content_block = self._build_document_block(file_bytes, file_name)
+
+            system_prompt = self._build_parse_system_prompt(document_type)
+            user_message = (
+                f"Extract all information from this {document_type} document. "
+                "Return a JSON object with these top-level keys:\n"
+                "- ``fields``: flat key-value pairs for header/summary fields\n"
+                "- ``items``: array of line-item objects (empty array if none)\n"
+                "- ``tables``: array of raw table objects with ``headers`` and ``rows``\n"
+                "- ``raw_text``: full plain-text representation of the document\n\n"
+                "Use snake_case for all field names. "
+                "Return ONLY valid JSON — no markdown fences, no commentary."
+            )
+
+            raw_response = self._invoke(
+                system=system_prompt,
+                content_blocks=[content_block, {"type": "text", "text": user_message}],
+                options=options,
+            )
+
+            elapsed = time.monotonic() - start
+            parsed = self._parse_json_response(raw_response)
+
+            doc = ParsedDocument(
+                document_id=f"claude-{int(time.time())}",
+                document_type=document_type,
+                raw_text=parsed.get("raw_text", ""),
+                structured_data={"fields": parsed.get("fields", {}), "items": parsed.get("items", [])},
+                tables=parsed.get("tables", []),
+                metadata={
+                    "provider": "claude",
+                    "model": self.model,
+                    "extraction_duration": round(elapsed, 2),
+                    "confidence": 1.0,
+                },
+                page_count=None,
+            )
+
+            logger.info(
+                f"Claude parse complete: {file_name} "
+                f"({len(parsed.get('fields', {}))} fields, "
+                f"{len(parsed.get('items', []))} items) in {elapsed:.1f}s"
+            )
+            return doc
+
+        except (TimeoutError, ConnectionError) as exc:
+            raise ParserTimeoutError(f"Claude request timed out: {exc}") from exc
+        except Exception as exc:
+            logger.error(f"Claude parse_document failed: {exc}")
+            raise ParserException(f"Failed to parse document with Claude: {exc}") from exc
+
+    async def extract_fields(
+        self,
+        file_bytes: bytes,
+        schema: Dict[str, Any],
+        **options,
+    ) -> Dict[str, Any]:
+        """
+        Extract structured fields from a document using the provided schema.
+
+        The universal schema is translated into a Claude prompt that instructs
+        the model on exactly which fields to look for.
+
+        Args:
+            file_bytes: Raw document bytes.
+            schema: Universal extraction schema (see ``translate_schema``).
+            **options: Additional options (``file_name``, ``document_type``, …).
+
+        Returns:
+            Normalised extraction result in universal format.
+        """
+        try:
+            file_name = options.get("file_name", "document.pdf")
+            document_type = options.get("document_type", "unknown")
+
+            logger.info(
+                f"Extracting fields with Claude: file={file_name}, "
+                f"doc_type={document_type}, mode={schema.get('mode', 'focused')}"
+            )
+            start = time.monotonic()
+
+            content_block = self._build_document_block(file_bytes, file_name)
+            claude_schema = self.translate_schema(schema)
+
+            system_prompt = self._build_extract_system_prompt(document_type)
+            user_message = self._build_extract_user_message(claude_schema, schema)
+
+            raw_response = self._invoke(
+                system=system_prompt,
+                content_blocks=[content_block, {"type": "text", "text": user_message}],
+                options=options,
+            )
+
+            elapsed = time.monotonic() - start
+            parsed = self._parse_json_response(raw_response)
+
+            normalized = self.normalize_response(parsed, document_type, schema=claude_schema)
+            normalized["raw_provider_response"] = parsed
+            normalized["metadata"]["extraction_duration"] = round(elapsed, 2)
+
+            logger.info(
+                f"Claude extraction complete: "
+                f"{len(normalized.get('fields', {}))} fields, "
+                f"{len(normalized.get('items', []))} items in {elapsed:.1f}s"
+            )
+            return normalized
+
+        except Exception as exc:
+            logger.error(f"Claude extract_fields failed: {exc}")
+            raise ParserException(f"Failed to extract fields with Claude: {exc}") from exc
+
+    def translate_schema(self, universal_schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Translate the universal schema into a Claude-friendly prompt schema.
+
+        Open mode  → return empty dict (Claude extracts everything it finds).
+        Focused mode → build a structured description of required fields.
+
+        Args:
+            universal_schema: Universal schema produced by SchemaGenerator.
+
+        Returns:
+            Claude prompt schema dict with ``fields`` and optionally ``items``.
+        """
+        mode = universal_schema.get("mode", "focused")
+
+        if mode == "open":
+            logger.info("Using OPEN mode — Claude will extract all discovered fields")
+            return {"mode": "open"}
+
+        logger.debug("Translating focused schema to Claude prompt schema")
+
+        claude_schema: Dict[str, Any] = {"mode": "focused", "fields": {}, "items": None}
+
+        # Header / summary fields
+        for field_name, field_def in universal_schema.get("fields", {}).items():
+            claude_schema["fields"][field_name] = {
+                "type": field_def.get("type", "string"),
+                "required": field_def.get("required", False),
+                "description": field_def.get("description", ""),
+            }
+
+        # Line-item fields
+        items_def = universal_schema.get("items")
+        if items_def:
+            field_name = items_def.get("field_name", "items")
+            item_fields = {}
+            for ifield, idef in items_def.get("fields", {}).items():
+                item_fields[ifield] = {
+                    "type": idef.get("type", "string"),
+                    "required": idef.get("required", False),
+                    "description": idef.get("description", ""),
+                }
+            claude_schema["items"] = {"field_name": field_name, "fields": item_fields}
+
+        logger.debug(
+            f"Translated schema: {len(claude_schema['fields'])} header fields, "
+            f"items={'yes' if claude_schema['items'] else 'no'}"
+        )
+        return claude_schema
+
+    def normalize_response(
+        self,
+        provider_response: Dict[str, Any],
+        document_type: str,
+        schema: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Normalise Claude's JSON response into the universal extraction format.
+
+        Args:
+            provider_response: Parsed JSON returned by Claude.
+            document_type: Semantic document type.
+            schema: Optional translated schema (used for mode detection).
+
+        Returns:
+            Universal format dict with ``fields``, ``items``, ``blocks``,
+            ``layout``, ``metadata``, and ``raw_provider_response``.
+        """
+        logger.info(f"Normalising Claude response for {document_type}")
+
+        mode = (schema or {}).get("mode", "focused")
+
+        # --- Fields ---
+        fields: Dict[str, Any] = {}
+        raw_fields = provider_response.get("fields", {})
+        if isinstance(raw_fields, dict):
+            for k, v in raw_fields.items():
+                norm_key = self._normalize_key(k)
+                if norm_key:
+                    fields[norm_key] = v
+
+        # In OPEN mode also flatten any top-level scalar keys that aren't reserved
+        if mode == "open":
+            _reserved = {"fields", "items", "tables", "raw_text", "blocks", "layout", "metadata"}
+            for k, v in provider_response.items():
+                if k not in _reserved and isinstance(v, (str, int, float, bool, type(None))):
+                    norm_key = self._normalize_key(k)
+                    if norm_key and norm_key not in fields:
+                        fields[norm_key] = v
+
+        # --- Items ---
+        items: List[Dict[str, Any]] = []
+        raw_items = provider_response.get("items", [])
+        if isinstance(raw_items, list):
+            for row in raw_items:
+                if isinstance(row, dict):
+                    items.append({self._normalize_key(k): v for k, v in row.items() if self._normalize_key(k)})
+
+        # --- Blocks (raw text chunks for downstream rendering) ---
+        blocks: List[Dict[str, Any]] = []
+        raw_text = provider_response.get("raw_text", "")
+        if raw_text:
+            blocks.append({"type": "Text", "content": raw_text})
+
+        # Also carry over any table blocks
+        for tbl in provider_response.get("tables", []):
+            blocks.append({"type": "Table", "content": tbl})
+
+        # --- Layout (minimal — Claude doesn't return bounding boxes) ---
+        layout: Dict[str, Any] = {
+            "pages": [],
+            "total_pages": 0,
+            "has_form_fields": False,
+            "has_tables": bool(provider_response.get("tables")),
+        }
+
+        # --- Metadata ---
+        metadata: Dict[str, Any] = {
+            "provider": "claude",
+            "model": self.model,
+            "confidence": 1.0,
+            "extraction_duration": None,
+        }
+
+        normalized = {
+            "fields": fields,
+            "items": items,
+            "blocks": blocks,
+            "layout": layout,
+            "metadata": metadata,
+            "raw_provider_response": provider_response,
+        }
+
+        logger.info(
+            f"Normalised: {len(fields)} fields, {len(items)} items, {len(blocks)} blocks"
+        )
+        return normalized
+
+    async def health_check(self) -> bool:
+        """
+        Verify that the Claude API / Bedrock endpoint is reachable.
+
+        Returns:
+            True if healthy, False otherwise.
+        """
+        try:
+            response = self._invoke(
+                system="You are a health check assistant.",
+                content_blocks=[{"type": "text", "text": "Reply with the single word: OK"}],
+                options={"max_tokens": 10},
+            )
+            healthy = "ok" in response.strip().lower()
+            logger.info(f"Claude health check: {'pass' if healthy else 'fail'}")
+            return healthy
+        except Exception as exc:
+            logger.warning(f"Claude health check failed: {exc}")
+            return False
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _invoke(
+        self,
+        system: str,
+        content_blocks: List[Dict[str, Any]],
+        options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Send a synchronous request to Claude (direct API or Bedrock).
+
+        Args:
+            system: System prompt string.
+            content_blocks: List of content blocks for the user turn.
+            options: Override dict (e.g. ``{"max_tokens": 512}``).
+
+        Returns:
+            Raw text response from Claude.
+        """
+        options = options or {}
+        max_tokens = options.get("max_tokens", self.max_tokens)
+
+        if self.bedrock_enabled:
+            return self._invoke_bedrock(system, content_blocks, max_tokens)
+
+        # Direct Anthropic API
+        message = self._client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": content_blocks}],
+        )
+
+        # Record token usage
+        try:
+            from shared.utils.token_tracker import record_tokens
+            usage = message.usage
+            record_tokens(
+                provider="anthropic",
+                model=self.model,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+            )
+        except Exception:
+            pass
+
+        return message.content[0].text
+
+    def _to_bedrock_blocks(self, content_blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Convert Anthropic SDK content blocks to AWS Bedrock Converse API tagged-union format.
+
+        Anthropic SDK format:  ``{"type": "document", "source": {"type": "base64", "data": "..."}}``
+        Bedrock Converse format: ``{"document": {"format": "pdf", "name": "doc", "source": {"bytes": b"..."}}}``
+
+        Args:
+            content_blocks: Blocks in Anthropic SDK format.
+
+        Returns:
+            Blocks in Bedrock Converse tagged-union format.
+        """
+        bedrock_blocks = []
+        for block in content_blocks:
+            block_type = block.get("type")
+
+            if block_type == "text":
+                bedrock_blocks.append({"text": block["text"]})
+
+            elif block_type == "document":
+                source = block.get("source", {})
+                raw_bytes = base64.standard_b64decode(source.get("data", ""))
+                bedrock_blocks.append({
+                    "document": {
+                        "format": "pdf",
+                        "name": "document",
+                        "source": {"bytes": raw_bytes},
+                    }
+                })
+
+            elif block_type == "image":
+                source = block.get("source", {})
+                media_type = source.get("media_type", "image/png")
+                fmt = media_type.split("/")[-1]
+                # Bedrock uses "jpeg" not "jpg"
+                if fmt == "jpg":
+                    fmt = "jpeg"
+                raw_bytes = base64.standard_b64decode(source.get("data", ""))
+                bedrock_blocks.append({
+                    "image": {
+                        "format": fmt,
+                        "source": {"bytes": raw_bytes},
+                    }
+                })
+
+            else:
+                # Fallback: treat unknown block as plain text
+                bedrock_blocks.append({"text": str(block)})
+
+        return bedrock_blocks
+
+    def _invoke_bedrock(
+        self,
+        system: str,
+        content_blocks: List[Dict[str, Any]],
+        max_tokens: int,
+    ) -> str:
+        """
+        Invoke Claude via the AWS Bedrock ``converse`` API.
+
+        Converts Anthropic SDK content blocks to Bedrock tagged-union format
+        before sending.
+
+        Args:
+            system: System prompt.
+            content_blocks: User-turn content blocks in Anthropic SDK format.
+            max_tokens: Maximum response tokens.
+
+        Returns:
+            Raw text from Bedrock response.
+        """
+        bedrock_blocks = self._to_bedrock_blocks(content_blocks)
+
+        response = self._bedrock_client.converse(
+            modelId=self.model,
+            system=[{"text": system}],
+            messages=[{"role": "user", "content": bedrock_blocks}],
+            inferenceConfig={"maxTokens": max_tokens, "temperature": 0.0},
+        )
+
+        # Record token usage
+        try:
+            from shared.utils.token_tracker import record_tokens
+            bedrock_usage = response.get("usage", {})
+            input_tokens = bedrock_usage.get("inputTokens", 0)
+            output_tokens = bedrock_usage.get("outputTokens", 0)
+            if input_tokens or output_tokens:
+                record_tokens(
+                    provider="anthropic",
+                    model=self.model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+        except Exception:
+            pass
+
+        output = response.get("output", {})
+        message = output.get("message", {})
+        content = message.get("content", [{}])
+        return content[0].get("text", "")
+
+    def _build_document_block(self, file_bytes: bytes, file_name: str) -> Dict[str, Any]:
+        """
+        Build the correct Anthropic content block for the given file.
+
+        - PDF files   → ``{"type": "document", "source": {...}}``
+        - Images      → ``{"type": "image",    "source": {...}}``
+
+        Args:
+            file_bytes: Raw bytes of the document.
+            file_name: Original file name (used to resolve MIME type).
+
+        Returns:
+            Content block dict ready for the Anthropic messages API.
+
+        Raises:
+            ParserException: If the file format is not supported.
+        """
+        if len(file_bytes) > _MAX_INLINE_BYTES:
+            raise ParserException(
+                f"Document too large for inline embedding "
+                f"({len(file_bytes) / 1024 / 1024:.1f} MB > "
+                f"{_MAX_INLINE_BYTES / 1024 / 1024:.0f} MB limit). "
+                "Consider splitting the document before extraction."
+            )
+
+        ext = Path(file_name).suffix.lower()
+        mime_type = _MIME_TYPES.get(ext)
+        if not mime_type:
+            # Default to PDF for unknown extensions
+            logger.warning(f"Unknown extension '{ext}', treating as PDF")
+            mime_type = "application/pdf"
+
+        encoded = base64.standard_b64encode(file_bytes).decode("utf-8")
+
+        if mime_type == "application/pdf":
+            return {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": encoded,
+                },
+            }
+
+        # Image content block
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": mime_type,
+                "data": encoded,
+            },
+        }
+
+    def _build_parse_system_prompt(self, document_type: str) -> str:
+        """Build the system prompt for full document parsing."""
+        return (
+            f"You are an expert document data-extraction engine specialising in "
+            f"trade and logistics documents, specifically {document_type} documents.\n\n"
+            "Your task is to extract ALL information from the document provided.\n"
+            "Rules:\n"
+            "1. Return ONLY a single valid JSON object — no markdown, no explanation.\n"
+            "2. Use snake_case for every key.\n"
+            "3. Preserve original values exactly (do not normalise dates, amounts, or codes).\n"
+            "4. If a field is absent, omit it rather than returning null.\n"
+            "5. Capture every line item in the 'items' array.\n"
+            "6. Include full raw text of the document in the 'raw_text' field.\n"
+        )
+
+    def _build_extract_system_prompt(self, document_type: str) -> str:
+        """Build the system prompt for schema-guided field extraction."""
+        return (
+            f"You are a precise document data-extraction engine for {document_type} documents.\n\n"
+            "Extract the requested fields from the document following the schema exactly.\n"
+            "Rules:\n"
+            "1. Return ONLY a single valid JSON object — no markdown, no explanation.\n"
+            "2. Use the exact field names from the schema (already in snake_case).\n"
+            "3. Preserve original values — do not normalise dates, currencies, or codes.\n"
+            "4. For missing fields return null rather than omitting them.\n"
+            "5. For array fields (items/line items) extract every row from the document.\n"
+        )
+
+    def _build_extract_user_message(
+        self, claude_schema: Dict[str, Any], universal_schema: Dict[str, Any]
+    ) -> str:
+        """
+        Build the user-turn extraction instruction based on the translated schema.
+
+        Args:
+            claude_schema: Translated Claude schema dict.
+            universal_schema: Original universal schema (for mode detection).
+
+        Returns:
+            Instruction string to append after the document content block.
+        """
+        mode = claude_schema.get("mode", "focused")
+
+        if mode == "open":
+            return (
+                "Extract ALL fields and line items you can identify in this document.\n"
+                "Return a JSON object with:\n"
+                "- ``fields``: flat key-value pairs for all header/summary fields\n"
+                "- ``items``: array of line-item objects\n"
+                "- ``tables``: array of table objects with ``headers`` and ``rows``\n"
+                "- ``raw_text``: full plain-text content\n\n"
+                "Return ONLY valid JSON."
+            )
+
+        # Focused mode — build explicit field list
+        lines = [
+            "Extract the following fields from the document and return a JSON object.\n",
+            "=== HEADER FIELDS ===",
+        ]
+
+        for fname, fdef in claude_schema.get("fields", {}).items():
+            req_tag = "[REQUIRED]" if fdef.get("required") else "[optional]"
+            desc = fdef.get("description", "")
+            type_tag = fdef.get("type", "string")
+            line = f"  - {fname} ({type_tag}) {req_tag}"
+            if desc:
+                line += f": {desc}"
+            lines.append(line)
+
+        items_def = claude_schema.get("items")
+        if items_def:
+            field_name = items_def.get("field_name", "items")
+            lines.append(f"\n=== LINE ITEMS (field: '{field_name}') ===")
+            lines.append(f"  Return as a JSON array under the key '{field_name}'.")
+            for fname, fdef in items_def.get("fields", {}).items():
+                req_tag = "[REQUIRED]" if fdef.get("required") else "[optional]"
+                desc = fdef.get("description", "")
+                type_tag = fdef.get("type", "string")
+                line = f"  - {fname} ({type_tag}) {req_tag}"
+                if desc:
+                    line += f": {desc}"
+                lines.append(line)
+
+        lines.append(
+            "\nReturn the JSON with top-level keys:\n"
+            f"  - ``fields``: object containing all header fields above\n"
+            f"  - ``items``: array of line-item objects (use field name above for the key)\n"
+            "  - ``raw_text``: plain-text content of the document\n\n"
+            "Return ONLY valid JSON — no markdown, no explanation."
+        )
+
+        return "\n".join(lines)
+
+    def _parse_json_response(self, raw: str) -> Dict[str, Any]:
+        """
+        Parse a JSON string returned by Claude.
+
+        Strips markdown code fences if present before parsing.
+
+        Args:
+            raw: Raw text response from Claude.
+
+        Returns:
+            Parsed dictionary.
+
+        Raises:
+            ParserException: If JSON cannot be decoded.
+        """
+        text = raw.strip()
+
+        # Strip markdown fences (```json ... ``` or ``` ... ```)
+        if text.startswith("```"):
+            first_newline = text.find("\n")
+            if first_newline != -1:
+                text = text[first_newline + 1:]
+            if text.endswith("```"):
+                text = text[:-3].rstrip()
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            logger.error(f"Failed to parse Claude JSON response: {exc}")
+            logger.debug(f"Raw response (first 500 chars): {raw[:500]}")
+            raise ParserException(
+                f"Claude returned invalid JSON: {exc}. "
+                f"Response preview: {raw[:200]}"
+            ) from exc
+
+    @staticmethod
+    def _normalize_key(key: str) -> str:
+        """
+        Normalise a field key to snake_case.
+
+        Args:
+            key: Raw key string.
+
+        Returns:
+            Normalised snake_case key (empty string if input is empty/None).
+        """
+        if not key:
+            return ""
+        import re
+        # Replace spaces, hyphens, slashes with underscores
+        normalised = re.sub(r"[\s\-/\\]+", "_", key.strip().lower())
+        # Remove characters that are not alphanumeric or underscore
+        normalised = re.sub(r"[^\w]", "", normalised)
+        # Collapse multiple underscores
+        normalised = re.sub(r"_+", "_", normalised).strip("_")
+        return normalised
+
+
+# ==============================================================================
+# Provider factory registration
+# ==============================================================================
+
+def _create_claude_provider(provider_config: dict) -> ClaudeProvider:
+    """
+    Factory function registered with ProviderFactory.
+
+    Reads configuration from ``config/providers.yaml`` (claude section)
+    and instantiates a ClaudeProvider.
+
+    Args:
+        provider_config: Provider-specific config dict from providers.yaml.
+
+    Returns:
+        Configured ClaudeProvider instance.
+    """
+    api_key = os.getenv(provider_config.get("api_key_env", "ANTHROPIC_API_KEY"))
+
+    bedrock_cfg = provider_config.get("bedrock", {})
+    bedrock_enabled = bedrock_cfg.get("enabled", False)
+    aws_region = bedrock_cfg.get("region", os.getenv("AWS_REGION", "us-east-1"))
+    bedrock_model_id = bedrock_cfg.get("model_id")
+
+    model = provider_config.get("model", "claude-opus-4-5")
+    max_tokens = provider_config.get("max_tokens", 8192)
+    timeout = provider_config.get("timeout", 300)
+
+    logger.debug(
+        f"Creating ClaudeProvider: model={model}, bedrock={bedrock_enabled}, "
+        f"region={aws_region}"
+    )
+
+    return ClaudeProvider(
+        api_key=api_key,
+        model=model,
+        max_tokens=max_tokens,
+        timeout=timeout,
+        bedrock_enabled=bedrock_enabled,
+        aws_region=aws_region,
+        bedrock_model_id=bedrock_model_id,
+    )
+
+
+# Self-register when this module is imported
+try:
+    from .provider_factory import ProviderFactory
+    ProviderFactory.register_provider("claude", _create_claude_provider)
+    logger.info("Claude provider registered successfully")
+except Exception as _reg_exc:
+    logger.warning(f"Failed to register Claude provider: {_reg_exc}")

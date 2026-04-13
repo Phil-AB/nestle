@@ -91,16 +91,24 @@ class BaseDocumentExtractor(ABC):
         return "\n".join(lines)
 
     def _serialize_blocks(self, blocks: List[Dict], max_blocks: int = 80) -> str:
-        """Serialise content blocks to plain text for the LLM."""
-        lines = []
-        for block in blocks[:max_blocks]:
+        """Serialise content blocks to plain text for the LLM.
+
+        Each block is prefixed with [Block N of M] so the LLM can reason about
+        document position — Block 1 is the header/letterhead; the last block is
+        typically footer legal text.
+        """
+        total = min(len(blocks), max_blocks)
+        parts = []
+        for i, block in enumerate(blocks[:max_blocks]):
+            text = ""
             if isinstance(block, dict):
                 text = block.get("content") or block.get("text") or block.get("value", "")
-                if text:
-                    lines.append(str(text))
-            elif isinstance(block, str) and block:
-                lines.append(block)
-        return "\n".join(lines)
+                text = str(text) if text else ""
+            elif isinstance(block, str):
+                text = block
+            if text:
+                parts.append(f"[Block {i + 1} of {total}]\n{text}")
+        return "\n\n".join(parts)
 
     def _fields_summary(self, fields: Dict[str, Any], max_fields: int = 20) -> str:
         """Summarise already-extracted fields for the LLM context."""

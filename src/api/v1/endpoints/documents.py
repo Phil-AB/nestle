@@ -97,13 +97,19 @@ async def _parse_document_background(document_id: str, file_path: Path, document
             else:
                 extraction_status = ExtractionStatus.INCOMPLETE
 
+            # Include token usage in stored metadata
+            stored_metadata = result.get("metadata", {})
+            token_usage = result.get("token_usage")
+            if token_usage:
+                stored_metadata["token_usage"] = token_usage
+
             # Update extraction results in database
             updated_doc = await repo.update_extraction_result(
                 document_id=document_id,
                 fields=result.get("fields", {}),
                 items=result.get("items", []),
                 blocks=result.get("blocks", []),
-                metadata=result.get("metadata", {}),
+                metadata=stored_metadata,
                 extraction_status=extraction_status,
                 raw_provider_response=result.get("raw_provider_response")
             )
@@ -559,7 +565,8 @@ async def update_document_fields(
                 for field_key, new_value in field_updates.items():
                     # Match "Field Name: old_value" and replace with new value
                     pattern = rf"({re.escape(field_key)}:\s*)([^\n]*)"
-                    content = re.sub(pattern, rf"\1{new_value}", content, flags=re.IGNORECASE)
+                    safe_val = str(new_value)
+                    content = re.sub(pattern, lambda m, v=safe_val: m.group(1) + v, content, flags=re.IGNORECASE)
                 block["content"] = content
 
     # Add update history to metadata
@@ -587,14 +594,28 @@ async def update_document_fields(
     updated_doc = await repo.get_by_document_id(document_id)
     fields = updated_doc.fields or {}
 
+    items = updated_doc.items or []
+
+    def _unwrap_str(v: Any) -> Optional[str]:
+        """Return a plain string from a field value that may be a dict envelope."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            v = v.get("value", v)
+        return str(v) if v is not None else None
+
+    doc_number = _unwrap_str(fields.get("document_number")) or _unwrap_str(fields.get("invoice_number"))
+
     return DocumentResponse(
         status=ResponseStatus.SUCCESS,
         document_id=updated_doc.document_id,
         document_type=updated_doc.document_type,
-        document_number=fields.get("document_number") or fields.get("invoice_number"),
+        document_number=doc_number,
         extraction_status=ExtractionStatus(updated_doc.extraction_status),
-        fields=updated_doc.fields,
-        items=updated_doc.items,
+        fields=fields,
+        items=items,
+        fields_count=len(fields),
+        items_count=len(items),
         blocks=updated_doc.blocks,
         metadata=DocumentMetadata(
             provider=updated_doc.doc_metadata.get("provider", "unknown") if updated_doc.doc_metadata else "unknown",
@@ -605,7 +626,6 @@ async def update_document_fields(
         ) if updated_doc.doc_metadata else None,
         created_at=updated_doc.created_at,
         updated_at=updated_doc.updated_at,
-        message=f"Updated {len(field_updates)} field(s)"
     )
 
 

@@ -1,5 +1,5 @@
-import Dashboard from "@/components/dashboard"
+import PipelineDashboard from "@/components/pipeline-dashboard"
 
 export default function Home() {
-  return <Dashboard />
+  return <PipelineDashboard />
 }

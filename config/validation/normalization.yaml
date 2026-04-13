@@ -149,15 +149,20 @@ normalization:
         - "total_amount"
 
       # Product information
-      description:
+      product_description:
         - "Description"
         - "Product Description"
         - "Item Description"
         - "Goods Description"
+        - "Description of Goods"
+        - "Description of goods"
+        - "Kind of packages; description of goods"
+        - "Article Description"
         - "description"
         - "product_description"
         - "item_description"
         - "goods_description"
+        - "description_of_goods"
 
       product_name:
         - "Product Name"
@@ -255,6 +260,35 @@ normalization:
         - "Container IDs"
         - "Container List"
 
+      # BOE / declaration number
+      boe_number:
+        - "boe_number"
+        - "BOE No"
+        - "Bill of Entry No"
+        - "bill_of_entry_no"
+        - "bill_of_entryboe_no"
+        - "Declaration Number"
+        - "Entry Number"
+        - "bill_no"
+
+      # Declarant / clearing agent identity
+      declarant_name:
+        - "declarant_name"
+        - "declarant_representative"
+        - "Declarant"
+        - "Representative"
+        - "Customs Agent"
+        - "Clearing Agent"
+        - "declarant"
+
+      declarant_reg_number:
+        - "declarant_reg_number"
+        - "declarant_no"
+        - "declarant_registration"
+        - "Declarant No"
+        - "Agent Registration"
+        - "declarant_id"
+
       # Bill of Lading reference number (distinct from the BOE bl_awb field)
       bl_number:
         - "bl_number"
@@ -320,6 +354,47 @@ normalization:
         - "grand_total"
         - "total_amount"
         - "total_incl_vat"
+
+      total_fob_value:
+        - "Total FOB"
+        - "FOB Value"
+        - "Total FOB Value"
+        - "FOB Amount"
+        - "Total Excl. VAT"
+        - "Total Excl VAT"
+        - "Total Excl. Tax"
+        - "Total HT"
+        - "Montant HT"
+        - "total_fob_value"
+        - "fob_value"
+        - "total_excl_vat"
+        - "fob_fcy_cc"
+        - "total_fob_fcy"
+
+      # Document dates
+      document_date:
+        - "Dated"
+        - "dated"
+        - "Document Date"
+        - "Date"
+        - "doc_date"
+        - "packing_list_date"
+        - "issue_date"
+
+      # Article / product codes
+      article_number:
+        - "Article No"
+        - "Article No."
+        - "article_no"
+        - "Article Number"
+        - "Part Number"
+        - "SKU"
+        - "Product Code"
+        - "Material Number"
+        - "article_no"
+        - "article_number"
+        - "material_number"
+        - "sku"
 
       currency:
         - "Currency"

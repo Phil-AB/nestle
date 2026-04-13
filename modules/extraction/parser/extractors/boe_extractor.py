@@ -115,6 +115,26 @@ FINANCIAL (extract if clearly stated as plain text — section-encoded values
 are handled by the BOE section extractor separately):
 - total_fob_value     = FOB value if shown as a labelled field
 - total_invoice_value = invoice/CIF value if shown as a labelled field
+- customs_value       = CIF customs value (field 42 on GRA BOE)
+- freight_value       = Freight amount (NCY / local currency)
+- insurance_value     = Insurance amount (NCY / local currency)
+
+TAX COMPUTATION (Section 40 / Tax Table):
+IMPORTANT — extract these from the Tax Computation table rows.
+The table has columns: Tax Code | Tax Base Amt | TBC | Rate % | Exempted | Amount Payable
+- duty_rate    = Rate % for Tax Code 01 (Import Duty), as a decimal fraction
+                 e.g. if the table shows "5.00" for Tax 01, set duty_rate = 0.05
+- duty_amount  = Amount Payable for Tax Code 01 (Import Duty)
+- vat_rate     = Rate % for Tax Code 02 (Import VAT), as a decimal fraction
+                 e.g. "15.00" → 0.15
+- vat_amount   = Amount Payable for Tax Code 02 (Import VAT)
+- nhil_amount  = Amount Payable for Tax Code 47 (Import NHIL)
+
+DECLARANT:
+- declarant_name       = Name of the clearing agent / declarant company
+                         Label: "Declarant/Representative"
+- declarant_reg_number = Registration/license number of the declarant
+                         Often in format: "CH000258" — appears before the company name
 
 TRANSPORT:
 - vessel_name        = vessel or ship name

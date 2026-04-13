@@ -488,7 +488,7 @@ use_case:
 
           validations:
             - name: "fob_boe_to_invoice"
-              source: "bill_of_entry.fob_value"
+              source: "bill_of_entry.total_fob_value"
               target: "invoice.total_fob_value"
               tolerance_percent: 0.5
               operator: "equals"
@@ -505,7 +505,7 @@ use_case:
           documents:
             - "bill_of_entry"
             - "invoice"
-          match_type: "fuzzy"
+          match_type: "incoterm"  # extracts 3-letter code only (e.g. "FCA TEMA" → "FCA")
           require_all: false
         on_failure: "continue"
         severity: "major"
@@ -533,7 +533,8 @@ use_case:
         config:
           required_fields:
             bill_of_entry:
-              - "country_of_origin"
+              # "country_of_origin" normalises to canonical "origin" via synonym mapping
+              - "origin"
         on_failure: "flag_and_continue"
         severity: "major"
 
@@ -574,7 +575,7 @@ use_case:
               amount_exempted_field: "bill_of_entry.amount_exempted"
               duty_amount_field: "bill_of_entry.duty_amount"
               vat_amount_field: "bill_of_entry.vat_amount"
-              customs_code_field: "bill_of_entry.cpc_code"
+              customs_code_field: "bill_of_entry.customs_code"
               etls_approval_field: "bill_of_entry.etls_approval_number"
 
           tolerance: 0.01

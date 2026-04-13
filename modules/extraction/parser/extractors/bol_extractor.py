@@ -111,10 +111,15 @@ EXTRACTION RULES — read carefully before answering
 
 PARTIES:
 - shipper_name     = company name of the shipper/exporter ONLY (label: "Shipper", "Exporter").
-                     If the shipper block is redacted (shows "XXXXXXXXXX"), return null.
+                     Copy verbatim from the document.
+                     Return null ONLY if the company NAME itself is redacted or illegible
+                     (e.g. replaced with "XXXXXXXXXX" or blank). If the name is visible but
+                     the address is redacted/omitted, still extract the name.
                      Do NOT use the carrier/shipping line as shipper_name.
 - shipper_address  = full postal address of the shipper. Separate from name.
+                     Return null if the address is redacted — the name may still be extracted.
 - consignee_name   = company name of the consignee ONLY (label: "Consignee"). No address.
+                     Copy verbatim from the document.
 - consignee_address = full postal address of the consignee.
 - notify_party     = notify party name and address.
 - carrier_name     = ocean carrier / shipping line (label: "Carrier", "Shipping Line").

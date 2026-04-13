@@ -360,8 +360,21 @@ class NWayMatcher(IValidator):
                 return value.lower()
 
             elif match_type == "normalized":
-                # Normalize whitespace and case
+                # Normalize whitespace and case.
+                # For comma-separated lists (e.g. container IDs), sort tokens so
+                # that order differences don't cause false-positive mismatches.
+                stripped = value.strip()
+                if "," in stripped:
+                    tokens = sorted(t.strip().upper() for t in stripped.split(",") if t.strip())
+                    return ",".join(tokens)
                 return " ".join(value.lower().split())
+
+            elif match_type == "incoterm":
+                # Compare only the 3-letter Incoterm code, ignoring the place of
+                # delivery.  e.g. "FCA TEMA" and "FCA ROTTERDAM PORT" both → "FCA".
+                import re as _re
+                m = _re.match(r'([A-Z]{3})', value.strip().upper())
+                return m.group(1) if m else value.upper().strip()
 
         return value
 

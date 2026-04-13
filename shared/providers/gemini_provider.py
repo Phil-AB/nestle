@@ -182,6 +182,19 @@ class GeminiProvider(BaseProvider):
 
         response = result.data
 
+        # Record token usage
+        try:
+            from shared.utils.token_tracker import record_tokens
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                record_tokens(
+                    provider="google",
+                    model=self.config.model,
+                    input_tokens=response.usage_metadata.prompt_token_count or 0,
+                    output_tokens=response.usage_metadata.candidates_token_count or 0,
+                )
+        except Exception:
+            pass
+
         return GeminiVisionResult(
             text=response.text,
             metadata={
@@ -233,6 +246,19 @@ class GeminiProvider(BaseProvider):
             raise RuntimeError(f"Image analysis failed: {result.error}")
 
         response = result.data
+
+        # Record token usage
+        try:
+            from shared.utils.token_tracker import record_tokens
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                record_tokens(
+                    provider="google",
+                    model=self.config.model,
+                    input_tokens=response.usage_metadata.prompt_token_count or 0,
+                    output_tokens=response.usage_metadata.candidates_token_count or 0,
+                )
+        except Exception:
+            pass
 
         return GeminiVisionResult(
             text=response.text,

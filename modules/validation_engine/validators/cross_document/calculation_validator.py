@@ -352,6 +352,13 @@ class CalculationValidator(IValidator):
         _ALLOWED_BIN_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)
         _ALLOWED_UNARY_OPS = (ast.UAdd, ast.USub)
 
+        # Coerce all variable values to Decimal — guards against floats that slip
+        # through (e.g. from CET lookup or round() calls).
+        variables = {
+            k: (v if isinstance(v, Decimal) else Decimal(str(v)))
+            for k, v in variables.items()
+        }
+
         def _eval(node: ast.expr) -> Decimal:
             if isinstance(node, ast.Constant):
                 if isinstance(node.value, (int, float)):
@@ -407,14 +414,14 @@ class CalculationValidator(IValidator):
             if tolerance == 0:
                 return 1.0
 
-            ratio = abs(difference) / tolerance
+            ratio = float(abs(difference) / tolerance)
             confidence = max(0.7, 1.0 - (ratio * 0.3))
             return float(confidence)
         else:
             if tolerance == 0:
                 return 0.3
 
-            ratio = abs(difference) / tolerance
+            ratio = float(abs(difference) / tolerance)
             if ratio < 2:
                 confidence = 0.5
             elif ratio < 5:

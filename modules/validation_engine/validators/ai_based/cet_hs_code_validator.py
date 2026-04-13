@@ -290,6 +290,12 @@ class CETHSCodeValidator(IValidator):
         # Convert to Decimal
         provided_duty_rate = self._to_decimal(provided_duty_rate)
 
+        # Normalise units: CET stores percentage (e.g. 5.0), but extracted
+        # documents typically store duty_rate as a decimal fraction (e.g. 0.05).
+        # If the provided value looks like a decimal fraction (< 1), convert to %.
+        if provided_duty_rate is not None and provided_duty_rate < Decimal("1"):
+            provided_duty_rate = provided_duty_rate * Decimal("100")
+
         # Calculate difference
         difference = abs(cet_duty_rate - provided_duty_rate)
         tolerance = cet_duty_rate * self.duty_rate_tolerance_percent

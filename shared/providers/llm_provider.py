@@ -6,18 +6,120 @@ Supports multiple providers: OpenAI, Anthropic, Google (Gemini).
 """
 
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Any as _Any
 from functools import lru_cache
 import logging
+from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 
 from shared.providers.base_provider import BaseProvider, ProviderConfig
 from shared.utils.logger import setup_logger
+from shared.utils.token_tracker import record_tokens, get_step
 
 logger = setup_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Token-tracking LangChain callback
+# ---------------------------------------------------------------------------
+
+class TokenUsageCallbackHandler(BaseCallbackHandler):
+    """
+    LangChain callback that records token usage into the active
+    request-scoped TokenUsageTracker (no-op when no tracker is set).
+
+    Injected at LLM construction time so it fires for every call regardless
+    of how the chain is composed (direct invoke, with_structured_output, etc).
+    """
+
+    # Maps run_id -> (provider, model) so on_llm_end can look up model info
+    _run_meta: Dict[str, tuple] = {}
+
+    def on_chat_model_start(
+        self,
+        serialized: Dict[str, _Any],
+        messages: List,
+        *,
+        run_id: UUID,
+        **kwargs: _Any,
+    ) -> None:
+        kwargs_dict = serialized.get("kwargs", {})
+        model = (
+            kwargs_dict.get("model")
+            or kwargs_dict.get("model_id")
+            or kwargs_dict.get("model_name")
+            or "unknown"
+        )
+        # Infer provider from class name
+        cls_name = serialized.get("id", ["unknown"])[-1].lower()
+        if "anthropic" in cls_name or "bedrock" in cls_name:
+            provider = "anthropic"
+        elif "openai" in cls_name:
+            provider = "openai"
+        elif "google" in cls_name or "gemini" in cls_name:
+            provider = "google"
+        else:
+            provider = cls_name
+        self.__class__._run_meta[str(run_id)] = (provider, model)
+
+    def on_llm_end(
+        self,
+        response: LLMResult,
+        *,
+        run_id: UUID,
+        **kwargs: _Any,
+    ) -> None:
+        provider, model = self.__class__._run_meta.pop(str(run_id), ("unknown", "unknown"))
+
+        input_tokens: Optional[int] = None
+        output_tokens: Optional[int] = None
+
+        # Try llm_output (populated by most providers)
+        llm_output = response.llm_output or {}
+
+        # Anthropic direct / Bedrock format
+        usage = llm_output.get("usage") or {}
+        if "input_tokens" in usage:
+            input_tokens = usage["input_tokens"]
+            output_tokens = usage.get("output_tokens", 0)
+
+        # OpenAI format
+        if input_tokens is None:
+            token_usage = llm_output.get("token_usage") or {}
+            if "prompt_tokens" in token_usage:
+                input_tokens = token_usage["prompt_tokens"]
+                output_tokens = token_usage.get("completion_tokens", 0)
+
+        # Fallback: check generation info on first generation
+        if input_tokens is None and response.generations:
+            gen = response.generations[0]
+            if gen:
+                gen_info = getattr(gen[0], "generation_info", None) or {}
+                usage_meta = gen_info.get("usage_metadata") or {}
+                if "input_tokens" in usage_meta:
+                    input_tokens = usage_meta["input_tokens"]
+                    output_tokens = usage_meta.get("output_tokens", 0)
+
+        if input_tokens is not None:
+            record_tokens(
+                provider=provider,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens or 0,
+            )
+
+    def on_llm_error(self, error: Exception, *, run_id: UUID, **kwargs: _Any) -> None:
+        # Clean up run meta on error to avoid memory leak
+        self.__class__._run_meta.pop(str(run_id), None)
+
+
+# Singleton — one instance is injected into every LLM, reads ContextVar at call time
+_token_callback = TokenUsageCallbackHandler()
 
 
 class LLMProvider(BaseProvider):
@@ -82,18 +184,26 @@ class LLMProvider(BaseProvider):
         provider = self.config.provider_name.lower()
 
         if provider == "openai":
-            return self._create_openai_llm()
+            llm = self._create_openai_llm()
         elif provider == "anthropic":
-            return self._create_anthropic_llm()
+            llm = self._create_anthropic_llm()
         elif provider == "google" or provider == "gemini":
-            return self._create_google_llm()
+            llm = self._create_google_llm()
         elif provider == "custom":
-            return self._create_custom_llm()
+            llm = self._create_custom_llm()
         else:
             raise ValueError(
                 f"Unsupported LLM provider: {provider}. "
                 f"Supported: openai, anthropic, google, custom"
             )
+
+        # Inject token-usage callback so every call is tracked automatically
+        if not any(isinstance(cb, TokenUsageCallbackHandler) for cb in (llm.callbacks or [])):
+            existing = list(llm.callbacks or [])
+            existing.append(_token_callback)
+            llm.callbacks = existing
+
+        return llm
 
     def _create_openai_llm(self) -> ChatOpenAI:
         """Create OpenAI LLM instance."""

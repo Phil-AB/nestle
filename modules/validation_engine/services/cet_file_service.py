@@ -22,6 +22,10 @@ from shared.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Resolve project root relative to this file:
+# modules/validation_engine/services/ -> modules/validation_engine/ -> modules/ -> project root
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
 
 class CETFileService:
     """
@@ -67,9 +71,9 @@ class CETFileService:
         Returns:
             Configuration dictionary
         """
-        # Default configuration
+        # Default configuration — use absolute path so it resolves regardless of CWD
         config = {
-            "cet_file_path": "config/data/CET_Ghana.csv",
+            "cet_file_path": str(_PROJECT_ROOT / "config" / "data" / "CET_Ghana.csv"),
             "columns": {
                 "hs_code": "E",  # Column E: HS Code ID
                 "description": "C",  # Column C: Description
@@ -82,7 +86,7 @@ class CETFileService:
         # Try to load from config file
         try:
             import yaml
-            config_path = Path("config/validation/cet_integration.yaml")
+            config_path = _PROJECT_ROOT / "config" / "validation" / "cet_integration.yaml"
             if config_path.exists():
                 with open(config_path, 'r') as f:
                     user_config = yaml.safe_load(f)

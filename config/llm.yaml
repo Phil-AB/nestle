@@ -193,6 +193,12 @@ modules:
     model_variant: pro  # Claude Sonnet 4.5 (most powerful model)
     description: "AI-powered banking customer insights and risk assessment via AWS Bedrock"
 
+  # Claude Extractor Provider - Direct document parsing via Claude vision API
+  claude_extractor:
+    provider: anthropic
+    model_variant: default
+    description: "Native PDF/image extraction using Claude vision and document understanding"
+
   # Synonym Mapper - Field name normalisation during validation
   synonym_mapper:
     provider: anthropic

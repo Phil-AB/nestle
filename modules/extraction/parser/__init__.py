@@ -28,6 +28,7 @@ from .provider_factory import ProviderFactory, get_active_provider
 
 from .reducto_provider import ReductoProvider
 from .google_provider import GoogleDocumentAIProvider
+from .claude_provider import ClaudeProvider
 
 # Note: To add a new provider:
 # 1. Create your_provider.py implementing IParserProvider
@@ -50,4 +51,5 @@ __all__ = [
     # Provider implementations
     "ReductoProvider",
     "GoogleDocumentAIProvider",
+    "ClaudeProvider",
 ]

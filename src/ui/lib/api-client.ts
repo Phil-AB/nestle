@@ -181,6 +181,51 @@ export interface DocumentStatsResponse {
   recent_activity: RecentActivityItem[]
 }
 
+// Pipeline dashboard stats
+export interface ShipmentTokenUsage {
+  shipment_id: string
+  step: "step2" | "step6"
+  validation_type: "vendor_validation" | "boe_validation"
+  document_type: string
+  documents_processed: number
+  total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  estimated_cost_usd: number
+  call_count: number
+  by_model: Array<{
+    provider: string
+    model: string
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    cost_usd: number
+    calls: number
+  }>
+  created_at: string | null
+}
+
+export interface PipelineStatsResponse {
+  step2_shipments: number
+  step6_shipments: number
+  total_shipments_processed: number
+  total_tokens: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_estimated_cost_usd: number
+  total_llm_calls: number
+  by_model: Array<{
+    provider: string
+    model: string
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    cost_usd: number
+    calls: number
+  }>
+  shipments: ShipmentTokenUsage[]
+}
+
 // ============================================================================
 // Generation Types (V2 API)
 // ============================================================================
@@ -430,6 +475,19 @@ export interface ValidationDiscrepancy {
   resolution_status?: string
 }
 
+export interface ExtractedFieldMeta {
+  value: any
+  source?: string
+  enhancement_method?: string
+  confidence?: number
+}
+
+export interface ExtractedDocumentMeta {
+  document_id: string
+  fields: Record<string, ExtractedFieldMeta | any>
+  items: any[]
+}
+
 export interface VendorValidationResponse {
   session_id?: string
   workflow_status: "completed" | "awaiting_user" | "failed" | "running"
@@ -438,6 +496,7 @@ export interface VendorValidationResponse {
   discrepancies?: ValidationDiscrepancy[]
   validation_results?: any[]
   shipment_id?: string
+  extracted_documents?: Record<string, ExtractedDocumentMeta>
 }
 
 export interface BOEValidationResponse {
@@ -449,6 +508,7 @@ export interface BOEValidationResponse {
   discrepancies?: ValidationDiscrepancy[]
   critical_discrepancies?: ValidationDiscrepancy[]
   validation_results?: any[]
+  extracted_boe?: ExtractedDocumentMeta
 }
 
 // ============================================================================
@@ -1319,6 +1379,13 @@ class APIClient {
    */
   async getDocumentStats(): Promise<DocumentStatsResponse> {
     return this.request<DocumentStatsResponse>("/documents/stats")
+  }
+
+  /**
+   * Get pipeline dashboard statistics (Step 2 / Step 6 counts + token usage)
+   */
+  async getPipelineStats(): Promise<PipelineStatsResponse> {
+    return this.request<PipelineStatsResponse>("/validation/pipeline/stats", {}, true)
   }
 
   // ========================================================================
@@ -2257,7 +2324,7 @@ class APIClient {
     if (files.certificate_of_origin) form.append("certificate_of_origin_file", files.certificate_of_origin)
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 300_000) // 5-min for multi-doc
+    const timeoutId = setTimeout(() => controller.abort(), 600_000) // 10-min for multi-doc
     try {
       const response = await fetch(`${API_V2_BASE_URL}/validation/shipments/${shipmentId}/validate-vendor-docs`, {
         method: "POST",
@@ -2291,7 +2358,7 @@ class APIClient {
     form.append("boe_file", boeFile)
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 300_000)
+    const timeoutId = setTimeout(() => controller.abort(), 600_000) // 10-min for BOE
     try {
       const response = await fetch(`${API_V2_BASE_URL}/validation/shipments/${shipmentId}/validate-boe`, {
         method: "POST",

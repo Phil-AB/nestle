@@ -99,10 +99,21 @@ class BOESectionExtractor:
         )
         return boe
 
-    def extract_flat_fields(self, raw_fields: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_flat_fields(
+        self,
+        raw_fields: Dict[str, Any],
+        items: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Main extraction entry point.  Returns a flat dict of canonical field
         names → normalised values extracted from the GRA BOE raw fields.
+
+        Args:
+            raw_fields: Flat field dict from the AI provider (may contain
+                        Reducto dict-wrapped values).
+            items: Optional list of line-item / table rows.  Used to parse
+                   the tax computation table (Section 40) for duty_rate and
+                   duty_amount.
         """
         extracted: Dict[str, Any] = {}
 
@@ -119,6 +130,10 @@ class BOESectionExtractor:
             self._parse_key_name(key, val_str, extracted)
             self._parse_field_value(key, val_str, extracted)
 
+        # Parse Section 40 (tax table) from items if provided
+        if items:
+            self._parse_tax_table(items, extracted)
+
         self._post_process(extracted)
         return extracted
 
@@ -126,6 +141,15 @@ class BOESectionExtractor:
 
     def _parse_key_name(self, key: str, val_str: str, out: Dict[str, Any]) -> None:
         """Extract values that Reducto encoded inside the field key name."""
+
+        # ── BOE number from key like "bill_of_entryboe_no" ───────────────────
+        # Value: "40126075519 / 00"
+        if ("bill_of_entry" in key and "no" in key) or "boe_no" in key:
+            if "boe_number" not in out and val_str:
+                # Strip trailing " / 00" revision suffix
+                clean = re.split(r'\s*/\s*\d+', val_str)[0].strip()
+                if re.fullmatch(r'\d{8,14}', clean):
+                    out["boe_number"] = clean
 
         # ── Section 3: Gross Mass Kg ─────────────────────────────────────────
         # Key: "3_gross_mass_kg_1927800000_bill_of_date"
@@ -244,6 +268,15 @@ class BOESectionExtractor:
                 except Exception:
                     pass
 
+        # ── BOE number from field VALUE ──────────────────────────────────────
+        # Field: "bill_of_entry_no" / "bill_of_entryboe_no"
+        # Value: "40126075519 / 00"
+        if ("bill_of_entry" in key and "no" in key) or "boe_no" in key:
+            if "boe_number" not in out and val_str:
+                clean = re.split(r'\s*/\s*\d+', val_str)[0].strip()
+                if re.fullmatch(r'\d{8,14}', clean):
+                    out["boe_number"] = clean
+
         # ── Invoice number from attached documents table ─────────────────────
         # Value may contain "| INVOICE | 9400080882 |"
         m = re.search(r'invoice\s*[|\s]+(\d{8,12})', val_str, re.IGNORECASE)
@@ -271,6 +304,83 @@ class BOESectionExtractor:
                         out["duty_rate"] = rate / 100.0  # store as decimal fraction
                 except Exception:
                     pass
+
+    # ─── Tax table parsing (Section 40) ──────────────────────────────────────
+
+    def _parse_tax_table(self, items: List[Dict[str, Any]], out: Dict[str, Any]) -> None:
+        """
+        Parse the BOE Section 40 tax computation table from extracted items.
+
+        Ghana GRA BOE tax table structure (each row = one tax line):
+          tax_code | tax_base_amount | tbc | rate_pct | exempted | amount_payable
+
+        Tax code 01 = Import Duty (5% on customs value).
+        Tax code 02 = Import VAT (15% on customs_value + duty_amount).
+        Tax code 47 = NHIL (2.5% of the VAT base).
+
+        We populate:
+          duty_rate    — decimal fraction (e.g. 0.05 for 5%)
+          duty_amount  — Import Duty amount payable (Tax 01)
+          vat_amount   — Import VAT amount payable (Tax 02)
+          nhil_amount  — NHIL amount payable (Tax 47)
+        """
+        # Tax code → canonical output field
+        TAX_CODE_MAP = {
+            "01": ("duty_rate", "duty_amount"),
+            "02": (None, "vat_amount"),
+            "47": (None, "nhil_amount"),
+        }
+
+        for item in items:
+            # Unwrap any Reducto envelopes in item values
+            item = {k: (v["value"] if isinstance(v, dict) and "value" in v else v)
+                    for k, v in item.items()}
+
+            # Identify the tax code — look for a key like "tax_code" / "code"
+            tax_code = None
+            for tc_key in ("tax_code", "code", "tc", "tax"):
+                raw = str(item.get(tc_key, "")).strip()
+                if re.fullmatch(r'\d{2}', raw):
+                    tax_code = raw
+                    break
+
+            if tax_code not in TAX_CODE_MAP:
+                continue
+
+            rate_field, amount_field = TAX_CODE_MAP[tax_code]
+
+            # Extract rate (%) — look for a "rate" or "rate_pct" column
+            if rate_field and rate_field not in out:
+                for rk in ("rate", "rate_pct", "rate_%", "duty_rate", "pct"):
+                    raw_rate = str(item.get(rk, "")).strip()
+                    m = re.search(r'([\d]+\.[\d]+)', raw_rate)
+                    if m:
+                        try:
+                            rate_pct = float(m.group(1))
+                            if 0 < rate_pct <= 100:
+                                out[rate_field] = rate_pct / 100.0
+                                break
+                        except ValueError:
+                            pass
+
+            # Extract amount payable — look for "amount_payable" / "payable" / "amount"
+            if amount_field and amount_field not in out:
+                for ak in ("amount_payable", "payable", "amount", "tax_amount"):
+                    raw_amt = str(item.get(ak, "")).strip().replace(",", "")
+                    m = re.search(r'([\d]+\.[\d]+)', raw_amt)
+                    if m:
+                        try:
+                            out[amount_field] = float(m.group(1))
+                            break
+                        except ValueError:
+                            pass
+
+        if "duty_rate" in out or "duty_amount" in out:
+            logger.debug(
+                f"Tax table: duty_rate={out.get('duty_rate')}, "
+                f"duty_amount={out.get('duty_amount')}, "
+                f"vat_amount={out.get('vat_amount')}"
+            )
 
     # ─── Post-processing ─────────────────────────────────────────────────────
 

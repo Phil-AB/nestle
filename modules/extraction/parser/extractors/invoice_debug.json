@@ -1,0 +1,54 @@
+{
+  "fields": {
+    "invoice_number": "9400080882",
+    "invoice_date": "Jan 21, 2026",
+    "payment_terms": "Within 90 days after invoice date",
+    "contract_number": "40017796",
+    "our_order_number": "64896",
+    "your_order_number": "4562599410",
+    "seller_name": "Industrie- en Handelsonderneming Vreugdenhil B.V.",
+    "seller_trade_name": "Vreugdenhil Dairy Foods",
+    "seller_address": "Arkerpoort 5, P.O. Box 64, 3860 AB Nijkerk, The Netherlands",
+    "seller_phone": "+31 33 303 5000",
+    "seller_email": "info@vreugdenhil.nl",
+    "seller_website": "www.vreugdenhil.com",
+    "seller_bank": "ING Utrecht",
+    "seller_bic": "INGBNL2A",
+    "seller_iban_eur": "NL83 INGB 0006 2522 13",
+    "seller_iban_usd": "NL55 INGB 0020 0545 56",
+    "seller_vat_number": "NL003503495B01",
+    "seller_chamber_of_commerce": "09040933",
+    "buyer_name": "Nestlé Ghana Limited",
+    "buyer_address": "Private Mail Bag, Kotoka International Airport, ACCRA, GHANA",
+    "ship_to_name": "Nestlé Ghana Limited",
+    "ship_to_address": "Sanyo Road Heavy Ind. Area, TEMA, GHANA",
+    "shipping_condition": "FCA ROTTERDAM PORT",
+    "shipping_date": "Jan 21, 2026 12:00:00 AM",
+    "total_units": "7,560",
+    "total_units_uom": "BAG",
+    "total_net_weight": "189,000.000",
+    "total_net_weight_uom": "KG",
+    "total_gross_weight": "192,780.000",
+    "total_gross_weight_uom": "KG",
+    "total_excl_vat": "467,775.00",
+    "total_excl_vat_currency": "EUR",
+    "vat_amount": "0.00",
+    "vat_amount_currency": "EUR",
+    "total_incl_vat": "467,775.00",
+    "total_incl_vat_currency": "EUR"
+  },
+  "blocks": [
+    {
+      "type": "Text",
+      "text": "Nestlé Ghana Limited Private Mail Bag\nKotoka International Airport\nACCRA\nGHANA\n\nArkerpoort 5\nP.O. Box 64\n3860 AB Nijkerk\nThe Netherlands\n\nT: +31 33 303 5000\nE: info@vreugdenhil.nl\nwww.vreugdenhil.com\n\nBank: ING Utrecht\nBIC: INGBNL2A\nNL83 INGB 0006 2522 13 (EUR)\nNL55 INGB 0020 0545 56 (USD)\nVAT no.: NL003503495B01\n\nRegistered Chamber of Commerce number 09040933\nVreugdenhil Dairy Foods is a trade na"
+    },
+    {
+      "type": "Table",
+      "text": "{'headers': ['Article No.', 'Description', 'Quantity', 'Unit', 'Price / Unit', 'Amount', 'VAT%'], 'rows': [{'article_no': 'E36001065', 'description': 'FFP 28% MQAV004F-1 25kg bag', 'quantity': '7,560', 'unit': 'BAG', 'price_per_unit': '2,475.00 EUR / 1 MTON', 'amount': '467,775.00', 'vat_percent': '0.00 %'}]}"
+    },
+    {
+      "type": "Table",
+      "text": "{'headers': ['', 'Total Excl. VAT', 'EUR', '467,775.00', 'EUR'], 'rows': [{'label': 'Total Excl. VAT', 'currency': 'EUR', 'amount': '467,775.00', 'currency2': 'EUR'}, {'label': 'VAT', 'currency': '%', 'amount': '0.00', 'currency2': 'EUR'}, {'label': 'Total Incl. VAT', 'currency': 'EUR', 'amount': '467,775.00', 'currency2': 'EUR'}]}"
+    }
+  ]
+}
