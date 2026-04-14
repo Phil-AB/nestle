@@ -27,7 +27,7 @@ export default function Dashboard() {
       value: statsData?.data.total_documents?.toLocaleString() ?? "—",
       change: statsData ? "Total documents" : "Loading...",
       icon: FileText,
-      color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+      color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500",
     },
     {
       label: "Extraction Success",

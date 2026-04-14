@@ -8,6 +8,7 @@ Supports both direct Anthropic API and AWS Bedrock (bearer token auth).
 """
 
 import base64
+import asyncio
 import json
 import os
 import time
@@ -60,8 +61,8 @@ class ClaudeProvider(IParserProvider):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-opus-4-5",
-        max_tokens: int = 8192,
+        model: str = "claude-sonnet-4-6",
+        max_tokens: int = 32768,
         timeout: int = 300,
         bedrock_enabled: bool = False,
         aws_region: str = "us-east-1",
@@ -214,10 +215,11 @@ class ClaudeProvider(IParserProvider):
                 "Return ONLY valid JSON — no markdown fences, no commentary."
             )
 
-            raw_response = self._invoke(
-                system=system_prompt,
-                content_blocks=[content_block, {"type": "text", "text": user_message}],
-                options=options,
+            raw_response = await asyncio.to_thread(
+                self._invoke,
+                system_prompt,
+                [content_block, {"type": "text", "text": user_message}],
+                options,
             )
 
             elapsed = time.monotonic() - start
@@ -287,10 +289,11 @@ class ClaudeProvider(IParserProvider):
             system_prompt = self._build_extract_system_prompt(document_type)
             user_message = self._build_extract_user_message(claude_schema, schema)
 
-            raw_response = self._invoke(
-                system=system_prompt,
-                content_blocks=[content_block, {"type": "text", "text": user_message}],
-                options=options,
+            raw_response = await asyncio.to_thread(
+                self._invoke,
+                system_prompt,
+                [content_block, {"type": "text", "text": user_message}],
+                options,
             )
 
             elapsed = time.monotonic() - start
@@ -703,7 +706,7 @@ class ClaudeProvider(IParserProvider):
 
     def _build_extract_system_prompt(self, document_type: str) -> str:
         """Build the system prompt for schema-guided field extraction."""
-        return (
+        base = (
             f"You are a precise document data-extraction engine for {document_type} documents.\n\n"
             "Extract the requested fields from the document following the schema exactly.\n"
             "Rules:\n"
@@ -731,6 +734,26 @@ class ClaudeProvider(IParserProvider):
             "(black bar, [REDACTED] stamp, white-out patch, or any obscured region), "
             "return {\"value\": null, \"redacted\": true} for that field instead of null.\n"
         )
+
+        # Add document-type-specific structural guidance
+        dt = document_type.lower().replace("-", "_").replace(" ", "_")
+        if dt in ("bill_of_entry", "boe"):
+            base += (
+                "\nBOE-SPECIFIC RULES:\n"
+                "This is a Ghana GRA Customs Declaration (Bill of Entry). The form has "
+                "numbered sections (Field 1, Field 2, …). IMPORTANT:\n"
+                "- The section NUMBER is NOT a field value. 'Field 1 — Regime: 40' means "
+                "regime=40, NOT regime=1. The number before the dash is the section label.\n"
+                "- 'items' must ONLY contain goods line-item rows (Section 31/Item No 0001). "
+                "Attached document references (INVOICE, BILL OF LADING, etc.) go in 'tables', "
+                "NOT in 'items'.\n"
+                "- Tax computation rows (Tax Code 01, 02, etc.) go in 'tables', NOT 'items'.\n"
+                "- Tax summary rows (Import Duty, Import VAT, etc.) go in 'tables', NOT 'items'.\n"
+                "- If the form has a 'Manifest No' field and its value is blank or 'N/A', "
+                "extract it as null, NOT as a number from an adjacent field.\n"
+            )
+
+        return base
 
     def _build_extract_user_message(
         self, claude_schema: Dict[str, Any], universal_schema: Dict[str, Any]
@@ -869,12 +892,55 @@ class ClaudeProvider(IParserProvider):
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
+            # Attempt recovery if the response was truncated (hit max_tokens).
+            # Strategy: find the last complete JSON object entry, close all
+            # open braces, and retry — preserving whatever fields were extracted.
+            recovered = self._recover_truncated_json(text)
+            if recovered is not None:
+                logger.warning(
+                    f"Claude response was truncated (max_tokens?); recovered "
+                    f"{len(recovered.get('fields', {}))} fields from partial JSON. "
+                    f"Consider increasing max_tokens in config/providers.yaml."
+                )
+                return recovered
+
             logger.error(f"Failed to parse Claude JSON response: {exc}")
             logger.debug(f"Raw response (first 500 chars): {raw[:500]}")
             raise ParserException(
                 f"Claude returned invalid JSON: {exc}. "
                 f"Response preview: {raw[:200]}"
             ) from exc
+
+    @staticmethod
+    def _recover_truncated_json(text: str) -> Optional[Dict[str, Any]]:
+        """
+        Attempt to recover a JSON object truncated mid-stream (e.g. hit max_tokens).
+
+        Finds the last fully-closed field entry (`},`), trims there, and closes
+        all open brace/bracket pairs so the result is valid JSON.
+        """
+        # Find the last position that ends a complete object value: `},` or `}`
+        # followed only by whitespace/newlines up to the truncation point.
+        last_complete = -1
+        for marker in ('},\n', '},', '}'):
+            pos = text.rfind(marker)
+            if pos > last_complete:
+                last_complete = pos + len(marker.rstrip(','))  # keep the closing `}`
+
+        if last_complete <= 0:
+            return None
+
+        truncated = text[:last_complete]
+
+        # Count and close open braces/brackets
+        opens = truncated.count('{') - truncated.count('}')
+        closes = truncated.count('[') - truncated.count(']')
+        truncated += (']' * max(closes, 0)) + ('}' * max(opens, 0))
+
+        try:
+            return json.loads(truncated)
+        except json.JSONDecodeError:
+            return None
 
     @staticmethod
     def _normalize_key(key: str) -> str:
@@ -923,8 +989,8 @@ def _create_claude_provider(provider_config: dict) -> ClaudeProvider:
     aws_region = bedrock_cfg.get("region", os.getenv("AWS_REGION", "us-east-1"))
     bedrock_model_id = bedrock_cfg.get("model_id")
 
-    model = provider_config.get("model", "claude-opus-4-5")
-    max_tokens = provider_config.get("max_tokens", 8192)
+    model = provider_config.get("model", "claude-sonnet-4-6")
+    max_tokens = provider_config.get("max_tokens", 32768)
     timeout = provider_config.get("timeout", 300)
 
     logger.debug(

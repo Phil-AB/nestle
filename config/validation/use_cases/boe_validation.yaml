@@ -58,6 +58,10 @@ use_case:
         - "poids_net"
         - "net_wt"
         - "NetWeight"
+        - "total_net_weight"
+        - "total_sent_net_weight"
+        - "nett_weight_kg"
+        - "net_wt_kg"
 
       gross_weight:
         - "Gross Weight"
@@ -68,6 +72,10 @@ use_case:
         - "poids_brut"
         - "gross_wt"
         - "GrossWeight"
+        - "total_gross_weight"
+        - "total_sent_gross_weight"
+        - "gross_weight_kg"
+        - "gross_wt_kg"
 
       quantity:
         - "Quantity"
@@ -76,6 +84,8 @@ use_case:
         - "Qté"
         - "quantity"
         - "quantite"
+        - "total_units"
+        - "total_sent_units"
 
       unit_price:
         - "Unit Price"
@@ -135,16 +145,42 @@ use_case:
 
       declarant_name:
         - "Declarant"
+        - "Declarant / Representative"
         - "Representative"
         - "Customs Agent"
         - "Clearing Agent"
         - "declarant_name"
+        - "declarant_representative"  # GRA BOE Field 9 raw key (snake_case of label)
+
+      declarant_reg_number:
+        - "declarant_reg_number"
+        - "declarant_no"              # GRA BOE Field 9 registration sub-field
+        - "CH Number"
+        - "Agent Reg No"
+        - "License Number"
 
       container_count:
         - "No of Containers"
         - "Number of Containers"
         - "Container Count"
         - "container_count"
+
+      total_fob_value:
+        - "Total FOB"
+        - "FOB Value"
+        - "Total FOB Value"
+        - "FOB Amount"
+        - "total_fob_value"
+        - "fob_value"
+        - "total_excl_vat"
+        - "total_fob_fcy"
+
+      currency:
+        - "Currency"
+        - "currency"
+        - "curr_code"
+        - "total_excl_vat_currency"
+        - "total_fob_currency"
 
     # Unit conversions
     units:

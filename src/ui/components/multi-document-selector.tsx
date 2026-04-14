@@ -107,7 +107,7 @@ export default function MultiDocumentSelector({
   const getDocumentTypeColor = (type: string | null | undefined) => {
     if (!type) return "bg-gray-100 text-gray-700"
     const colors: Record<string, string> = {
-      invoice: "bg-blue-100 text-blue-700",
+      invoice: "bg-amber-100 text-amber-800",
       "packing-list": "bg-green-100 text-green-700",
       "bill-of-entry": "bg-purple-100 text-purple-700",
       coo: "bg-amber-100 text-amber-700",

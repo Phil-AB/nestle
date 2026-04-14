@@ -458,7 +458,7 @@ export function TableRenderer({
                       key={cellIndex}
                       colSpan={cellStyle?.colspan}
                       rowSpan={cellStyle?.rowspan}
-                      className={`border border-border ${cellStyle?.isHeader ? 'font-semibold bg-muted/30' : ''} ${cellStyle?.className || ''} ${!cellStyle?.isHeader && onEdit ? 'cursor-text bg-blue-50 hover:bg-blue-100' : ''}`}
+                      className={`border border-border ${cellStyle?.isHeader ? 'font-semibold bg-muted/30' : ''} ${cellStyle?.className || ''} ${!cellStyle?.isHeader && onEdit ? 'cursor-text bg-amber-50 hover:bg-amber-100' : ''}`}
                       style={{wordBreak: 'break-word'}}
                       contentEditable={!cellStyle?.isHeader && !!onEdit}
                       suppressContentEditableWarning={true}

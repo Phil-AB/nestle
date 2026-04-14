@@ -21,6 +21,7 @@ import {
   Package,
   FileText,
   ShieldCheck,
+  Eye,
 } from "lucide-react"
 import {
   apiClient,
@@ -77,6 +78,11 @@ function deriveConfidence(v: any): number {
   return 0.85
 }
 
+/** Normalise a header or key string for fuzzy matching (snake_case, lowercase). */
+function normKey(s: string): string {
+  return String(s).toLowerCase().replace(/[\s\-/\\]+/g, "_").replace(/[^\w]/g, "").replace(/_+/g, "_")
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100)
   const color =
@@ -96,7 +102,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   const map: Record<string, string> = {
     critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
     major: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    minor: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    minor: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500",
     info: "bg-muted text-muted-foreground",
   }
   return (
@@ -281,6 +287,119 @@ function EditableLineItemsTable({
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// ─── RenderedBlocks (Table blocks from extraction) ─────────────────────────────
+
+function RenderedBlocks({
+  blocks,
+  blockEdits,
+  onCellChange,
+}: {
+  blocks?: Array<{ type: string; content: any }>
+  blockEdits?: Record<number, Record<string, string>>
+  onCellChange?: (tableIdx: number, rowIdx: number, colIdx: number, val: string) => void
+}) {
+  if (!blocks || blocks.length === 0) return null
+
+  const tables = blocks.filter((b) => b.type === "Table" && b.content)
+  if (tables.length === 0) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+        Extracted Tables — {tables.length}
+        {onCellChange && (
+          <span className="ml-2 normal-case font-normal text-muted-foreground/70">
+            (hover a cell to edit)
+          </span>
+        )}
+      </p>
+      {tables.map((block, tableIdx) => {
+        const tbl = block.content
+        const headers: string[] = (tbl.headers ?? []).map((h: any) => unwrap(h))
+        const rows: any[][] = tbl.rows ?? tbl.data ?? []
+        const title = tbl.title || `Table ${tableIdx + 1}`
+
+        if (headers.length === 0 && rows.length === 0) return null
+
+        return (
+          <div key={tableIdx} className="overflow-x-auto rounded border border-border">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-muted/60">
+                  <th
+                    colSpan={headers.length || 1}
+                    className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border"
+                  >
+                    {title}
+                  </th>
+                </tr>
+                {headers.length > 0 && (
+                  <tr className="bg-muted/40">
+                    {headers.map((h, j) => (
+                      <th
+                        key={j}
+                        className="text-left px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => {
+                  // Normalise row to array of cell values.
+                  // Claude may return rows as arrays OR as objects keyed by column name.
+                  let cells: any[]
+                  if (Array.isArray(row)) {
+                    cells = row
+                  } else if (typeof row === "object" && row !== null) {
+                    const rowObj = row as Record<string, any>
+                    const rowKeys = Object.keys(rowObj)
+                    cells = headers.length > 0
+                      ? headers.map((h) => {
+                          const nh = normKey(h)
+                          if (h in rowObj) return rowObj[h]
+                          const match = rowKeys.find(k => normKey(k) === nh)
+                          return match ? rowObj[match] : null
+                        })
+                      : rowKeys.map(k => rowObj[k])
+                  } else {
+                    cells = [row]
+                  }
+                  return (
+                    <tr
+                      key={ri}
+                      className={`border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors ${ri % 2 === 0 ? "bg-background" : "bg-muted/10"}`}
+                    >
+                      {cells.map((cell, ci) => {
+                        const cellKey = `${ri},${ci}`
+                        const edited = blockEdits?.[tableIdx]?.[cellKey]
+                        const isEdited = edited !== undefined && edited !== unwrap(cell)
+                        return (
+                          <EditableItemCell
+                            key={ci}
+                            raw={cell}
+                            edited={edited}
+                            isEdited={isEdited}
+                            confidence={deriveConfidence(cell)}
+                            readOnly={!onCellChange}
+                            onChange={onCellChange ? (v) => onCellChange(tableIdx, ri, ci, v) : undefined}
+                          />
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -493,6 +612,12 @@ function ExtractedFieldsReference({ docMeta }: { docMeta: ExtractedDocumentMeta 
               <EditableLineItemsTable items={docMeta.items} readOnly />
             </div>
           )}
+
+          {docMeta.blocks && docMeta.blocks.length > 0 && (
+            <div className="px-4 py-3">
+              <RenderedBlocks blocks={docMeta.blocks} />
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -505,14 +630,18 @@ function BOEFieldPanel({
   docMeta,
   edits,
   itemEdits,
+  blockEdits,
   onFieldChange,
   onItemChange,
+  onBlockCellChange,
 }: {
   docMeta: ExtractedDocumentMeta
   edits: Record<string, string>
   itemEdits: Record<number, Record<string, string>>
+  blockEdits: Record<number, Record<string, string>>
   onFieldChange: (key: string, val: string) => void
   onItemChange: (rowIndex: number, column: string, val: string) => void
+  onBlockCellChange: (tableIdx: number, rowIdx: number, colIdx: number, val: string) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -572,6 +701,14 @@ function BOEFieldPanel({
               items={docMeta.items}
               edits={itemEdits}
               onCellChange={onItemChange}
+            />
+          )}
+
+          {docMeta.blocks && docMeta.blocks.length > 0 && (
+            <RenderedBlocks
+              blocks={docMeta.blocks}
+              blockEdits={blockEdits}
+              onCellChange={onBlockCellChange}
             />
           )}
         </div>
@@ -926,6 +1063,8 @@ export default function BOEValidationForm() {
   const [fieldEdits, setFieldEdits] = useState<Record<string, string>>({})
   // Per-row, per-column line item edits: { rowIndex: { column: newValue } }
   const [lineItemEdits, setLineItemEdits] = useState<Record<number, Record<string, string>>>({})
+  // Per-table, per-cell block edits: { tableIdx: { "rowIdx,colIdx": newValue } }
+  const [blockEdits, setBlockEdits] = useState<Record<number, Record<string, string>>>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -942,6 +1081,28 @@ export default function BOEValidationForm() {
   const [submitting, setSubmitting] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Document viewer tabs — one per step that has content to review
+  const [fieldReviewView, setFieldReviewView] = useState<"fields" | "document">("fields")
+  const [resultsView, setResultsView] = useState<"results" | "document">("results")
+
+  // Blob URL for the uploaded BOE file — created on demand, revoked on unmount
+  const boeBlobUrlRef = useRef<string | null>(null)
+  const getBOEBlobUrl = useCallback((): string | null => {
+    if (!boeFile) return null
+    if (!boeBlobUrlRef.current) {
+      boeBlobUrlRef.current = URL.createObjectURL(boeFile)
+    }
+    return boeBlobUrlRef.current
+  }, [boeFile])
+  useEffect(() => {
+    return () => {
+      if (boeBlobUrlRef.current) {
+        URL.revokeObjectURL(boeBlobUrlRef.current)
+        boeBlobUrlRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (submitting) {
@@ -963,6 +1124,13 @@ export default function BOEValidationForm() {
     setLineItemEdits((prev) => ({
       ...prev,
       [rowIndex]: { ...(prev[rowIndex] ?? {}), [column]: val },
+    }))
+  }, [])
+
+  const handleBlockCellChange = useCallback((tableIdx: number, rowIdx: number, colIdx: number, val: string) => {
+    setBlockEdits((prev) => ({
+      ...prev,
+      [tableIdx]: { ...(prev[tableIdx] ?? {}), [`${rowIdx},${colIdx}`]: val },
     }))
   }, [])
 
@@ -1005,6 +1173,7 @@ export default function BOEValidationForm() {
         setExtractedBOE(res.extracted_boe)
         setFieldEdits({})
         setLineItemEdits({})
+        setBlockEdits({})
         setPendingResult(res)
         setStep("field_review")
       } else {
@@ -1028,8 +1197,9 @@ export default function BOEValidationForm() {
     try {
       const hasFieldEdits = Object.keys(fieldEdits).length > 0
       const hasItemEdits = Object.keys(lineItemEdits).length > 0
+      const hasBlockEdits = Object.keys(blockEdits).length > 0
 
-      if ((hasFieldEdits || hasItemEdits) && extractedBOE.document_id) {
+      if ((hasFieldEdits || hasItemEdits || hasBlockEdits) && extractedBOE.document_id) {
         // Flatten line item edits to [{row_index, column, value}]
         const itemUpdates = Object.entries(lineItemEdits).flatMap(([rowIdx, cols]) =>
           Object.entries(cols).map(([column, value]) => ({
@@ -1039,12 +1209,31 @@ export default function BOEValidationForm() {
           }))
         )
 
+        // Apply block edits back into the blocks structure
+        const updatedBlocks = hasBlockEdits && extractedBOE.blocks
+          ? extractedBOE.blocks.map((block, ti) => {
+              const tableEdits = blockEdits[ti]
+              if (!tableEdits || block.type !== "Table") return block
+              const tbl = { ...block.content }
+              const rows = (tbl.rows ?? tbl.data ?? []).map((row: any[], ri: number) => {
+                const arr = Array.isArray(row) ? [...row] : [row]
+                Object.entries(tableEdits).forEach(([key, val]) => {
+                  const [r, c] = key.split(",").map(Number)
+                  if (r === ri && c < arr.length) arr[c] = val
+                })
+                return arr
+              })
+              return { ...block, content: { ...tbl, rows } }
+            })
+          : extractedBOE.blocks
+
         await apiClient.updateDocumentFields(
           extractedBOE.document_id,
           fieldEdits,
           {
             updated_by: "field_review",
             update_reason: "User reviewed and corrected extracted BOE fields",
+            blocks: updatedBlocks,
           },
           itemUpdates.length > 0 ? itemUpdates : undefined
         )
@@ -1095,6 +1284,7 @@ export default function BOEValidationForm() {
     setExtractedBOE(null)
     setFieldEdits({})
     setLineItemEdits({})
+    setBlockEdits({})
     setSessionId(null)
     setDiscrepancies([])
     setConfirmations({})
@@ -1103,6 +1293,12 @@ export default function BOEValidationForm() {
     setSummary(null)
     setError(null)
     setSaveError(null)
+    setFieldReviewView("fields")
+    setResultsView("results")
+    if (boeBlobUrlRef.current) {
+      URL.revokeObjectURL(boeBlobUrlRef.current)
+      boeBlobUrlRef.current = null
+    }
   }
 
   // ─── Step indicator ────────────────────────────────────────────────────────
@@ -1121,7 +1317,7 @@ export default function BOEValidationForm() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground mb-2">BOE Validation</h1>
@@ -1273,6 +1469,65 @@ export default function BOEValidationForm() {
       {/* ── Field Review ─────────────────────────────────────────────────────── */}
       {step === "field_review" && extractedBOE && (
         <div className="space-y-4">
+
+          {/* Tab bar */}
+          <div className="flex justify-center py-1">
+            <div className="flex items-center bg-muted/70 rounded-xl p-1 gap-0.5 border border-border/50 shadow-sm">
+              {[
+                { v: "fields" as const, label: "Review Fields", icon: ClipboardCheck },
+                { v: "document" as const, label: "View BOE Document", icon: Eye },
+              ].map(({ v, label, icon: Icon }) => (
+                <button
+                  key={v}
+                  onClick={() => setFieldReviewView(v)}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    fieldReviewView === v
+                      ? "bg-background text-foreground shadow-sm border border-border/60"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${fieldReviewView === v ? "text-primary" : ""}`} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Document viewer panel */}
+          {fieldReviewView === "document" && (() => {
+            const blobUrl = getBOEBlobUrl()
+            const isPdf = boeFile?.type === "application/pdf" || boeFile?.name?.toLowerCase().endsWith(".pdf")
+            return (
+              <div className="rounded-lg border border-border overflow-hidden bg-muted/20 h-[780px]">
+                {blobUrl && boeFile ? (
+                  isPdf ? (
+                    <iframe
+                      src={blobUrl}
+                      title={boeFile.name}
+                      className="w-full h-full border-0"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={blobUrl}
+                        alt={boeFile.name}
+                        className="max-w-full max-h-full object-contain rounded"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground">No BOE document available to preview.</p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Fields review panel */}
+          {fieldReviewView === "fields" && <>
+
           <Card className="p-5 border-l-4 border-primary bg-primary/5">
             <div className="flex items-start gap-3">
               <ClipboardCheck className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
@@ -1281,7 +1536,7 @@ export default function BOEValidationForm() {
                 <p className="text-sm text-muted-foreground mt-0.5">
                   Verify every extracted value before proceeding. Each field shows its AI
                   confidence score. Hover a row to edit — press Enter to confirm or Escape to
-                  cancel.
+                  cancel. Switch to <strong>View BOE Document</strong> to cross-reference the original.
                 </p>
               </div>
             </div>
@@ -1293,14 +1548,12 @@ export default function BOEValidationForm() {
             {[
               {
                 label: "90%+",
-                classes:
-                  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                classes: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
                 desc: "High",
               },
               {
                 label: "70–89%",
-                classes:
-                  "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                classes: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                 desc: "Medium",
               },
               {
@@ -1322,8 +1575,10 @@ export default function BOEValidationForm() {
             docMeta={extractedBOE}
             edits={fieldEdits}
             itemEdits={lineItemEdits}
+            blockEdits={blockEdits}
             onFieldChange={handleFieldChange}
             onItemChange={handleLineItemChange}
+            onBlockCellChange={handleBlockCellChange}
           />
 
           {saveError && (
@@ -1334,6 +1589,8 @@ export default function BOEValidationForm() {
               </div>
             </Card>
           )}
+
+          </>}
 
           <div className="flex justify-between items-center pt-2">
             <Button variant="outline" onClick={() => setStep("select")}>
@@ -1370,6 +1627,65 @@ export default function BOEValidationForm() {
       {/* ── Results ──────────────────────────────────────────────────────────── */}
       {step === "results" && (
         <div className="space-y-4">
+
+          {/* Tab bar */}
+          <div className="flex justify-center py-1">
+            <div className="flex items-center bg-muted/70 rounded-xl p-1 gap-0.5 border border-border/50 shadow-sm">
+              {[
+                { v: "results" as const, label: "Validation Results", icon: ShieldCheck },
+                { v: "document" as const, label: "View BOE Document", icon: Eye },
+              ].map(({ v, label, icon: Icon }) => (
+                <button
+                  key={v}
+                  onClick={() => setResultsView(v)}
+                  className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    resultsView === v
+                      ? "bg-background text-foreground shadow-sm border border-border/60"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${resultsView === v ? "text-primary" : ""}`} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Document viewer panel */}
+          {resultsView === "document" && (() => {
+            const blobUrl = getBOEBlobUrl()
+            const isPdf = boeFile?.type === "application/pdf" || boeFile?.name?.toLowerCase().endsWith(".pdf")
+            return (
+              <div className="rounded-lg border border-border overflow-hidden bg-muted/20 h-[780px]">
+                {blobUrl && boeFile ? (
+                  isPdf ? (
+                    <iframe
+                      src={blobUrl}
+                      title={boeFile.name}
+                      className="w-full h-full border-0"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={blobUrl}
+                        alt={boeFile.name}
+                        className="max-w-full max-h-full object-contain rounded"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground">No BOE document available to preview.</p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Validation results content */}
+          {resultsView === "results" && <>
+
           {/* Summary stats */}
           {summary && (
             <div className="grid grid-cols-4 gap-3">
@@ -1452,6 +1768,8 @@ export default function BOEValidationForm() {
           {validationResults.length > 0 && (
             <ValidationResultsPanel results={validationResults} />
           )}
+
+          </>}
 
           <div className="flex justify-between pt-2">
             <Button variant="outline" onClick={handleReset}>

@@ -1,12 +1,17 @@
 #!/bin/bash
 
 # Start Next.js Frontend
-# Usage: ./start_ui.sh
+# Usage:
+#   ./start_ui.sh            — development mode (default)
+#   ./start_ui.sh prod       — production mode (build + start)
 
 set -e
 
+MODE="${1:-dev}"
+
 echo "=========================================="
 echo "  Starting Nestle UI Frontend"
+echo "  Mode: $MODE"
 echo "=========================================="
 echo ""
 
@@ -19,9 +24,9 @@ cd "$PROJECT_ROOT"
 echo "Working directory: $PROJECT_ROOT"
 
 # Activate conda environment for Python dependencies (if any)
-echo "Activating conda environment: nestle..."
+echo "Activating conda environment: ocr..."
 eval "$(conda shell.bash hook)"
-conda activate ocr 2>/dev/null || echo "Warning: Could not activate conda environment 'nestle'"
+conda activate ocr 2>/dev/null || echo "Warning: Could not activate conda environment 'ocr'"
 
 # Navigate to UI directory
 cd src/ui
@@ -31,7 +36,6 @@ if [ ! -d "node_modules" ]; then
     echo "Node modules not found. Installing dependencies..."
     echo ""
 
-    # Check if pnpm is available
     if command -v pnpm &> /dev/null; then
         echo "Using pnpm..."
         pnpm install
@@ -49,13 +53,8 @@ if [ ! -f ".env.local" ]; then
     echo "Warning: .env.local not found"
     echo "Creating default .env.local file..."
 
-    # API_BACKEND_URL is server-side only — the Next.js proxy forwards
-    # browser requests to this URL. The browser never connects directly,
-    # so port 8000 does not need to be publicly accessible.
     BACKEND_URL=${API_BACKEND_URL:-"http://localhost:8000"}
 
-    # If running on EC2 and the backend is on the same host, localhost is correct.
-    # If the backend is on a different host, set API_BACKEND_URL before running this script.
     cat > .env.local << EOF
 # Server-side only: backend URL used by the Next.js proxy rewrite.
 # The browser never sees this value — it uses relative paths (/api/v1/...).
@@ -67,15 +66,42 @@ EOF
 fi
 
 echo ""
-echo "Starting Next.js development server..."
-echo "UI will be available at: http://54.236.135.105:3000"
-echo ""
-echo "Press Ctrl+C to stop the server"
-echo ""
 
-# Start Next.js dev server bound to all interfaces so it is reachable via EC2 IP
-if command -v pnpm &> /dev/null; then
-    pnpm dev --hostname 0.0.0.0
+HOSTNAME_FLAG="--hostname 0.0.0.0"
+PORT_FLAG="--port 3000"
+
+if [ "$MODE" = "prod" ]; then
+    echo "Building production bundle..."
+    echo ""
+
+    if command -v pnpm &> /dev/null; then
+        pnpm build
+    else
+        npm run build
+    fi
+
+    echo ""
+    echo "Starting Next.js production server..."
+    echo "UI will be available at: http://54.236.135.105:3000"
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo ""
+
+    if command -v pnpm &> /dev/null; then
+        pnpm start $HOSTNAME_FLAG $PORT_FLAG
+    else
+        npx next start $HOSTNAME_FLAG $PORT_FLAG
+    fi
 else
-    npm run dev -- --hostname 0.0.0.0
+    echo "Starting Next.js development server..."
+    echo "UI will be available at: http://54.236.135.105:3000"
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo ""
+
+    if command -v pnpm &> /dev/null; then
+        pnpm dev $HOSTNAME_FLAG
+    else
+        npm run dev -- $HOSTNAME_FLAG
+    fi
 fi

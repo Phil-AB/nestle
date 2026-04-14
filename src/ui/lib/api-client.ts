@@ -226,6 +226,26 @@ export interface PipelineStatsResponse {
   shipments: ShipmentTokenUsage[]
 }
 
+// Dashboard overview stats
+export interface DashboardStatsResponse {
+  total_shipments: number
+  shipments_by_status: Record<string, number>
+  total_documents: number
+  documents_by_type: Record<string, number>
+  documents_by_status: Record<string, number>
+  pipeline: {
+    step2_validated: number
+    step6_validated: number
+  }
+  recent_shipments: Array<{
+    id: string
+    shipment_number: string
+    status: string
+    supplier_name: string | null
+    created_at: string | null
+  }>
+}
+
 // ============================================================================
 // Generation Types (V2 API)
 // ============================================================================
@@ -494,6 +514,10 @@ export interface ExtractedDocumentMeta {
   fields: Record<string, ExtractedFieldMeta | any>
   items: any[]
   tables?: ExtractedTable[]
+  blocks?: Array<{
+    type: string
+    content: any
+  }>
 }
 
 export interface VendorValidationResponse {
@@ -1398,6 +1422,13 @@ class APIClient {
    */
   async getPipelineStats(): Promise<PipelineStatsResponse> {
     return this.request<PipelineStatsResponse>("/validation/pipeline/stats", {}, true)
+  }
+
+  /**
+   * Get dashboard overview stats (shipments, documents, pipeline)
+   */
+  async getDashboardStats(): Promise<DashboardStatsResponse> {
+    return this.request<DashboardStatsResponse>("/validation/dashboard/stats", {}, true)
   }
 
   // ========================================================================

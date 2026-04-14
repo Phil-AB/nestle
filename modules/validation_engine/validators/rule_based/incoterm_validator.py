@@ -119,6 +119,15 @@ class IncotermValidator(IValidator):
             # The extracted value may be "FCA ROTTERDAM PORT" — we only need "FCA".
             incoterm_upper = str(incoterm).upper().strip().split()[0] if incoterm else ""
 
+            # Determine if the source document is the BOE.  The BOE always
+            # includes freight/insurance for customs CIF valuation regardless
+            # of incoterm, so the "no freight on invoice" rule does not apply.
+            incoterm_doc = (incoterm_field or "").split(".")[0]
+            is_boe_source = any(
+                f and f.startswith("bill_of_entry.")
+                for f in [freight_field, insurance_field, fob_field]
+            )
+
             # Validate based on incoterm
             if incoterm_upper in self.FREIGHT_REQUIRED:
                 results.extend(self._validate_freight_required(
@@ -131,9 +140,13 @@ class IncotermValidator(IValidator):
                 ))
 
             if incoterm_upper in self.NO_FREIGHT:
-                results.extend(self._validate_no_freight(
-                    incoterm_upper, freight_value, insurance_value
-                ))
+                # Skip the "no freight/insurance" check when the source is the
+                # BOE — customs valuation always includes FOB + freight +
+                # insurance regardless of incoterm.
+                if not is_boe_source:
+                    results.extend(self._validate_no_freight(
+                        incoterm_upper, freight_value, insurance_value
+                    ))
 
             # CIF specific: validate CIF = FOB + Freight + Insurance
             if incoterm_upper == "CIF" and all([fob_value, freight_value, insurance_value, cif_value]):

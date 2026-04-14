@@ -91,11 +91,11 @@ export default function GroundTruthEntry() {
             </div>
 
             {/* Info Card */}
-            <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+            <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
                 <CardContent className="pt-6">
                     <div className="flex gap-3">
-                        <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <div className="text-sm text-blue-900 dark:text-blue-100">
+                        <AlertCircle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-950 dark:text-amber-200">
                             <p className="font-medium mb-1">What is Ground Truth?</p>
                             <p>
                                 Ground truth is the manually verified, correct data used to measure extraction accuracy.

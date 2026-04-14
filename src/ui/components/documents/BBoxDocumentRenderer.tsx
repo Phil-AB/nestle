@@ -614,7 +614,7 @@ export function BBoxDocumentRenderer({ rawData, className = "", documentId }: BB
                         }
                       }}
                       dangerouslySetInnerHTML={{ __html: markdownTableToHTML(currentContent) }}
-                      className="w-full outline-none focus:ring-2 focus:ring-blue-400 cursor-text table-container"
+                      className="w-full outline-none focus:ring-2 focus:ring-primary cursor-text table-container"
                     />
                   ) : block.type === 'Figure' ? (
                     block.image_url ? (
@@ -637,7 +637,7 @@ export function BBoxDocumentRenderer({ rawData, className = "", documentId }: BB
                           handleContentEdit(globalIndex, newContent)
                         }
                       }}
-                      className="outline-none focus:ring-2 focus:ring-blue-400 cursor-text"
+                      className="outline-none focus:ring-2 focus:ring-primary cursor-text"
                       style={{ whiteSpace: 'pre-wrap' }}
                     >
                       {currentContent}

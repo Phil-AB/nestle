@@ -85,7 +85,7 @@ function convertNamedColor(color: string): string {
     'gray': '#808080',
     'silver': '#c0c0c0',
     'red': '#ff0000',
-    'blue': '#0000ff',
+    'blue': '#63513D',
     'green': '#008000',
     'yellow': '#ffff00',
     'orange': '#ffa500',

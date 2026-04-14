@@ -147,6 +147,11 @@ class ShipperConsigneeValidator(IValidator):
 
                 value = self._get_field_from_documents(f"{doc_type}.{field_path}", context)
 
+                # Skip redacted values (e.g. BOL shipper physically redacted)
+                if isinstance(value, dict) and value.get("redacted") is True:
+                    logger.debug(f"{party_name} in {doc_type} is redacted — skipping")
+                    continue
+
                 if value:
                     normalized_value = self._normalize_name(str(value))
                     party_values[doc_type] = {

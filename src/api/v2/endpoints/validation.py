@@ -214,6 +214,112 @@ async def get_pipeline_stats():
     }
 
 
+# ---------------------------------------------------------------------------
+# Dashboard Overview Stats
+# ---------------------------------------------------------------------------
+
+@router.get("/dashboard/stats", tags=["dashboard"])
+async def get_dashboard_stats():
+    """
+    Return aggregate statistics for the main dashboard overview.
+
+    Draws from shipments, api_documents, validation_results and
+    shipment_token_usage tables to provide a high-level processing summary.
+    """
+    from src.database.connection import get_session as get_db_session
+    from src.database.schema import (
+        Shipment as ShipmentModel,
+        ShipmentTokenUsage as ShipmentTokenUsageModel,
+    )
+    from src.database.models.api_document import APIDocument as APIDocumentModel
+    from sqlalchemy import select as sa_select, func as sa_func, distinct, desc
+
+    async with get_db_session() as db:
+        # --- Shipment counts -----------------------------------------------
+        ship_total_q = await db.execute(
+            sa_select(sa_func.count(ShipmentModel.id))
+        )
+        total_shipments = ship_total_q.scalar() or 0
+
+        ship_by_status_q = await db.execute(
+            sa_select(ShipmentModel.status, sa_func.count(ShipmentModel.id))
+            .group_by(ShipmentModel.status)
+        )
+        shipments_by_status = {row[0]: row[1] for row in ship_by_status_q}
+
+        # --- Document counts -----------------------------------------------
+        doc_total_q = await db.execute(
+            sa_select(sa_func.count(APIDocumentModel.document_id))
+        )
+        total_documents = doc_total_q.scalar() or 0
+
+        doc_by_type_q = await db.execute(
+            sa_select(
+                APIDocumentModel.document_type,
+                sa_func.count(APIDocumentModel.document_id),
+            ).group_by(APIDocumentModel.document_type)
+        )
+        documents_by_type = {}
+        for row in doc_by_type_q:
+            key = row[0] or "unknown"
+            documents_by_type[key] = (documents_by_type.get(key, 0) + row[1])
+
+        doc_by_status_q = await db.execute(
+            sa_select(
+                APIDocumentModel.extraction_status,
+                sa_func.count(APIDocumentModel.document_id),
+            ).group_by(APIDocumentModel.extraction_status)
+        )
+        documents_by_status = {}
+        for row in doc_by_status_q:
+            key = row[0] or "unknown"
+            documents_by_status[key] = (documents_by_status.get(key, 0) + row[1])
+
+        # --- Validation pipeline (token usage) -----------------------------
+        step2_q = await db.execute(
+            sa_select(sa_func.count(distinct(ShipmentTokenUsageModel.shipment_id))).where(
+                ShipmentTokenUsageModel.validation_type == "vendor_validation",
+                ShipmentTokenUsageModel.shipment_id.isnot(None),
+            )
+        )
+        step2_count = step2_q.scalar() or 0
+
+        step6_q = await db.execute(
+            sa_select(sa_func.count(distinct(ShipmentTokenUsageModel.shipment_id))).where(
+                ShipmentTokenUsageModel.validation_type == "boe_validation",
+                ShipmentTokenUsageModel.shipment_id.isnot(None),
+            )
+        )
+        step6_count = step6_q.scalar() or 0
+
+        # --- Recent shipments -----------------------------------------------
+        recent_q = await db.execute(
+            sa_select(ShipmentModel).order_by(desc(ShipmentModel.created_at)).limit(10)
+        )
+        recent_shipments = []
+        for s in recent_q.scalars().all():
+            recent_shipments.append({
+                "id": str(s.id),
+                "shipment_number": s.shipment_number,
+                "status": s.status,
+                "supplier_name": s.supplier_name,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            })
+
+    return {
+        "total_shipments": total_shipments,
+        "shipments_by_status": shipments_by_status,
+        "total_documents": total_documents,
+        "documents_by_type": documents_by_type,
+        "documents_by_status": documents_by_status,
+        "pipeline": {
+            "step2_validated": step2_count,
+            "step6_validated": step6_count,
+        },
+        "recent_shipments": recent_shipments,
+    }
+
+
 @router.post("/sessions", response_model=CreateValidationSessionResponse)
 async def create_validation_session(request: CreateValidationSessionRequest):
     """
@@ -1733,7 +1839,7 @@ async def validate_boe(
         # --- Retrieve stored vendor documents for this shipment -----------
         async with get_db_session() as db:
             repo = APIDocumentRepository(db)
-            vendor_doc_types = ("invoice", "packing_list", "freight_manifest", "certificate_of_origin")
+            vendor_doc_types = ("invoice", "packing_list", "bill_of_lading", "freight_manifest", "certificate_of_origin")
             vendor_docs_raw, _ = await repo.list_documents(
                 shipment_id=shipment_id,
                 extraction_status="complete",
@@ -1915,6 +2021,7 @@ async def validate_boe(
             "document_id": boe_result.get("document_id", ""),
             "fields": boe_result.get("fields", {}),
             "items": boe_result.get("items", []),
+            "blocks": boe_result.get("blocks", []),
         }
 
         if needs_review and (critical or discrepancies):

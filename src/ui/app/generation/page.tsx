@@ -186,7 +186,7 @@ export default function GenerationPage() {
             >
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-lg bg-blue-100 text-blue-600">
+                  <div className="p-3 rounded-lg bg-amber-100 text-amber-700">
                     <FileText className="w-8 h-8" />
                   </div>
                   <div>

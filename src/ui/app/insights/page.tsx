@@ -398,7 +398,7 @@ export default function DocumentInsightsPage() {
                     <h3 className="font-semibold text-lg">Recommendations</h3>
                     <div className="space-y-2">
                       {insights.recommendations.account_upgrades.map((rec, i) => (
-                        <div key={i} className="text-sm p-3 bg-blue-50 rounded border-l-4 border-blue-500">
+                        <div key={i} className="text-sm p-3 bg-amber-50 rounded border-l-4 border-amber-500">
                           <div className="font-medium">{rec.title}</div>
                           <div className="text-xs text-muted-foreground mt-1">{rec.description}</div>
                           {rec.priority && (

@@ -67,7 +67,7 @@ export default function DocumentRenderer({ document, onClose }: DocumentRenderer
   const getTypeColor = (type: string) => {
     switch (type) {
       case "invoice":
-        return "bg-blue-100 text-blue-700"
+        return "bg-amber-100 text-amber-800"
       case "po":
         return "bg-purple-100 text-purple-700"
       case "manifest":

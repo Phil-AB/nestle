@@ -178,9 +178,9 @@ class RequiredFieldsValidator(IValidator):
         """
         Get field value, supporting nested dot-path traversal.
 
-        Field name synonyms are resolved upstream by the normalize_node,
-        which adds canonical field names to the normalized documents.
-        This method just does a direct lookup.
+        Also unwraps ``{"value": X, "confidence": Y}`` dicts that may
+        survive normalization when a field is only added by the use-case
+        synonym pass (which runs *after* value normalization).
 
         Args:
             data: Dictionary to search
@@ -192,6 +192,11 @@ class RequiredFieldsValidator(IValidator):
         # 1. Exact match
         value = data.get(field_name)
         if value is not None:
+            # Unwrap {"value": ..., "confidence": ...} envelope
+            if isinstance(value, dict) and "value" in value:
+                if value.get("redacted") is True:
+                    return value  # preserve redacted marker
+                return value["value"] if value["value"] is not None else value
             return value
 
         # 2. Nested dot-path
@@ -205,6 +210,9 @@ class RequiredFieldsValidator(IValidator):
                         return None
                 else:
                     return None
+            # Unwrap at the leaf level too
+            if isinstance(value, dict) and "value" in value and value.get("redacted") is not True:
+                return value["value"] if value["value"] is not None else value
             return value
 
         return None

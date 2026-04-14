@@ -577,6 +577,7 @@ class DocumentProcessingService:
                     flat_fields = boe_extractor.extract_flat_fields(
                         result.get("fields", {}),
                         items=result.get("items", []),
+                        blocks=result.get("blocks", []),
                     )
                     boe_data = boe_extractor.extract_sections(result.get("fields", {}))
 
@@ -588,6 +589,17 @@ class DocumentProcessingService:
                     for field, value in flat_fields.items():
                         if value is not None:
                             result["fields"][field] = value
+
+                    # Remove noise/garbage fields that the extractor flagged for removal
+                    # (stray single letters, page numbers, etc.)
+                    for noise_key in ("f", "page_no", "items_count"):
+                        result["fields"].pop(noise_key, None)
+
+                    # Filter items: remove attached-document reference rows and tax
+                    # rows that Claude sometimes dumps into the items array.
+                    result["items"] = boe_extractor.filter_goods_items(
+                        result.get("items", [])
+                    )
 
                     # Structured section data fills fields not covered by flat_fields.
                     # Only fill gaps here (don't overwrite known-good extractor values).

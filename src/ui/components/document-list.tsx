@@ -82,7 +82,7 @@ export default function DocumentList({ onViewDocument }: DocumentListProps) {
       complete: { color: "bg-green-100 text-green-800", icon: CheckCircle },
       incomplete: { color: "bg-yellow-100 text-yellow-800", icon: AlertCircle },
       failed: { color: "bg-red-100 text-red-800", icon: AlertCircle },
-      processing: { color: "bg-blue-100 text-blue-800", icon: Clock },
+      processing: { color: "bg-amber-100 text-amber-900", icon: Clock },
     }
 
     const { color, icon: Icon } = variants[status]

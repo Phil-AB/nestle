@@ -33,7 +33,7 @@ export default function DocumentCard({ document, onSelect, selected = false, com
         return {
           icon: Clock,
           variant: "secondary" as const,
-          className: "bg-blue-100 text-blue-800 border-blue-300",
+          className: "bg-amber-100 text-amber-900 border-amber-300",
         }
       case "incomplete":
         return {

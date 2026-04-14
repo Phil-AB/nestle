@@ -55,12 +55,16 @@ normalization:
         - "Net Wt"
         - "net_weight"
         - "net_wt"
+        - "total_net_weight"    # SAP-style invoice header total
+        - "Total Net Weight"
 
       gross_weight:
         - "Gross Weight"
         - "Gross Wt"
         - "gross_weight"
         - "gross_wt"
+        - "total_gross_weight"  # SAP-style invoice header total
+        - "Total Gross Weight"
 
       tare_weight:
         - "Tare Weight"
@@ -72,6 +76,10 @@ normalization:
         - "Quantity"
         - "Qty"
         - "quantity"
+        - "total_units"     # SAP-style invoice header (total number of units)
+        - "Total Units"
+        - "Total Qty"
+        - "total_qty"
 
       unit_price:
         - "Unit Price"
@@ -193,6 +201,15 @@ normalization:
       shipper_name:
         - "shipper_name"
         - "Shipper"
+        - "Seller"
+        - "seller"
+        - "seller_name"
+        - "Exporter"
+        - "exporter"
+        - "exporter_name"
+        - "Supplier"
+        - "supplier"
+        - "supplier_name"
 
       shipper_address:
         - "shipper_address"

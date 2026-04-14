@@ -45,7 +45,7 @@ function SortableFileItem({ file, onRemove }: { file: FileWithPreview; onRemove:
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
         <GripVertical className="w-5 h-5 text-muted-foreground" />
       </div>
-      <FileText className="w-6 h-6 text-blue-500 flex-shrink-0" />
+      <FileText className="w-6 h-6 text-amber-600 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{file.name}</p>
         <p className="text-xs text-muted-foreground">

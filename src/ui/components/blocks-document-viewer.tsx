@@ -576,7 +576,7 @@ function BlockRenderer({
             return (
                 <div className="py-4">
                     <div className="flex items-center gap-2 mb-3">
-                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
                             {isComplex ? "Complex Table" : "Table"}
                         </Badge>
                         {hasHtmlTableTags && (
@@ -722,7 +722,7 @@ function KeyValueBlock({
             {/* Confidence Badge */}
             {confidenceBadge && (
                 <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
                         Key Value Block
                     </Badge>
                     {confidenceBadge}

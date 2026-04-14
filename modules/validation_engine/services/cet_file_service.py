@@ -291,7 +291,13 @@ class CETFileService:
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
-        Calculate text similarity using simple word overlap
+        Calculate text similarity using enhanced word overlap with
+        abbreviation expansion and keyword weighting.
+
+        Handles cases like:
+        - "FFP 28%" matching "Fat Filled Powder" (abbreviation expansion)
+        - "MQAV004F-1 25KG BAG" partially matching "food preparations"
+          (product terms are weighted)
 
         Args:
             text1: First text
@@ -310,18 +316,63 @@ class CETFileService:
         if text1 == text2:
             return 1.0
 
-        # Word-based similarity
-        words1 = set(text1.split())
-        words2 = set(text2.split())
+        # Expand common trade abbreviations so that "FFP" matches
+        # "fat filled powder", "BG"/"BAG" match, etc.
+        _EXPANSIONS = {
+            "ffp": {"fat filled powder"},
+            "wmp": {"whole milk powder"},
+            "smp": {"skimmed milk powder"},
+            "fcmp": {"full cream milk powder"},
+            "veg": {"vegetable"},
+            "min": {"mineral", "minerals"},
+            "vit": {"vitamin", "vitamins"},
+            "enr": {"enriched"},
+            "kg": set(),   # unit — skip
+            "bg": {"bag", "bags"},
+            "bag": {"bag", "bags"},
+            "mt": {"metric ton"},
+        }
 
-        if not words1 or not words2:
+        def _expand_word(w: str) -> set:
+            """Return the word itself plus any expansion terms."""
+            expansions = _EXPANSIONS.get(w, set())
+            return {w} | expansions
+
+        # Tokenize and expand
+        import re
+        words1_raw = set(re.findall(r'[a-z]+', text1))
+        words2_raw = set(re.findall(r'[a-z]+ text2'))
+
+        words1 = set()
+        words2 = set()
+        for w in words1_raw:
+            words1 |= _expand_word(w)
+        for w in words2_raw:
+            words2 |= _expand_word(w)
+
+        # Also add numeric tokens (e.g. "28" for 28% fat content)
+        nums1 = set(re.findall(r'\d+', text1))
+        nums2 = set(re.findall(r'\d+', text2))
+
+        all1 = words1 | nums1
+        all2 = words2 | nums2
+
+        if not all1 or not all2:
             return 0.0
 
-        # Jaccard similarity
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
+        # Weighted Jaccard: shared meaningful words count more
+        intersection = all1.intersection(all2)
+        union = all1.union(all2)
 
-        return len(intersection) / len(union) if union else 0.0
+        # Boost: if key product descriptors overlap, boost the score
+        _KEY_TERMS = {"fat", "filled", "powder", "milk", "dairy", "food",
+                      "preparation", "vegetable", "enriched", "whey",
+                      "cream", "skimmed", "whole", "concentrate"}
+        key_overlap = intersection.intersection(_KEY_TERMS)
+        key_bonus = len(key_overlap) * 0.1  # each key term match adds 10%
+
+        base_similarity = len(intersection) / len(union) if union else 0.0
+        return min(base_similarity + key_bonus, 1.0)
 
     def search_by_description(
         self,

@@ -2,7 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Upload, Settings, LogOut, FileOutput, ShieldCheck, FileSearch, LayoutDashboard } from "lucide-react"
+import { Settings, LogOut, ShieldCheck, FileSearch, LayoutDashboard } from "lucide-react"
+
+// Nestle brand brown (#63513D) and derivatives
+const BRAND = "#63513D"
+const BRAND_DARK = "#4A3B2E"
+const BRAND_LIGHT = "#8B7355"
+const BRAND_CREAM = "#F5F0EB"
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -17,16 +23,22 @@ export default function Sidebar() {
     href === "/" ? pathname === "/" : pathname.startsWith(href)
 
   return (
-    <aside className="w-64 bg-card border-r border-border flex flex-col">
+    <aside
+      className="w-64 flex flex-col border-r"
+      style={{
+        background: `linear-gradient(180deg, ${BRAND_DARK} 0%, ${BRAND} 100%)`,
+        borderColor: BRAND_DARK,
+      }}
+    >
       {/* Header */}
-      <div className="p-6 border-b border-border">
+      <div className="p-5 border-b" style={{ borderColor: BRAND_LIGHT + "40" }}>
         <div className="flex items-center">
-          <img src="/nestle.png" alt="Nestle" className="w-full h-auto" />
+          <img src="/nestle.svg" alt="Nestle" className="w-full h-auto brightness-0 invert opacity-90" />
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
@@ -34,25 +46,63 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"
-                }`}
+              className="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-150"
+              style={{
+                background: active ? BRAND_CREAM : "transparent",
+                color: active ? BRAND_DARK : BRAND_CREAM + "CC",
+                fontWeight: active ? 600 : 400,
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = BRAND_LIGHT + "30"
+                  e.currentTarget.style.color = BRAND_CREAM
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = "transparent"
+                  e.currentTarget.style.color = BRAND_CREAM + "CC"
+                }
+              }}
             >
               <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
+              <span className="text-sm">{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border space-y-2">
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-foreground hover:bg-muted transition-colors">
+      <div className="p-4 space-y-1" style={{ borderTop: `1px solid ${BRAND_LIGHT}40` }}>
+        <button
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-150"
+          style={{ color: BRAND_CREAM + "CC" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = BRAND_LIGHT + "30"
+            e.currentTarget.style.color = BRAND_CREAM
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent"
+            e.currentTarget.style.color = BRAND_CREAM + "CC"
+          }}
+        >
           <Settings className="w-5 h-5" />
-          <span className="font-medium">Settings</span>
+          <span className="text-sm">Settings</span>
         </button>
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-foreground hover:bg-muted transition-colors">
+        <button
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-150"
+          style={{ color: BRAND_CREAM + "CC" }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = BRAND_LIGHT + "30"
+            e.currentTarget.style.color = BRAND_CREAM
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent"
+            e.currentTarget.style.color = BRAND_CREAM + "CC"
+          }}
+        >
           <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout</span>
+          <span className="text-sm">Logout</span>
         </button>
       </div>
     </aside>

@@ -417,7 +417,7 @@ export function UniversalHtmlTableRenderer({ content, onEdit, edits }: {
           key={cellKey}
           colSpan={style.colspan}
           rowSpan={style.rowspan}
-          className={`${style.className} cursor-text bg-blue-50 hover:bg-blue-100`}
+          className={`${style.className} cursor-text bg-amber-50 hover:bg-amber-100`}
           style={{
             wordBreak: 'break-word',
             backgroundColor: style.backgroundColor ?
@@ -488,7 +488,7 @@ export function UniversalHtmlTableRenderer({ content, onEdit, edits }: {
       'gray': '#808080',
       'silver': '#c0c0c0',
       'red': '#ff0000',
-      'blue': '#0000ff',
+      'blue': '#63513D',
       'green': '#008000',
       'yellow': '#ffff00',
       'orange': '#ffa500',

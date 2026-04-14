@@ -147,6 +147,11 @@ function deriveConfidence(v: any): number {
   return 0.85
 }
 
+/** Normalise a header or key string for fuzzy matching (snake_case, lowercase). */
+function normKey(s: string): string {
+  return String(s).toLowerCase().replace(/[\s\-/\\]+/g, "_").replace(/[^\w]/g, "").replace(/_+/g, "_")
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100)
   const color =
@@ -348,7 +353,7 @@ function ExtractedTablesSection({
       </p>
       {tables.map((tbl, tblIdx) => {
         // Normalise: support {headers, rows} and {columns, data} shapes
-        const headers: string[] = tbl.headers ?? tbl.columns ?? []
+        const headers: string[] = (tbl.headers ?? tbl.columns ?? []).map((h: any) => unwrap(h))
         const rows: any[][] = tbl.rows ?? tbl.data ?? []
         const title = tbl.title ?? tbl.name ?? `Table ${tblIdx + 1}`
 
@@ -373,7 +378,7 @@ function ExtractedTablesSection({
                           key={hi}
                           className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border whitespace-nowrap"
                         >
-                          {String(h).replace(/_/g, " ")}
+                          {h.replace(/_/g, " ")}
                         </th>
                       ))}
                     </tr>
@@ -381,23 +386,38 @@ function ExtractedTablesSection({
                 )}
                 <tbody>
                   {rows.map((row, ri) => {
-                    const cells: any[] = Array.isArray(row)
-                      ? row
-                      : headers.map((h) => (row as any)[h])
+                    // Normalise row to cell array — rows may be arrays or objects keyed by column name.
+                    let cells: any[]
+                    if (Array.isArray(row)) {
+                      cells = row
+                    } else if (typeof row === "object" && row !== null) {
+                      const rowObj = row as Record<string, any>
+                      const rowKeys = Object.keys(rowObj)
+                      cells = headers.length > 0
+                        ? headers.map((h) => {
+                            if (h in rowObj) return rowObj[h]
+                            const nh = normKey(h)
+                            const match = rowKeys.find(k => normKey(k) === nh)
+                            return match ? rowObj[match] : null
+                          })
+                        : rowKeys.map(k => rowObj[k])
+                    } else {
+                      cells = [row]
+                    }
                     return (
                       <tr key={ri} className="border-b border-border last:border-b-0 hover:bg-muted/20">
                         {cells.map((cell, ci) => {
                           if (editable) {
                             const editedVal = tableEdits?.[tblIdx]?.[ri]?.[ci]
-                            const rawStr = cell === null || cell === undefined ? "" : String(cell)
+                            const rawStr = unwrap(cell)
                             const isEdited = editedVal !== undefined && editedVal !== rawStr
                             return (
                               <EditableItemCell
                                 key={ci}
-                                raw={rawStr}
+                                raw={cell}
                                 edited={editedVal}
                                 isEdited={isEdited}
-                                confidence={1}
+                                confidence={deriveConfidence(cell)}
                                 readOnly={false}
                                 onChange={onCellChange ? (v) => onCellChange(tblIdx, ri, ci, v) : undefined}
                               />
@@ -408,7 +428,7 @@ function ExtractedTablesSection({
                               {cell === null || cell === undefined ? (
                                 <span className="text-muted-foreground italic">—</span>
                               ) : (
-                                String(cell)
+                                unwrap(cell)
                               )}
                             </td>
                           )
@@ -2339,7 +2359,7 @@ export default function VendorValidationForm() {
                                   key={docKey}
                                   className={`rounded-lg border-2 overflow-hidden ${
                                     role === "source"
-                                      ? "border-blue-400 dark:border-blue-600"
+                                      ? "border-amber-400 dark:border-amber-700"
                                       : role === "target"
                                       ? "border-amber-400 dark:border-amber-600"
                                       : "border-border"
@@ -2349,7 +2369,7 @@ export default function VendorValidationForm() {
                                   <div
                                     className={`px-4 py-2.5 border-b flex items-center justify-between gap-3 ${
                                       role === "source"
-                                        ? "bg-blue-50 dark:bg-blue-900/25 border-blue-200 dark:border-blue-700"
+                                        ? "bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-700"
                                         : role === "target"
                                         ? "bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-700"
                                         : "bg-muted/40 border-border"
@@ -2359,7 +2379,7 @@ export default function VendorValidationForm() {
                                       <FileText
                                         className={`w-3.5 h-3.5 flex-shrink-0 ${
                                           role === "source"
-                                            ? "text-blue-500 dark:text-blue-400"
+                                            ? "text-amber-600 dark:text-amber-500"
                                             : role === "target"
                                             ? "text-amber-500 dark:text-amber-400"
                                             : "text-muted-foreground"
@@ -2368,7 +2388,7 @@ export default function VendorValidationForm() {
                                       <p
                                         className={`text-[12px] font-bold truncate ${
                                           role === "source"
-                                            ? "text-blue-800 dark:text-blue-300"
+                                            ? "text-amber-900 dark:text-amber-300"
                                             : role === "target"
                                             ? "text-amber-800 dark:text-amber-300"
                                             : "text-foreground"
@@ -2381,7 +2401,7 @@ export default function VendorValidationForm() {
                                       <span
                                         className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0 ${
                                           role === "source"
-                                            ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                                            ? "bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300"
                                             : "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300"
                                         }`}
                                       >

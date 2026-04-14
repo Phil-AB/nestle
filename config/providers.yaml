@@ -33,8 +33,8 @@ providers:
     api_key_env: ANTHROPIC_API_KEY
 
     # Model to use for extraction
-    model: "claude-opus-4-5"
-    max_tokens: 8192
+    model: "claude-sonnet-4-6"
+    max_tokens: 32768
     timeout: 300
 
     # AWS Bedrock (alternative to direct API)
