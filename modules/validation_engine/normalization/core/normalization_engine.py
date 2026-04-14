@@ -176,7 +176,12 @@ class NormalizationEngine:
         # Unwrap Reducto field-data dicts: {"value": "...", "original_label": ..., "bbox": ...}
         # The parser returns KV-extracted fields as dicts with a "value" key carrying the
         # actual content. Unwrap here so all downstream normalisers see plain scalars.
+        # Exception: redacted markers {"value": null, "redacted": true} must be preserved
+        # so that downstream validators can distinguish "field is absent" from "field is
+        # present but physically redacted on the document".
         if isinstance(value, dict) and "value" in value:
+            if value.get("redacted") is True:
+                return value  # preserve redacted marker intact
             value = value["value"]
             if value is None:
                 return None

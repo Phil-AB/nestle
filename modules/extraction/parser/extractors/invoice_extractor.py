@@ -73,17 +73,6 @@ class InvoiceExtractor(BaseDocumentExtractor):
                 all_fields_text=all_fields_text,
             )
 
-            # Temporary diagnostic — remove after debugging
-            import pathlib, json as _json
-            _dbg = pathlib.Path(__file__).parent / "invoice_debug.json"
-            _dbg.write_text(_json.dumps({
-                "fields": {k: str(v)[:200] for k, v in fields.items()},
-                "blocks": [
-                    {"type": b.get("type","?") if isinstance(b,dict) else "?",
-                     "text": str(b.get("content") or b.get("text") or b.get("value","") if isinstance(b,dict) else b)[:400]}
-                    for b in blocks
-                ]
-            }, indent=2, ensure_ascii=False))
             result = await self.llm_extraction.ainvoke(prompt)
             extracted = {k: v for k, v in result.model_dump().items() if v is not None}
 

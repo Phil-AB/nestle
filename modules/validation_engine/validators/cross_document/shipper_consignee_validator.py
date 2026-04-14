@@ -307,6 +307,7 @@ class ShipperConsigneeValidator(IValidator):
                     f"Mismatches: {mismatch_str}"
                 ),
                 severity=Severity.CRITICAL if len(mismatches) > 1 else Severity.MAJOR,
+                source_document=ref_doc,
                 source_value=party_values[ref_doc]["original"],
                 target_value={m["document"]: m["value"] for m in mismatches},
                 confidence=min_similarity,
@@ -486,6 +487,7 @@ class ShipperConsigneeValidator(IValidator):
                     f"Mismatches: {mismatch_str}"
                 ),
                 severity=Severity.MINOR,  # Address differences are often legitimate
+                source_document=ref_doc,
                 source_value=address_values[ref_doc]["original"],
                 target_value={m["document"]: m["value"] for m in mismatches},
                 confidence=min_similarity,
@@ -578,13 +580,15 @@ class ShipperConsigneeValidator(IValidator):
         source_value: Any,
         target_value: Any,
         confidence: float = 1.0,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        source_document: Optional[str] = None,
     ) -> ValidationResult:
         """Create a validation result"""
         return ValidationResult(
             validator_name=self.validator_name,
             validator_type=self.validator_type,
             field_name=field_name,
+            source_document=source_document,
             source_value=source_value,
             target_value=target_value,
             passed=passed,

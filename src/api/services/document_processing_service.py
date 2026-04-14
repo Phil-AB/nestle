@@ -117,11 +117,23 @@ class DocumentProcessingService:
         """
         Deterministic post-processing for bill_of_lading fields.
 
-        Fills gaps that AI enhancement may miss due to LLM variability:
-        - bl_number: fall back to booking_number, or scan all content for BL labels
-        - container_numbers: scan all content for 4-letter+7-digit container ID pattern
+        - bl_number / booking_number: validate against BL ref pattern; fall back
+          to bl_no / booking_no when the extracted value is a stamp phrase like
+          "N-NEGOTIABLE" rather than a real reference number.
+        - container_numbers: scan all content for 4-letter+7-digit container IDs.
+        - page-split containers: merge items where container_no ends with
+          "(continued)" back into their base container row.
         """
         import re
+
+        # Valid BL / booking reference: alphanumeric, no spaces, 4-20 chars
+        _bl_ref_re = re.compile(r'^[A-Z0-9][A-Z0-9\-/]{3,19}$', re.IGNORECASE)
+
+        def _is_valid_bl_ref(v) -> bool:
+            if not v:
+                return False
+            s = str(v).strip()
+            return bool(_bl_ref_re.match(s)) and ' ' not in s
 
         def _val(v):
             """Unwrap Reducto dict-wrapped values."""
@@ -149,7 +161,20 @@ class DocumentProcessingService:
         logger.debug(f"BOL post-process: fields={len(fields)}, blocks={len(blocks)}, total_content={len(all_content)}, items={len(items) if items else 0}")
 
         # ── bl_number fallback ────────────────────────────────────────────────
-        if not _val(fields.get("bl_number")):
+        # Also accept bl_no / booking_no as authoritative sources so we can
+        # overwrite an invalid value (e.g. "N-NEGOTIABLE" from a stamp).
+        for src_key in ("bl_no", "booking_no"):
+            src_val = _val(fields.get(src_key))
+            if _is_valid_bl_ref(src_val):
+                if not _is_valid_bl_ref(_val(fields.get("bl_number"))):
+                    fields["bl_number"] = src_val
+                    logger.info(f"BOL post-process: bl_number ← {src_key} ({src_val})")
+                if not _is_valid_bl_ref(_val(fields.get("booking_number"))):
+                    fields["booking_number"] = src_val
+                    logger.info(f"BOL post-process: booking_number ← {src_key} ({src_val})")
+                break
+
+        if not _is_valid_bl_ref(_val(fields.get("bl_number"))):
             # 1) Fall back to booking_number if present in fields
             booking = _val(fields.get("booking_number"))
             if booking:
@@ -230,6 +255,38 @@ class DocumentProcessingService:
                                     break
                             break
 
+        # ── merge page-split container items ─────────────────────────────────
+        # When a container spans two pages, Claude produces two items: the base
+        # row (missing seal/tare/net) and a "(continued)" row (missing gross/qty).
+        # Merge the continuation into its base row and remove it.
+        if items:
+            i = 0
+            while i < len(items):
+                item = items[i]
+                raw_cno = str(item.get("container_no") or "")
+                if "(continued)" in raw_cno.lower():
+                    base_no = raw_cno.lower().replace("(continued)", "").strip()
+                    merged = False
+                    for j in range(i - 1, -1, -1):
+                        prev_cno = str(items[j].get("container_no") or "").strip()
+                        if prev_cno.lower() == base_no:
+                            for field, value in item.items():
+                                if field == "container_no":
+                                    continue
+                                if items[j].get(field) is None and value is not None:
+                                    items[j][field] = value
+                            items.pop(i)
+                            merged = True
+                            logger.info(
+                                f"BOL post-process: merged page-split container "
+                                f"{prev_cno} (continued) into base row"
+                            )
+                            break
+                    if not merged:
+                        i += 1
+                else:
+                    i += 1
+
         # ── container_numbers fallback ────────────────────────────────────────
         if not _val(fields.get("container_numbers")):
             container_pattern = re.compile(r'\b[A-Z]{4}\d{7}\b')
@@ -258,14 +315,38 @@ class DocumentProcessingService:
                     fields["container_count"] = len(found)
                 logger.info(f"BOL post-process: container_numbers ← {fields['container_numbers']}")
 
+    def _post_process_packing_list(self, fields: dict) -> None:
+        """
+        Deterministic post-processing for packing_list fields.
+
+        On a packing list the top-left address block is the BILL-TO (consignee),
+        not the shipper. Claude labels it shipper_* in OPEN mode because it sits
+        in the top-left position. Rename those keys to bill_to_* to reflect the
+        correct role. The actual shipper/exporter is the issuing party (often
+        redacted or in the document header, not the buyer address block).
+        """
+        renames = {
+            "shipper_name":         "bill_to_name",
+            "shipper_address":      "bill_to_address",
+            "shipper_address_line1":"bill_to_address_line1",
+            "shipper_address_line2":"bill_to_address_line2",
+            "shipper_city":         "bill_to_city",
+            "shipper_country":      "bill_to_country",
+        }
+        for old_key, new_key in renames.items():
+            if old_key in fields:
+                fields[new_key] = fields.pop(old_key)
+                logger.info(f"PL post-process: {old_key} → {new_key}")
+
     def _derive_party_names(self, fields: dict) -> None:
         """
-        Deterministic fallback: derive shipper_name / consignee_name from their
-        address fields when the name field is absent.
+        Deterministic fallback: derive party names from address fields when
+        the name field is absent.
 
-        Even with structured outputs, the LLM may return null for shipper_name
-        on documents where the shipper block is redacted (XXXXXXXXXX) or missing.
-        When that happens, the first line of shipper_address is the company name.
+        Looks for whatever field names Claude actually extracted — does not
+        assume canonical names like ``shipper_name`` or ``consignee_name``.
+        For each party role, checks all known field-name variants and
+        extracts the first line of the address block as the company name.
         """
         def _val(v):
             return v.get("value") if isinstance(v, dict) and "value" in v else v
@@ -274,19 +355,53 @@ class DocumentProcessingService:
             raw = _val(v)
             return raw is None or str(raw).strip() in ("", "<empty>", "-", "—")
 
-        for name_field, addr_field in (
-            ("shipper_name", "shipper_address"),
-            ("consignee_name", "consignee_address"),
-        ):
-            if _is_empty(fields.get(name_field)) and not _is_empty(fields.get(addr_field)):
-                raw_addr = str(_val(fields[addr_field])).strip()
-                first_line = raw_addr.split("\n")[0].strip()
-                if first_line:
-                    fields[name_field] = first_line
-                    logger.info(
-                        f"Party name fallback: {name_field} ← first line of "
-                        f"{addr_field} ({first_line!r})"
-                    )
+        # Map: name variants → address variants.
+        # The first non-empty name variant found is treated as the canonical
+        # name field; the first non-empty address variant as the address source.
+        party_roles = {
+            "shipper": {
+                "name_keys": ["shipper_name", "shipper", "exporter_name", "exporter", "seller_name", "seller"],
+                "addr_keys": ["shipper_address", "shipper_block", "exporter_address", "seller_address"],
+            },
+            "consignee": {
+                "name_keys": ["consignee_name", "consignee", "buyer_name", "buyer"],
+                "addr_keys": ["consignee_address", "consignee_block", "buyer_address", "bill_to_address", "ship_to_address", "delivery_address"],
+            },
+        }
+
+        for role, keys in party_roles.items():
+            # Find the existing name field (if any)
+            name_key = None
+            for nk in keys["name_keys"]:
+                if not _is_empty(fields.get(nk)):
+                    name_key = nk
+                    break
+
+            # If name is already present, nothing to do
+            if name_key and not _is_empty(fields.get(name_key)):
+                continue
+
+            # Find the address field to derive from
+            addr_key = None
+            for ak in keys["addr_keys"]:
+                if not _is_empty(fields.get(ak)):
+                    addr_key = ak
+                    break
+
+            if not addr_key:
+                continue
+
+            raw_addr = str(_val(fields[addr_key])).strip()
+            first_line = raw_addr.split("\n")[0].strip()
+            if first_line:
+                # Write back to the SAME key Claude used for the name, or
+                # fall back to the first name variant if no name key exists.
+                target = name_key or keys["name_keys"][0]
+                fields[target] = first_line
+                logger.info(
+                    f"Party name fallback: {target} ← first line of "
+                    f"{addr_key} ({first_line!r})"
+                )
 
     async def process_document(
         self,
@@ -382,8 +497,17 @@ class DocumentProcessingService:
             # Result is already in universal format from parser
             logger.info(f"Extraction complete. Fields: {len(result.get('fields', {}))}, Items: {len(result.get('items', []))}")
 
-            # AI Semantic Enhancement (if enabled)
-            if self.use_ai_enhancement:
+            # AI Semantic Enhancement — skip when the active provider is Claude.
+            # Claude already performs semantic extraction in one pass; running the
+            # enhancer would be a redundant second Claude call on top of Claude's output.
+            provider = self._get_parser_provider()
+            provider_name = getattr(provider, 'provider_name', '') or type(provider).__name__
+            is_claude_provider = 'claude' in provider_name.lower()
+
+            if is_claude_provider:
+                logger.info("Skipping AI Semantic Enhancement — active provider is Claude (redundant).")
+
+            if self.use_ai_enhancement and not is_claude_provider:
                 enhancer = self._get_ai_enhancer()
                 if enhancer:
                     logger.info("🤖 Running AI Semantic Enhancement...")
@@ -428,6 +552,11 @@ class DocumentProcessingService:
                     raw_response,
                     result.get("items", [])
                 )
+
+            # Packing list post-processing — rename bill-to address fields that
+            # Claude mislabels as shipper_* in OPEN mode.
+            if document_type.lower().replace("-", "_").replace(" ", "_") == "packing_list":
+                self._post_process_packing_list(result["fields"])
 
             # Party name fallback — for all document types.
             # When structured output returns null for shipper_name / consignee_name

@@ -5,8 +5,8 @@ normalization:
   # Strategy for field name resolution
   # - config_only: Use only predefined synonym mappings
   # - llm_only: Use only LLM for semantic matching
-  # - hybrid: Try config first, fallback to LLM (recommended)
-  strategy: "hybrid"
+  # - hybrid: Try config first, fallback to LLM
+  strategy: "config_only"
 
   # Synonym mapping for field names
   synonym_mapping:
@@ -14,227 +14,142 @@ normalization:
     enabled: true
 
     # LLM fallback configuration
+    # Disabled: Claude handles semantic extraction in the ai_enhancement step.
+    # A secondary LLM pass for synonym matching is redundant and adds latency.
     llm_fallback:
-      enabled: true
-      provider: "google"  # From llm.yaml
+      enabled: false
+      provider: "google"
       model: "default"
       confidence_threshold: 0.8
-      cache_successful_mappings: true  # Add to config for future use
+      cache_successful_mappings: true
       max_retries: 2
 
     # Global synonym dictionary
     # Format: canonical_name: [list of synonyms]
+    #
+    # RULE: Only list variants of the SAME label (abbreviations, case, spacing).
+    # Do NOT map semantically different labels to the same canonical name.
+    # Cross-concept matching (e.g. "Your Order Number" ↔ "po_number") is
+    # handled by the use-case field mappings in config/validation/use_cases/.
     synonyms:
       # Customs and trade
       hs_code:
         - "HS Code"
-        - "HSN Code"
-        - "Code SH"
-        - "Tariff Code"
-        - "Harmonized Code"
-        - "Commodity Code"
         - "hs_code"
-        - "hsn_code"
-        - "tariff_code"
-        - "harmonized_code"
-        - "code_sh"
-        - "commodity_code"
-        - "hs_code_ref"
 
       customs_value:
         - "Customs Value"
-        - "Valeur en Douane"
-        - "Declared Value"
         - "customs_value"
-        - "valeur_douane"
-        - "declared_value"
 
       duty_rate:
         - "Duty Rate"
-        - "Taux de Droits"
-        - "Tax Rate"
         - "duty_rate"
-        - "taux_droits"
-        - "tax_rate"
 
       duty_amount:
         - "Duty Amount"
-        - "Montant des Droits"
-        - "Tax Amount"
         - "duty_amount"
-        - "montant_droits"
-        - "tax_amount"
 
       # Weight fields
       net_weight:
         - "Net Weight"
-        - "Poids Net"
         - "Net Wt"
-        - "Poids net"
-        - "weight_net"
-        - "poids_net"
+        - "net_weight"
         - "net_wt"
-        - "NetWeight"
-        - "Weight (Net)"
-        - "Poids (Net)"
-        - "Total Net Weight"
-        - "Total sent Net weight"
-        - "Total sent Net Weight"
-        - "Net Weight Total"
-        - "total_net_weight"
-        - "total_sent_net_weight"
 
       gross_weight:
         - "Gross Weight"
-        - "Poids Brut"
         - "Gross Wt"
-        - "Poids brut"
-        - "weight_gross"
-        - "poids_brut"
+        - "gross_weight"
         - "gross_wt"
-        - "GrossWeight"
-        - "Weight (Gross)"
-        - "Poids (Brut)"
-        - "Total Gross Weight"
-        - "Total sent Gross weight"
-        - "Total sent Gross Weight"
-        - "Gross Weight Total"
-        - "total_gross_weight"
-        - "total_sent_gross_weight"
 
       tare_weight:
         - "Tare Weight"
-        - "Poids de Tare"
         - "Tare"
         - "tare_weight"
-        - "poids_tare"
 
       # Quantity and pricing
       quantity:
         - "Quantity"
-        - "Quantité"
         - "Qty"
-        - "Qté"
         - "quantity"
-        - "quantite"
-        - "Amount"
-        - "Montant"
-        - "Total Units"
-        - "Total sent Units"
-        - "Total Quantity"
-        - "Total Qty"
-        - "total_units"
-        - "total_quantity"
-        - "total_sent_units"
-        - "quantity_unit"
-        - "Quantity & Unit"
-        - "No. of Units"
 
       unit_price:
         - "Unit Price"
-        - "Prix Unitaire"
-        - "Price per Unit"
         - "Price/Unit"
         - "unit_price"
-        - "prix_unitaire"
-        - "price_per_unit"
 
       total_price:
         - "Total Price"
-        - "Prix Total"
-        - "Total Amount"
-        - "Montant Total"
         - "total_price"
-        - "prix_total"
-        - "total_amount"
 
       # Product information
       product_description:
-        - "Description"
         - "Product Description"
-        - "Item Description"
-        - "Goods Description"
-        - "Description of Goods"
-        - "Description of goods"
-        - "Kind of packages; description of goods"
-        - "Article Description"
-        - "description"
         - "product_description"
-        - "item_description"
-        - "goods_description"
-        - "description_of_goods"
 
       product_name:
         - "Product Name"
-        - "Nom du Produit"
-        - "Item Name"
         - "product_name"
-        - "nom_produit"
-        - "item_name"
 
       # Origin and shipping
       origin:
         - "Country of Origin"
-        - "Origin"
-        - "Pays d'Origine"
-        - "COO"
         - "origin"
         - "country_of_origin"
-        - "pays_origine"
 
       destination:
         - "Destination"
-        - "Country of Destination"
-        - "Pays de Destination"
         - "destination"
         - "country_of_destination"
 
       port_of_loading:
         - "Port of Loading"
-        - "Port d'Embarquement"
-        - "Loading Port"
         - "POL"
         - "port_of_loading"
-        - "port_embarquement"
 
       port_of_discharge:
         - "Port of Discharge"
-        - "Port de Déchargement"
-        - "Discharge Port"
         - "POD"
         - "port_of_discharge"
-        - "port_dechargement"
 
       # Dates
       invoice_date:
         - "Invoice Date"
-        - "Date de Facture"
-        - "Date"
         - "invoice_date"
-        - "date_facture"
 
       shipment_date:
         - "Shipment Date"
-        - "Date d'Expédition"
-        - "Shipping Date"
         - "shipment_date"
-        - "date_expedition"
 
       arrival_date:
         - "Arrival Date"
-        - "Date d'Arrivée"
         - "ETA"
         - "arrival_date"
-        - "date_arrivee"
 
       # Identifiers
       invoice_number:
         - "Invoice Number"
-        - "Numéro de Facture"
         - "Invoice No"
         - "Invoice #"
         - "invoice_number"
-        - "numero_facture"
+
+      po_number:
+        - "PO Number"
+        - "PO No"
+        - "Purchase Order"
+        - "po_number"
+
+      order_number:
+        - "Order Number"
+        - "Order No"
+        - "order_number"
+        - "order_no"
+
+      contract_number:
+        - "Contract Number"
+        - "Contract No"
+        - "contract_number"
+        - "contract_no"
 
       boe_number:
         - "BOE Number"
@@ -243,53 +158,27 @@ normalization:
         - "BOE No"
         - "boe_number"
         - "bill_of_entry_number"
+        - "bill_of_entry_no"
 
       container_number:
         - "Container Number"
-        - "Numéro de Conteneur"
         - "Container No"
         - "container_number"
-        - "numero_conteneur"
 
       # Plural form — comma-separated list of container IDs from BOL / packing list
-      # Must be a separate canonical so the fuzzy matcher doesn't collapse it into
-      # container_number (singular).  Validators reference "container_numbers".
       container_numbers:
         - "container_numbers"
         - "Container Numbers"
-        - "Container IDs"
-        - "Container List"
-
-      # BOE / declaration number
-      boe_number:
-        - "boe_number"
-        - "BOE No"
-        - "Bill of Entry No"
-        - "bill_of_entry_no"
-        - "bill_of_entryboe_no"
-        - "Declaration Number"
-        - "Entry Number"
-        - "bill_no"
 
       # Declarant / clearing agent identity
       declarant_name:
         - "declarant_name"
-        - "declarant_representative"
         - "Declarant"
-        - "Representative"
-        - "Customs Agent"
-        - "Clearing Agent"
-        - "declarant"
 
       declarant_reg_number:
         - "declarant_reg_number"
-        - "declarant_no"
-        - "declarant_registration"
-        - "Declarant No"
-        - "Agent Registration"
-        - "declarant_id"
 
-      # Bill of Lading reference number (distinct from the BOE bl_awb field)
+      # Bill of Lading reference number
       bl_number:
         - "bl_number"
         - "B/L No"
@@ -300,154 +189,71 @@ normalization:
         - "Bl. No."
         - "B/L Number"
 
-      # Parties
+      # Parties — each role keeps its own label
       shipper_name:
-        - "Shipper"
-        - "Exporter"
-        - "Exportateur"
-        - "Expéditeur"
-        - "Supplier"
-        - "Vendor"
-        - "Seller"
-        - "From"
-        - "Sold By"
-        - "Shipped By"
         - "shipper_name"
-        - "exporter_name"
-        - "supplier_name"
-        - "exporter"
-        - "shipper"
+        - "Shipper"
+
+      shipper_address:
+        - "shipper_address"
+        - "Shipper Address"
 
       consignee_name:
-        - "Consignee"
-        - "Consignataire"
-        - "Destinataire"
-        - "Importer"
-        - "Importateur"
-        - "Ship-to Address"
-        - "Ship-to"
-        - "Ship To"
-        - "Delivery Address"
-        - "Buyer"
-        - "To"
-        - "Sold To"
         - "consignee_name"
-        - "importer_name"
-        - "consignee"
-        - "ship_to"
-        - "delivery_address"
-        - "ship_to_address"
+        - "Consignee"
 
-      # Financial totals
+      consignee_address:
+        - "consignee_address"
+        - "Consignee Address"
+
+      # Financial totals — only match the exact label
       total_invoice_value:
-        - "Total Incl. VAT"
         - "Total Invoice Value"
         - "Invoice Total"
-        - "Total Amount"
-        - "Total Payable"
-        - "Grand Total"
-        - "Total Incl Tax"
-        - "Total Including VAT"
-        - "Montant Total TTC"
         - "total_invoice_value"
         - "invoice_total"
-        - "grand_total"
-        - "total_amount"
-        - "total_incl_vat"
 
       total_fob_value:
         - "Total FOB"
         - "FOB Value"
         - "Total FOB Value"
         - "FOB Amount"
-        - "Total Excl. VAT"
-        - "Total Excl VAT"
-        - "Total Excl. Tax"
-        - "Total HT"
-        - "Montant HT"
         - "total_fob_value"
         - "fob_value"
-        - "total_excl_vat"
-        - "fob_fcy_cc"
-        - "total_fob_fcy"
 
       # Document dates
       document_date:
-        - "Dated"
-        - "dated"
         - "Document Date"
-        - "Date"
-        - "doc_date"
-        - "packing_list_date"
-        - "issue_date"
+        - "document_date"
 
       # Article / product codes
       article_number:
         - "Article No"
         - "Article No."
-        - "article_no"
         - "Article Number"
-        - "Part Number"
-        - "SKU"
-        - "Product Code"
-        - "Material Number"
-        - "article_no"
         - "article_number"
-        - "material_number"
-        - "sku"
+        - "article_no"
 
       currency:
         - "Currency"
-        - "Devise"
-        - "Monnaie"
-        - "Währung"
         - "currency"
-        - "devise"
 
-      # Incoterms
+      # Incoterms — only match fields literally labeled "Incoterm/Incoterms".
       incoterm:
         - "Incoterm"
         - "Incoterms"
-        - "Delivery Terms"
-        - "Shipping Condition"
-        - "Trade Terms"
-        - "Delivery Condition"
-        - "Terms of Delivery"
-        - "Conditions de Livraison"
         - "incoterm"
-        - "delivery_terms"
-        - "shipping_condition"
-        - "trade_terms"
 
       # BOE-specific field names (GRA form)
-      boe_number:
-        - "bill_of_entryboe_no"
-        - "Bill of Entry No"
-        - "BOE No"
-        - "Entry Number"
-        - "Declaration Number"
-        - "boe_no"
-        - "entry_number"
-        - "declaration_number"
-
       bill_of_lading:
-        - "bl_awb"
-        - "bl_awb_no"
-        - "bill_of_lading_airwaybill"
         - "Bill of Lading"
         - "BL/AWB"
-        - "AWB"
-        - "Airway Bill"
         - "bill_of_lading_number"
-        - "awb_number"
 
       customs_code:
-        - "container_nos_chassis_nos"
-        - "CPC"
         - "Customs Procedure Code"
+        - "customs_code"
         - "cpc_code"
-
-      # (quantity and hs_code duplicates removed — merged into primary entries above)
 
   # Unit conversion configuration
   unit_conversion:

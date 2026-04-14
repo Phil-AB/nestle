@@ -63,20 +63,19 @@ class DiscrepancyClassifier:
         if not classification_config.get("enabled", False):
             return discrepancy
 
-        # Classify severity
+        # Type must be classified BEFORE severity — severity rules check discrepancy_type
+        # and the default type (VALUE_MISMATCH) would cause incorrect matches otherwise.
+        discrepancy = self._classify_type(discrepancy, context)
+
+        # Classify severity (now has correct type to match against rules)
         discrepancy = self._classify_severity(
             discrepancy,
             classification_config,
             context
         )
 
-        # Classify category
+        # Classify category and likely cause
         discrepancy = self._classify_category(discrepancy, context)
-
-        # Classify type
-        discrepancy = self._classify_type(discrepancy, context)
-
-        # Determine likely cause
         discrepancy = self._determine_likely_cause(discrepancy, context)
 
         logger.debug(

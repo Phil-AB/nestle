@@ -67,6 +67,8 @@ class RequiredFieldsValidator(IValidator):
         # Validate all document types that have required fields configured.
         # Use context.documents so both primary and supporting docs are covered
         # regardless of how source_data/target_data were dispatched.
+        # Field name synonyms are resolved upstream by the normalize_node,
+        # which adds canonical field names to the normalized documents.
         for doc_type, fields in self.required_fields.items():
             doc_data = context.documents.get(doc_type)
             if doc_data is None and doc_type == context.primary_document:
@@ -174,7 +176,11 @@ class RequiredFieldsValidator(IValidator):
 
     def _get_field_value(self, data: Dict[str, Any], field_name: str) -> Any:
         """
-        Get field value, supporting nested fields
+        Get field value, supporting nested dot-path traversal.
+
+        Field name synonyms are resolved upstream by the normalize_node,
+        which adds canonical field names to the normalized documents.
+        This method just does a direct lookup.
 
         Args:
             data: Dictionary to search
@@ -183,22 +189,25 @@ class RequiredFieldsValidator(IValidator):
         Returns:
             Field value or None if not found
         """
-        if not self.check_nested or "." not in field_name:
-            return data.get(field_name)
+        # 1. Exact match
+        value = data.get(field_name)
+        if value is not None:
+            return value
 
-        # Handle nested fields
-        parts = field_name.split(".")
-        value = data
-
-        for part in parts:
-            if isinstance(value, dict):
-                value = value.get(part)
-                if value is None:
+        # 2. Nested dot-path
+        if self.check_nested and "." in field_name:
+            parts = field_name.split(".")
+            value = data
+            for part in parts:
+                if isinstance(value, dict):
+                    value = value.get(part)
+                    if value is None:
+                        return None
+                else:
                     return None
-            else:
-                return None
+            return value
 
-        return value
+        return None
 
     def _is_empty(self, value: Any) -> bool:
         """

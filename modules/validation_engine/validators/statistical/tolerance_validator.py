@@ -124,6 +124,27 @@ class ToleranceValidator(IValidator):
 
             # Check if fields exist
             if source_value is None or target_value is None:
+                # If the target document is declared optional in the config and its
+                # value is absent, skip gracefully — not a failure.
+                optional_target = validation_config.get("optional_target", False)
+                if target_value is None and optional_target:
+                    results.append(ValidationResult(
+                        validator_name=self.validator_name,
+                        validator_type=self.validator_type,
+                        field_name=source_field,
+                        source_document=source_path.split(".")[0] if "." in source_path else None,
+                        target_document=target_path.split(".")[0] if "." in target_path else None,
+                        source_value=source_value,
+                        target_value=None,
+                        passed=True,
+                        confidence=0.5,
+                        severity=Severity.INFO,
+                        message=(
+                            f"Field '{source_field}': target document not available — "
+                            f"skipping optional cross-check ({target_path})"
+                        )
+                    ))
+                    continue
                 results.append(ValidationResult(
                     validator_name=self.validator_name,
                     validator_type=self.validator_type,

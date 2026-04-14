@@ -482,10 +482,18 @@ export interface ExtractedFieldMeta {
   confidence?: number
 }
 
+export interface ExtractedTable {
+  headers?: string[]
+  rows?: any[][]
+  title?: string
+  [key: string]: any
+}
+
 export interface ExtractedDocumentMeta {
   document_id: string
   fields: Record<string, ExtractedFieldMeta | any>
   items: any[]
+  tables?: ExtractedTable[]
 }
 
 export interface VendorValidationResponse {
@@ -1234,12 +1242,14 @@ class APIClient {
   }
 
   /**
-   * Update document field values
+   * Update document field values, line item cell values, and/or supplementary table cell values
    */
   async updateDocumentFields(
     documentId: string,
     fieldUpdates: Record<string, any>,
-    updateMetadata?: Record<string, any>
+    updateMetadata?: Record<string, any>,
+    itemUpdates?: Array<{ row_index: number; column: string; value: string }>,
+    tableUpdates?: Array<{ table_index: number; row_index: number; col_index: number; value: string }>
   ): Promise<DocumentResponse> {
     return this.request<DocumentResponse>(
       `/documents/${documentId}/fields`,
@@ -1247,6 +1257,8 @@ class APIClient {
         method: "PATCH",
         body: JSON.stringify({
           field_updates: fieldUpdates,
+          item_updates: itemUpdates ?? [],
+          table_updates: tableUpdates ?? [],
           update_metadata: updateMetadata,
         }),
       }

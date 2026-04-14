@@ -413,11 +413,19 @@ async def get_document(
     items = document.items or []
     blocks = document.blocks or []
 
+    def _unwrap(v):
+        """Unwrap ai_enhancement envelope {value: ..., source: ...} to a plain string."""
+        if isinstance(v, dict):
+            v = v.get("value", v)
+        return str(v) if v is not None else None
+
+    doc_number = _unwrap(fields.get("document_number")) or _unwrap(fields.get("invoice_number"))
+
     return DocumentResponse(
         status=ResponseStatus.SUCCESS,
         document_id=document.document_id,
         document_type=document.document_type,
-        document_number=fields.get("document_number") or fields.get("invoice_number"),
+        document_number=doc_number,
         extraction_status=document.extraction_status,
         fields=fields,
         items=items,
@@ -530,12 +538,16 @@ async def update_document_fields(
 
     # Get field updates from request
     field_updates = update_request.get("field_updates", {})
+    # item_updates: list of {row_index: int, column: str, value: str}
+    item_updates = update_request.get("item_updates", [])
+    # table_updates: list of {table_index: int, row_index: int, col_index: int, value: str}
+    table_updates = update_request.get("table_updates", [])
     update_metadata = update_request.get("update_metadata", {})
 
-    if not field_updates:
+    if not field_updates and not item_updates and not table_updates:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No field updates provided"
+            detail="No field updates, item updates, or table updates provided"
         )
 
     # Get current fields and update them
@@ -554,9 +566,24 @@ async def update_document_fields(
             # New field - just set the value
             fields[field_key] = new_value
 
+    # Apply line item updates: [{row_index, column, value}]
+    items = list(doc.items or [])
+    for item_update in item_updates:
+        row_index = item_update.get("row_index")
+        column = item_update.get("column")
+        new_value = item_update.get("value")
+        if row_index is None or column is None:
+            continue
+        if row_index < len(items):
+            cell = items[row_index].get(column)
+            if isinstance(cell, dict) and "value" in cell:
+                items[row_index][column]["value"] = new_value
+            else:
+                items[row_index][column] = new_value
+
     # Update blocks if they contain the changed fields
     blocks = doc.blocks or []
-    if blocks:
+    if blocks and field_updates:
         import re
         for block in blocks:
             if block.get("type") in ["Key Value", "Text"]:
@@ -571,24 +598,61 @@ async def update_document_fields(
 
     # Add update history to metadata
     metadata = doc.doc_metadata or {}
+
+    # Apply supplementary table updates: [{table_index, row_index, col_index, value}]
+    # Tables are stored in metadata["tables"] (set during extraction, edited here)
+    tables = list(metadata.get("tables", []))
+    for tbl_update in table_updates:
+        tbl_idx = tbl_update.get("table_index")
+        row_idx = tbl_update.get("row_index")
+        col_idx = tbl_update.get("col_index")
+        new_value = tbl_update.get("value")
+        if tbl_idx is None or row_idx is None or col_idx is None:
+            continue
+        if tbl_idx >= len(tables):
+            continue
+        tbl = tables[tbl_idx]
+        rows = tbl.get("rows") or tbl.get("data") or []
+        if row_idx >= len(rows):
+            continue
+        row = rows[row_idx]
+        if isinstance(row, list):
+            if col_idx < len(row):
+                row[col_idx] = new_value
+        elif isinstance(row, dict):
+            headers = tbl.get("headers") or tbl.get("columns") or []
+            if col_idx < len(headers):
+                row[headers[col_idx]] = new_value
+    if table_updates:
+        metadata["tables"] = tables
+
     if "update_history" not in metadata:
         metadata["update_history"] = []
 
     metadata["update_history"].append({
         "timestamp": datetime.utcnow().isoformat(),
         "field_updates": field_updates,
+        "item_updates": item_updates,
+        "table_updates": table_updates,
         "metadata": update_metadata
     })
 
     # Update document in database
-    await repo.update(document_id, {
+    update_payload: Dict[str, Any] = {
         "fields": fields,
         "blocks": blocks,
         "doc_metadata": metadata,
-        "fields_count": len(fields)
-    })
+        "fields_count": len(fields),
+    }
+    if item_updates:
+        update_payload["items"] = items
 
-    logger.info(f"Document {document_id} fields updated: {list(field_updates.keys())}")
+    await repo.update(document_id, update_payload)
+
+    logger.info(
+        f"Document {document_id} updated: {list(field_updates.keys())} fields, "
+        f"{len(item_updates)} item cell(s), {len(table_updates)} table cell(s)"
+    )
 
     # Get updated document
     updated_doc = await repo.get_by_document_id(document_id)

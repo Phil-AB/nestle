@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,6 +29,7 @@ import {
   type ValidationDiscrepancy,
   type VendorValidationResponse,
   type ExtractedDocumentMeta,
+  type ExtractedTable,
 } from "@/lib/api-client"
 
 // ─── Document Slot Definition ─────────────────────────────────────────────────
@@ -81,6 +82,15 @@ const DOC_LABEL: Record<string, string> = {
   certificate_of_origin: "Certificate of Origin",
 }
 
+// Short names used in conflict badges — scannable at a glance
+const DOC_SHORT: Record<string, string> = {
+  invoice: "Invoice",
+  packing_list: "Packing List",
+  bill_of_lading: "BOL",
+  freight_manifest: "Manifest",
+  certificate_of_origin: "Cert of Origin",
+}
+
 function autoShipmentNumber() {
   const now = new Date()
   const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
@@ -94,7 +104,28 @@ function autoShipmentNumber() {
 function unwrap(v: any): string {
   if (v === null || v === undefined) return ""
   if (typeof v === "object" && "value" in v) return String(v.value ?? "")
+  if (Array.isArray(v)) return v.map((item) => unwrap(item)).join(", ")
   if (typeof v === "object") return JSON.stringify(v)
+  return String(v)
+}
+
+/**
+ * Format a discrepancy source_value / target_value for display.
+ * Handles plain dicts (n-way matcher, shipper validator), {value} envelopes, arrays, and primitives.
+ */
+function formatValue(v: any): string {
+  if (v === null || v === undefined) return "—"
+  if (typeof v === "object" && !Array.isArray(v) && "value" in v) {
+    return String(v.value ?? "—")
+  }
+  if (Array.isArray(v)) {
+    return v.map((item) => formatValue(item)).join(", ")
+  }
+  if (typeof v === "object") {
+    return Object.entries(v)
+      .map(([doc, val]) => `${doc.replace(/_/g, " ")}: ${val}`)
+      .join(" · ")
+  }
   return String(v)
 }
 
@@ -127,6 +158,19 @@ function ConfidenceBadge({ score }: { score: number }) {
   return (
     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${color}`}>
       {pct}%
+    </span>
+  )
+}
+
+/** Returns true when a raw field value carries Claude's redaction flag */
+function isRedacted(v: any): boolean {
+  return typeof v === "object" && v !== null && !Array.isArray(v) && v.redacted === true
+}
+
+function RedactedBadge() {
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded font-mono uppercase tracking-wide bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+      redacted
     </span>
   )
 }
@@ -214,34 +258,15 @@ function DiscrepancyCard({
   onToggle: (id: string, value: boolean) => void
 }) {
   const [expanded, setExpanded] = useState(true)
-  const severityClass =
-    disc.severity === "critical"
-      ? "border-destructive/40 bg-destructive/5"
-      : disc.severity === "major"
-      ? "border-amber-400/40 bg-amber-50/30 dark:bg-amber-900/10"
-      : "border-border bg-muted/20"
 
   return (
-    <div className={`rounded-lg border p-4 ${severityClass}`}>
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="flex items-start gap-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <AlertTriangle
-          className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-            disc.severity === "critical" ? "text-destructive" : "text-amber-500"
-          }`}
-        />
+        <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm text-foreground">
               {disc.field_name ?? disc.field ?? "—"}
-            </span>
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                disc.severity === "critical"
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-              }`}
-            >
-              {disc.severity}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">{disc.message ?? disc.description}</p>
@@ -258,11 +283,11 @@ function DiscrepancyCard({
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-2 bg-card rounded border border-border">
               <p className="text-muted-foreground mb-0.5">{disc.source_document}</p>
-              <p className="font-medium text-foreground truncate">{String(disc.source_value ?? "—")}</p>
+              <p className="font-medium text-foreground truncate" title={formatValue(disc.source_value)}>{formatValue(disc.source_value)}</p>
             </div>
             <div className="p-2 bg-card rounded border border-border">
               <p className="text-muted-foreground mb-0.5">{disc.target_document}</p>
-              <p className="font-medium text-foreground truncate">{String(disc.target_value ?? "—")}</p>
+              <p className="font-medium text-foreground truncate" title={formatValue(disc.target_value)}>{formatValue(disc.target_value)}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -287,6 +312,116 @@ function DiscrepancyCard({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── ExtractedTablesSection ───────────────────────────────────────────────────
+// Renders supplementary tables (tax tables, freight tables, etc.) that Claude
+// returns separately from items — shown below the items table in both the
+// field-review (editable) and review-reference (read-only) panels.
+//
+// tableEdits shape: { [tblIdx]: { [rowIdx]: { [colIdx]: editedValue } } }
+
+function ExtractedTablesSection({
+  tables,
+  editable = false,
+  tableEdits,
+  onCellChange,
+}: {
+  tables: ExtractedTable[]
+  editable?: boolean
+  tableEdits?: Record<number, Record<number, Record<number, string>>>
+  onCellChange?: (tblIdx: number, rowIdx: number, colIdx: number, val: string) => void
+}) {
+  if (!tables || tables.length === 0) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Additional Tables — {tables.length} table{tables.length !== 1 ? "s" : ""}
+        {editable && (
+          <span className="ml-2 normal-case font-normal text-muted-foreground/70">
+            (hover a cell to edit)
+          </span>
+        )}
+      </p>
+      {tables.map((tbl, tblIdx) => {
+        // Normalise: support {headers, rows} and {columns, data} shapes
+        const headers: string[] = tbl.headers ?? tbl.columns ?? []
+        const rows: any[][] = tbl.rows ?? tbl.data ?? []
+        const title = tbl.title ?? tbl.name ?? `Table ${tblIdx + 1}`
+
+        if (headers.length === 0 && rows.length === 0) return null
+
+        return (
+          <div key={tblIdx} className="rounded border border-border overflow-hidden">
+            {title && (
+              <div className="px-3 py-1.5 bg-muted/40 border-b border-border">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  {title}
+                </span>
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                {headers.length > 0 && (
+                  <thead>
+                    <tr className="bg-muted/30">
+                      {headers.map((h, hi) => (
+                        <th
+                          key={hi}
+                          className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border whitespace-nowrap"
+                        >
+                          {String(h).replace(/_/g, " ")}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody>
+                  {rows.map((row, ri) => {
+                    const cells: any[] = Array.isArray(row)
+                      ? row
+                      : headers.map((h) => (row as any)[h])
+                    return (
+                      <tr key={ri} className="border-b border-border last:border-b-0 hover:bg-muted/20">
+                        {cells.map((cell, ci) => {
+                          if (editable) {
+                            const editedVal = tableEdits?.[tblIdx]?.[ri]?.[ci]
+                            const rawStr = cell === null || cell === undefined ? "" : String(cell)
+                            const isEdited = editedVal !== undefined && editedVal !== rawStr
+                            return (
+                              <EditableItemCell
+                                key={ci}
+                                raw={rawStr}
+                                edited={editedVal}
+                                isEdited={isEdited}
+                                confidence={1}
+                                readOnly={false}
+                                onChange={onCellChange ? (v) => onCellChange(tblIdx, ri, ci, v) : undefined}
+                              />
+                            )
+                          }
+                          return (
+                            <td key={ci} className="px-2 py-1.5 font-mono text-foreground whitespace-nowrap">
+                              {cell === null || cell === undefined ? (
+                                <span className="text-muted-foreground italic">—</span>
+                              ) : (
+                                String(cell)
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -353,6 +488,7 @@ function ExtractedDocRefPanel({
           <div className="grid grid-cols-2 gap-x-6 gap-y-2">
             {ordered.map((key) => {
               const raw = fields[key]
+              const redacted = isRedacted(raw)
               const val = unwrap(raw)
               const conf = deriveConfidence(raw)
               const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -363,30 +499,24 @@ function ExtractedDocRefPanel({
                       {label}
                     </p>
                     <p className="text-xs font-mono text-foreground truncate" title={val || "—"}>
-                      {val || <span className="text-muted-foreground italic">—</span>}
+                      {redacted
+                        ? <span className="text-slate-400 dark:text-slate-500 italic">—</span>
+                        : val || <span className="text-muted-foreground italic">—</span>
+                      }
                     </p>
                   </div>
-                  <ConfidenceBadge score={conf} />
+                  {redacted ? <RedactedBadge /> : <ConfidenceBadge score={conf} />}
                 </div>
               )
             })}
           </div>
 
           {docMeta.items && docMeta.items.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                Line Items ({docMeta.items.length})
-              </p>
-              <div className="space-y-1 max-h-28 overflow-y-auto">
-                {docMeta.items.map((item, i) => (
-                  <div key={i} className="text-[11px] font-mono text-muted-foreground bg-muted/40 rounded px-2 py-1 truncate">
-                    {JSON.stringify(item, (_, v) =>
-                      typeof v === "object" && v !== null && "value" in v ? v.value : v
-                    ).slice(0, 200)}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EditableLineItemsTable items={docMeta.items} readOnly />
+          )}
+
+          {docMeta.tables && docMeta.tables.length > 0 && (
+            <ExtractedTablesSection tables={docMeta.tables} />
           )}
         </div>
       )}
@@ -489,12 +619,8 @@ function ValidationChecksPanel({ results }: { results: any[] }) {
                     <span className="text-xs font-semibold text-foreground font-mono">
                       {r.field_name ?? r.validator_name}
                     </span>
-                    {r.severity && r.severity !== "info" && (
-                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                        r.severity === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                        : r.severity === "major" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                      }`}>
+                    {r.severity && r.severity === "critical" && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
                         {r.severity}
                       </span>
                     )}
@@ -504,12 +630,12 @@ function ValidationChecksPanel({ results }: { results: any[] }) {
                     <div className="flex gap-3 mt-1.5 flex-wrap">
                       {r.source_value !== undefined && (
                         <span className="text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
-                          Got: {String(r.source_value).slice(0, 80)}
+                          Got: {formatValue(r.source_value).slice(0, 120)}
                         </span>
                       )}
                       {r.target_value !== undefined && r.target_value !== null && (
                         <span className="text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded">
-                          Expected: {String(r.target_value).slice(0, 80)}
+                          Expected: {formatValue(r.target_value).slice(0, 120)}
                         </span>
                       )}
                     </div>
@@ -543,11 +669,13 @@ function EditableFieldRow({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const redacted = isRedacted(rawValue)
   const confidence = deriveConfidence(rawValue)
   const displayValue = editedValue !== undefined ? editedValue : unwrap(rawValue)
   const isEdited = editedValue !== undefined && editedValue !== unwrap(rawValue)
 
   const startEdit = () => {
+    if (redacted) return
     setDraft(displayValue)
     setEditing(true)
     setTimeout(() => inputRef.current?.focus(), 0)
@@ -577,7 +705,9 @@ function EditableFieldRow({
 
       {/* Value / Editor */}
       <div className="flex-1 min-w-0">
-        {editing ? (
+        {redacted ? (
+          <span className="text-xs font-mono text-slate-400 dark:text-slate-500 italic select-none">—</span>
+        ) : editing ? (
           <div className="flex items-center gap-2">
             <Input
               ref={inputRef}
@@ -621,9 +751,196 @@ function EditableFieldRow({
         )}
       </div>
 
-      {/* Confidence */}
+      {/* Confidence or redacted badge */}
       <div className="flex-shrink-0">
-        <ConfidenceBadge score={confidence} />
+        {redacted ? <RedactedBadge /> : <ConfidenceBadge score={confidence} />}
+      </div>
+    </div>
+  )
+}
+
+// ─── EditableItemCell ─────────────────────────────────────────────────────────
+
+function EditableItemCell({
+  raw,
+  edited,
+  isEdited,
+  confidence,
+  readOnly,
+  onChange,
+}: {
+  raw: any
+  edited: string | undefined
+  isEdited: boolean
+  confidence: number
+  readOnly?: boolean
+  onChange?: (value: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+  const cellRedacted = isRedacted(raw)
+  const displayValue = edited !== undefined ? edited : unwrap(raw)
+
+  const startEdit = () => {
+    if (readOnly || !onChange || cellRedacted) return
+    setDraft(displayValue)
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const commit = () => {
+    onChange?.(draft)
+    setEditing(false)
+  }
+
+  const cancel = () => setEditing(false)
+
+  // Redacted cell — no value, no editing, just the badge
+  if (cellRedacted) {
+    return (
+      <td className="px-2 py-1.5 font-mono">
+        <RedactedBadge />
+      </td>
+    )
+  }
+
+  return (
+    <td className={`px-2 py-1.5 font-mono group relative ${isEdited ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}`}>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit()
+              if (e.key === "Escape") cancel()
+            }}
+            className="h-6 text-xs py-0 font-mono bg-background border border-border rounded px-1 w-full min-w-[60px]"
+            autoComplete="off"
+          />
+          <button onClick={commit} className="text-green-600 hover:text-green-700 flex-shrink-0">
+            <Check className="w-3 h-3" />
+          </button>
+          <button onClick={cancel} className="text-muted-foreground hover:text-destructive flex-shrink-0">
+            <X className="w-2.5 h-2.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`truncate text-xs ${displayValue ? "text-foreground" : "text-muted-foreground italic"}`}
+            title={displayValue || "—"}
+          >
+            {displayValue || "—"}
+          </span>
+          {isEdited && (
+            <span className="text-[8px] font-bold uppercase text-amber-600 dark:text-amber-400 flex-shrink-0">
+              edited
+            </span>
+          )}
+          <ConfidenceBadge score={confidence} />
+          {!readOnly && onChange && (
+            <button
+              onClick={startEdit}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground flex-shrink-0 ml-auto"
+              title="Edit cell"
+            >
+              <Pencil className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
+      )}
+    </td>
+  )
+}
+
+// ─── EditableLineItemsTable ───────────────────────────────────────────────────
+
+const SKIP_ITEM_COLS = new Set([
+  "_row_index", "_table_index", "column_index", "column_number",
+  "row_index", "table_block_index", "table_bbox",
+  "normalized_header", "original_header", "original_page",
+])
+
+/** Renders line items as a proper table with per-cell confidence and optional editing */
+function EditableLineItemsTable({
+  items,
+  edits,
+  onCellChange,
+  readOnly,
+}: {
+  items: Array<Record<string, any>>
+  edits?: Record<number, Record<string, string>>
+  onCellChange?: (rowIndex: number, column: string, value: string) => void
+  readOnly?: boolean
+}) {
+  if (!items || items.length === 0) return null
+
+  // Derive column order from all rows, skipping internal metadata keys
+  const seen = new Set<string>()
+  const columns: string[] = []
+  for (const row of items) {
+    for (const k of Object.keys(row)) {
+      if (!SKIP_ITEM_COLS.has(k) && !k.startsWith("_") && !seen.has(k)) {
+        seen.add(k)
+        columns.push(k)
+      }
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+        Line Items — {items.length} row{items.length !== 1 ? "s" : ""}
+        {!readOnly && (
+          <span className="ml-2 normal-case font-normal text-muted-foreground/70">
+            (hover a cell to edit)
+          </span>
+        )}
+      </p>
+      <div className="overflow-x-auto rounded border border-border">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-muted/60">
+              <th className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border w-7">#</th>
+              {columns.map((col) => (
+                <th
+                  key={col}
+                  className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border whitespace-nowrap"
+                >
+                  {col.replace(/_/g, " ")}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((row, rowIdx) => (
+              <tr key={rowIdx} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+                <td className="px-2 py-1.5 text-[10px] text-muted-foreground font-mono">{rowIdx + 1}</td>
+                {columns.map((col) => {
+                  const raw = row[col]
+                  const editedRow = edits?.[rowIdx]
+                  const edited = editedRow?.[col]
+                  const isEdited = edited !== undefined && edited !== unwrap(raw)
+                  const conf = deriveConfidence(raw)
+                  return (
+                    <EditableItemCell
+                      key={col}
+                      raw={raw}
+                      edited={edited}
+                      isEdited={isEdited}
+                      confidence={conf}
+                      readOnly={readOnly}
+                      onChange={onCellChange ? (v) => onCellChange(rowIdx, col, v) : undefined}
+                    />
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -636,12 +953,20 @@ function DocumentFieldPanel({
   docType,
   docMeta,
   edits,
+  itemEdits,
+  tableEdits,
   onFieldChange,
+  onItemChange,
+  onTableCellChange,
 }: {
   docType: string
   docMeta: ExtractedDocumentMeta
   edits: Record<string, string>
+  itemEdits: Record<number, Record<string, string>>
+  tableEdits: Record<number, Record<number, Record<number, string>>>
   onFieldChange: (docType: string, key: string, val: string) => void
+  onItemChange: (docType: string, rowIndex: number, column: string, val: string) => void
+  onTableCellChange: (docType: string, tblIdx: number, rowIdx: number, colIdx: number, val: string) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -699,25 +1024,25 @@ function DocumentFieldPanel({
             ))
           )}
 
-          {/* Line items summary */}
+          {/* Line items — editable table */}
           {docMeta.items && docMeta.items.length > 0 && (
-            <div className="py-2.5 border-t border-border mt-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Line Items — {docMeta.items.length} row{docMeta.items.length !== 1 ? "s" : ""}
-              </span>
-              <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
-                {docMeta.items.slice(0, 10).map((item, i) => (
-                  <div key={i} className="text-[11px] font-mono text-muted-foreground bg-muted/40 rounded px-2 py-1 truncate">
-                    {JSON.stringify(item, (_, v) => (typeof v === "object" && v !== null && "value" in v ? v.value : v)).slice(0, 200)}
-                  </div>
-                ))}
-                {docMeta.items.length > 10 && (
-                  <p className="text-[10px] text-muted-foreground text-center">
-                    + {docMeta.items.length - 10} more rows
-                  </p>
-                )}
-              </div>
-            </div>
+            <EditableLineItemsTable
+              items={docMeta.items}
+              edits={itemEdits}
+              onCellChange={(rowIdx, col, val) => onItemChange(docType, rowIdx, col, val)}
+            />
+          )}
+
+          {/* Supplementary tables — editable */}
+          {docMeta.tables && docMeta.tables.length > 0 && (
+            <ExtractedTablesSection
+              tables={docMeta.tables}
+              editable
+              tableEdits={tableEdits}
+              onCellChange={(tblIdx, rowIdx, colIdx, val) =>
+                onTableCellChange(docType, tblIdx, rowIdx, colIdx, val)
+              }
+            />
           )}
         </div>
       )}
@@ -753,6 +1078,10 @@ export default function VendorValidationForm() {
   const [extractedDocuments, setExtractedDocuments] = useState<Record<string, ExtractedDocumentMeta> | null>(null)
   // Per-doc, per-field edits: { docType: { fieldKey: newValue } }
   const [fieldEdits, setFieldEdits] = useState<Record<string, Record<string, string>>>({})
+  // Per-doc, per-row, per-column line item edits: { docType: { rowIndex: { column: newValue } } }
+  const [lineItemEdits, setLineItemEdits] = useState<Record<string, Record<number, Record<string, string>>>>({})
+  // Per-doc, per-table, per-row, per-col supplementary table edits: { docType: { tblIdx: { rowIdx: { colIdx: newValue } } } }
+  const [tableEdits, setTableEdits] = useState<Record<string, Record<number, Record<number, Record<number, string>>>>>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -773,6 +1102,25 @@ export default function VendorValidationForm() {
   const [submitting, setSubmitting] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Document viewer tab — shared across review + complete steps
+  const [reviewView, setReviewView] = useState<"review" | "documents">("review")
+  const [completeView, setCompleteView] = useState<"results" | "documents">("results")
+  const [activeDocKey, setActiveDocKey] = useState<string | null>(null)
+  // Blob URLs for uploaded files — created on demand, revoked on unmount
+  const blobUrlsRef = useRef<Record<string, string>>({})
+  const getDocBlobUrl = useCallback((key: string): string | null => {
+    const file = files[key as keyof typeof files]
+    if (!file) return null
+    if (!blobUrlsRef.current[key]) {
+      blobUrlsRef.current[key] = URL.createObjectURL(file)
+    }
+    return blobUrlsRef.current[key]
+  }, [files])
+  useEffect(() => {
+    const urls = blobUrlsRef.current
+    return () => { Object.values(urls).forEach(URL.revokeObjectURL) }
+  }, [])
 
   useEffect(() => {
     if (submitting) {
@@ -795,6 +1143,31 @@ export default function VendorValidationForm() {
     setFieldEdits((prev) => ({
       ...prev,
       [docType]: { ...(prev[docType] ?? {}), [key]: val },
+    }))
+  }, [])
+
+  const handleLineItemChange = useCallback((docType: string, rowIndex: number, column: string, val: string) => {
+    setLineItemEdits((prev) => ({
+      ...prev,
+      [docType]: {
+        ...(prev[docType] ?? {}),
+        [rowIndex]: { ...(prev[docType]?.[rowIndex] ?? {}), [column]: val },
+      },
+    }))
+  }, [])
+
+  const handleTableCellChange = useCallback((
+    docType: string, tblIdx: number, rowIdx: number, colIdx: number, val: string
+  ) => {
+    setTableEdits((prev) => ({
+      ...prev,
+      [docType]: {
+        ...(prev[docType] ?? {}),
+        [tblIdx]: {
+          ...(prev[docType]?.[tblIdx] ?? {}),
+          [rowIdx]: { ...(prev[docType]?.[tblIdx]?.[rowIdx] ?? {}), [colIdx]: val },
+        },
+      },
     }))
   }, [])
 
@@ -856,6 +1229,8 @@ export default function VendorValidationForm() {
       if (result.extracted_documents && Object.keys(result.extracted_documents).length > 0) {
         setExtractedDocuments(result.extracted_documents)
         setFieldEdits({})
+        setLineItemEdits({})
+        setTableEdits({})
         setStep("field_review")
       } else {
         // No extracted documents returned — skip field review
@@ -877,16 +1252,57 @@ export default function VendorValidationForm() {
     setSaveError(null)
 
     try {
-      // Save edits for each document that has changes
-      const savePromises = Object.entries(fieldEdits)
-        .filter(([, edits]) => Object.keys(edits).length > 0)
-        .map(([docType, edits]) => {
+      // Collect all doc types that have any edits
+      const docTypes = new Set([
+        ...Object.keys(fieldEdits),
+        ...Object.keys(lineItemEdits),
+        ...Object.keys(tableEdits),
+      ])
+
+      const savePromises = Array.from(docTypes)
+        .filter((docType) => {
+          const hasFieldEdits = Object.keys(fieldEdits[docType] ?? {}).length > 0
+          const hasItemEdits = Object.keys(lineItemEdits[docType] ?? {}).length > 0
+          const hasTableEdits = Object.keys(tableEdits[docType] ?? {}).length > 0
+          return hasFieldEdits || hasItemEdits || hasTableEdits
+        })
+        .map((docType) => {
           const docId = extractedDocuments[docType]?.document_id
           if (!docId) return Promise.resolve()
-          return apiClient.updateDocumentFields(docId, edits, {
-            updated_by: "field_review",
-            update_reason: "User reviewed and corrected extracted fields before validation",
-          })
+
+          // Flatten item edits to [{row_index, column, value}]
+          const itemUpdates = Object.entries(lineItemEdits[docType] ?? {}).flatMap(
+            ([rowIdx, cols]) =>
+              Object.entries(cols).map(([column, value]) => ({
+                row_index: Number(rowIdx),
+                column,
+                value,
+              }))
+          )
+
+          // Flatten table edits to [{table_index, row_index, col_index, value}]
+          const tblUpdates = Object.entries(tableEdits[docType] ?? {}).flatMap(
+            ([tblIdx, rows]) =>
+              Object.entries(rows).flatMap(([rowIdx, cols]) =>
+                Object.entries(cols).map(([colIdx, value]) => ({
+                  table_index: Number(tblIdx),
+                  row_index: Number(rowIdx),
+                  col_index: Number(colIdx),
+                  value,
+                }))
+              )
+          )
+
+          return apiClient.updateDocumentFields(
+            docId,
+            fieldEdits[docType] ?? {},
+            {
+              updated_by: "field_review",
+              update_reason: "User reviewed and corrected extracted fields before validation",
+            },
+            itemUpdates.length > 0 ? itemUpdates : undefined,
+            tblUpdates.length > 0 ? tblUpdates : undefined
+          )
         })
 
       await Promise.all(savePromises)
@@ -952,8 +1368,13 @@ export default function VendorValidationForm() {
     setError(null)
     setExtractedDocuments(null)
     setFieldEdits({})
+    setLineItemEdits({})
+    setTableEdits({})
     setPendingResult(null)
     setSaveError(null)
+    setReviewView("review")
+    setCompleteView("results")
+    setActiveDocKey(null)
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -961,7 +1382,7 @@ export default function VendorValidationForm() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground mb-2">Vendor Document Validation</h1>
@@ -1139,7 +1560,11 @@ export default function VendorValidationForm() {
               docType={docType}
               docMeta={docMeta}
               edits={fieldEdits[docType] ?? {}}
+              itemEdits={lineItemEdits[docType] ?? {}}
+              tableEdits={tableEdits[docType] ?? {}}
               onFieldChange={handleFieldChange}
+              onItemChange={handleLineItemChange}
+              onTableCellChange={handleTableCellChange}
             />
           ))}
 
@@ -1182,6 +1607,89 @@ export default function VendorValidationForm() {
       {/* ── HITL Review ──────────────────────────────────────────────────────── */}
       {step === "review" && (
         <div className="space-y-4">
+
+          {/* Tab bar */}
+          {(() => {
+            const uploadedDocs = Object.entries(files).filter(([, f]) => f !== null)
+            const tabs = [
+              { v: "review" as const, label: "Discrepancy Review", icon: ClipboardCheck },
+              { v: "documents" as const, label: "View Original Documents", count: uploadedDocs.length, icon: FileText },
+            ]
+            return (
+              <div className="flex justify-center py-1">
+                <div className="flex items-center bg-muted/70 rounded-xl p-1 gap-0.5 border border-border/50 shadow-sm">
+                  {tabs.map(({ v, label, icon: Icon, count }) => (
+                    <button
+                      key={v}
+                      onClick={() => {
+                        setReviewView(v)
+                        if (v === "documents" && !activeDocKey) setActiveDocKey(uploadedDocs[0]?.[0] ?? null)
+                      }}
+                      className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                        reviewView === v
+                          ? "bg-background text-foreground shadow-sm border border-border/60"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${reviewView === v ? "text-primary" : ""}`} />
+                      {label}
+                      {count !== undefined && (
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${reviewView === v ? "bg-primary/10 text-primary" : "bg-muted-foreground/15 text-muted-foreground"}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Document viewer panel */}
+          {reviewView === "documents" && (() => {
+            const uploadedDocs = Object.entries(files).filter(([, f]) => f !== null) as [string, File][]
+            const currentKey = activeDocKey ?? uploadedDocs[0]?.[0] ?? null
+            const currentFile = currentKey ? files[currentKey as keyof typeof files] : null
+            const blobUrl = currentKey ? getDocBlobUrl(currentKey) : null
+            const isPdf = currentFile?.type === "application/pdf" || currentFile?.name?.toLowerCase().endsWith(".pdf")
+            return (
+              <div className="flex gap-4 h-[780px]">
+                <div className="w-52 flex-shrink-0 flex flex-col gap-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-1 mb-1">Uploaded Files</p>
+                  {uploadedDocs.map(([key, file]) => (
+                    <button key={key} onClick={() => setActiveDocKey(key)}
+                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${currentKey === key ? "border-primary bg-primary/5 text-primary" : "border-border hover:bg-muted/50 text-foreground"}`}>
+                      <div className="flex items-center gap-2">
+                        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${currentKey === key ? "text-primary" : "text-muted-foreground"}`} />
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold truncate">{DOC_LABEL[key] ?? key.replace(/_/g, " ")}</p>
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5" title={file.name}>{file.name}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex-1 min-w-0 rounded-lg border border-border overflow-hidden bg-muted/20">
+                  {blobUrl && currentFile ? (
+                    isPdf
+                      ? <iframe key={currentKey} src={blobUrl} title={DOC_LABEL[currentKey!] ?? currentKey!} className="w-full h-full border-0" />
+                      : <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img key={currentKey} src={blobUrl} alt={DOC_LABEL[currentKey!] ?? currentKey!} className="max-w-full max-h-full object-contain rounded" />
+                        </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <p className="text-sm text-muted-foreground">Select a document to preview</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Existing review content */}
+          {reviewView === "review" && <>
+
           {/* Summary */}
           {summary && (
             <div className="grid grid-cols-4 gap-3">
@@ -1243,14 +1751,35 @@ export default function VendorValidationForm() {
             </div>
           </Card>
 
-          <div className="space-y-3">
-            {discrepancies.map((disc) => (
-              <DiscrepancyCard
-                key={disc.id}
-                disc={disc}
-                confirmed={confirmations[disc.id] ?? null}
-                onToggle={(id, val) => setConfirmations((prev) => ({ ...prev, [id]: val }))}
-              />
+          <div className="space-y-5">
+            {Object.entries(
+              discrepancies.reduce((acc, disc) => {
+                const key = disc.source_document ?? "other"
+                if (!acc[key]) acc[key] = []
+                acc[key].push(disc)
+                return acc
+              }, {} as Record<string, ValidationDiscrepancy[]>)
+            ).map(([docKey, discs]) => (
+              <div key={docKey}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    {DOC_LABEL[docKey] ?? docKey.replace(/_/g, " ")}
+                  </span>
+                  <span className="text-[10px] font-mono text-muted-foreground/60">
+                    {discs.length} issue{discs.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {discs.map((disc) => (
+                    <DiscrepancyCard
+                      key={disc.id}
+                      disc={disc}
+                      confirmed={confirmations[disc.id] ?? null}
+                      onToggle={(id, val) => setConfirmations((prev) => ({ ...prev, [id]: val }))}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
 
@@ -1259,17 +1788,26 @@ export default function VendorValidationForm() {
             <ValidationChecksPanel results={validationResults} />
           )}
 
+          </>}
+
+          {/* Action footer — always visible */}
           <div className="flex justify-between pt-2">
-            <Button variant="outline" onClick={() => setStep("upload")}>
-              Re-upload Documents
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep("upload")}>
+                Re-upload Documents
+              </Button>
+              {extractedDocuments && Object.keys(extractedDocuments).length > 0 && (
+                <Button variant="outline" onClick={() => setStep("field_review")}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Fields
+                </Button>
+              )}
+            </div>
             <Button
               onClick={handleResume}
               disabled={
                 submitting ||
-                discrepancies
-                  .filter((d) => d.severity === "critical")
-                  .some((d) => confirmations[d.id] === null)
+                discrepancies.some((d) => confirmations[d.id] === null)
               }
               className="bg-primary hover:bg-primary/90"
             >
@@ -1282,7 +1820,123 @@ export default function VendorValidationForm() {
 
       {/* ── Complete ──────────────────────────────────────────────────────────── */}
       {step === "complete" && (
-        <div className="space-y-4">
+        <div className="space-y-5">
+
+          {/* ── View switcher tab bar ── */}
+          {(() => {
+            const uploadedDocs = Object.entries(files).filter(([, f]) => f !== null)
+            const tabs = [
+              { v: "results" as const, label: "Validation Results", icon: ShieldCheck },
+              { v: "documents" as const, label: "Documents", count: uploadedDocs.length, icon: FileText },
+            ]
+            return (
+              <div className="flex justify-center py-1">
+                <div className="flex items-center bg-muted/70 rounded-xl p-1 gap-0.5 border border-border/50 shadow-sm">
+                  {tabs.map(({ v, label, icon: Icon, count }) => (
+                    <button
+                      key={v}
+                      onClick={() => {
+                        setCompleteView(v)
+                        if (v === "documents" && !activeDocKey) setActiveDocKey(uploadedDocs[0]?.[0] ?? null)
+                      }}
+                      className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                        completeView === v
+                          ? "bg-background text-foreground shadow-sm border border-border/60"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      }`}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${completeView === v ? "text-primary" : ""}`} />
+                      {label}
+                      {count !== undefined && (
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${completeView === v ? "bg-primary/10 text-primary" : "bg-muted-foreground/15 text-muted-foreground"}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ── Documents viewer ── */}
+          {completeView === "documents" && (() => {
+            const uploadedDocs = Object.entries(files).filter(([, f]) => f !== null) as [string, File][]
+            const currentKey = activeDocKey ?? uploadedDocs[0]?.[0] ?? null
+            const currentFile = currentKey ? files[currentKey as keyof typeof files] : null
+            const blobUrl = currentKey ? getDocBlobUrl(currentKey) : null
+            const isPdf = currentFile?.type === "application/pdf" || currentFile?.name?.toLowerCase().endsWith(".pdf")
+
+            return (
+              <div className="flex gap-4 h-[780px]">
+                {/* Sidebar — document list */}
+                <div className="w-52 flex-shrink-0 flex flex-col gap-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-1 mb-1">
+                    Uploaded Files
+                  </p>
+                  {uploadedDocs.map(([key, file]) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveDocKey(key)}
+                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                        currentKey === key
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-border hover:bg-muted/50 text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${currentKey === key ? "text-primary" : "text-muted-foreground"}`} />
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold truncate">
+                            {DOC_LABEL[key] ?? key.replace(/_/g, " ")}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5" title={file.name}>
+                            {file.name}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {uploadedDocs.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-1">No files uploaded.</p>
+                  )}
+                </div>
+
+                {/* Viewer pane */}
+                <div className="flex-1 min-w-0 rounded-lg border border-border overflow-hidden bg-muted/20">
+                  {blobUrl && currentFile ? (
+                    isPdf ? (
+                      <iframe
+                        key={currentKey}
+                        src={blobUrl}
+                        title={DOC_LABEL[currentKey!] ?? currentKey!}
+                        className="w-full h-full border-0"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          key={currentKey}
+                          src={blobUrl}
+                          alt={DOC_LABEL[currentKey!] ?? currentKey!}
+                          className="max-w-full max-h-full object-contain rounded"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <p className="text-sm text-muted-foreground">Select a document to preview</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ── Validation results (default view) ── */}
+          {completeView === "results" && <>
+
+          {/* Status Banner */}
           <Card
             className={`p-5 border-l-4 ${
               finalStatus === "passed"
@@ -1322,220 +1976,449 @@ export default function VendorValidationForm() {
                   {finalStatus === "passed"
                     ? "All vendor documents are consistent. You may transmit to the clearing agent."
                     : finalStatus === "failed"
-                    ? "Critical discrepancies remain unresolved. Please correct the documents and retry."
+                    ? "Discrepancies remain unresolved. Please correct the documents and retry."
                     : "Some discrepancies were found. Review the details below before proceeding."}
                 </p>
                 {(generatedShipmentNumber || shipmentNumber) && (
-                  <p className="text-xs text-muted-foreground mt-1.5">
-                    Shipment: <code className="font-mono">{shipmentNumber || generatedShipmentNumber}</code>
+                  <p className="text-xs text-muted-foreground mt-2 font-mono">
+                    {shipmentNumber || generatedShipmentNumber}
                   </p>
                 )}
               </div>
+              {shipmentId && (
+                <button
+                  onClick={() => navigator.clipboard.writeText(shipmentId)}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+                  title="Copy shipment ID"
+                >
+                  <Copy className="w-3 h-3" />
+                  Copy ID
+                </button>
+              )}
             </div>
           </Card>
 
+          {/* Stats row */}
           {summary && (
             <div className="grid grid-cols-4 gap-3">
               {[
                 { label: "Total Checks", value: summary.total_checks ?? 0, color: "text-foreground" },
-                { label: "Passed", value: summary.passed_checks ?? 0, color: "text-green-600" },
-                { label: "Failed", value: summary.failed_checks ?? 0, color: "text-destructive" },
-                { label: "Discrepancies", value: summary.total_discrepancies ?? 0, color: "text-amber-500" },
+                { label: "Passed", value: summary.passed_checks ?? 0, color: "text-green-600 dark:text-green-400" },
+                { label: "Failed", value: summary.failed_checks ?? 0, color: (summary.failed_checks ?? 0) > 0 ? "text-destructive" : "text-muted-foreground" },
+                { label: "Discrepancies", value: summary.total_discrepancies ?? discrepancies.length, color: discrepancies.length > 0 ? "text-amber-500" : "text-muted-foreground" },
               ].map(({ label, value, color }) => (
                 <Card key={label} className="p-3 text-center">
-                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                  <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
                 </Card>
               ))}
             </div>
           )}
 
-          {summary && (summary.critical > 0 || summary.major > 0 || summary.minor > 0) && (
-            <div className="flex gap-3">
-              {[
-                { label: "Critical", count: summary.critical, bg: "bg-destructive/10", text: "text-destructive" },
-                { label: "Major", count: summary.major, bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600 dark:text-amber-400" },
-                { label: "Minor", count: summary.minor, bg: "bg-blue-50 dark:bg-blue-900/20", text: "text-blue-600 dark:text-blue-400" },
-              ]
-                .filter((s) => s.count > 0)
-                .map(({ label, count, bg, text }) => (
-                  <span key={label} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${bg} ${text}`}>
-                    {count} {label}
-                  </span>
-                ))}
-            </div>
-          )}
+          {/* ── Ghana Customs Checklist Table ── */}
+          {extractedDocuments && Object.keys(extractedDocuments).length > 0 && (() => {
+            const DOC_ORDER = ["invoice", "packing_list", "bill_of_lading", "freight_manifest", "certificate_of_origin"]
+            const docs = Object.keys(extractedDocuments).sort(
+              (a, b) => DOC_ORDER.indexOf(a) - DOC_ORDER.indexOf(b)
+            )
 
-          {validationResults && validationResults.length > 0 && (() => {
-            const groups: Record<string, any[]> = {}
-            for (const r of validationResults) {
-              const key = r.validator_name ?? "other"
-              if (!groups[key]) groups[key] = []
-              groups[key].push(r)
+            // 17-item Ghana Customs checklist — derived from vendor_document_validation.yaml
+            type ChecklistEntry = {
+              id: string
+              label: string
+              docFields: Partial<Record<string, string | string[]>>
+              boeOnly?: boolean
             }
-            const validatorLabel = (name: string) =>
-              name.replace(/_validator$/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+            const CHECKLIST: ChecklistEntry[] = [
+              // ── Vendor documents (Step 2) ──────────────────────────────────
+              // docFields lists canonical name first, then every document-specific
+              // label Claude may extract verbatim (exact label → snake_case).
+              // Shipper is physically redacted on PL and BOL for all Nestlé Ghana supplier docs.
+              // Only the invoice carries the full shipper block.
+              { id: "shippers_address",  label: "Shipper's Name & Address",
+                docFields: { invoice: ["shipper_name", "shipper_address"] } },
+              { id: "consignee_address", label: "Consignee Name & Address",
+                docFields: { invoice: ["consignee_name", "consignee_address"], packing_list: ["consignee_name", "consignee_address", "bill_to_name", "bill_to_address"], bill_of_lading: ["consignee_name", "consignee_address"] } },
+              // PO: invoice → "Your Order Number", BOL/PL → "Customer ref." / "CUSTOMER REF."
+              { id: "po_number",         label: "PO / Reference No.",
+                docFields: { invoice: ["po_number", "your_order_number", "customer_ref", "customer_reference"], packing_list: ["po_number", "customer_ref", "customer_reference"], bill_of_lading: ["po_number", "customer_ref", "customer_reference"] } },
+              // Product description: in line-item table rows (items[]) — resolveVal handles items fallback
+              { id: "product_desc",      label: "Product Description",
+                docFields: { invoice: ["product_description", "description", "goods_description"], packing_list: ["product_description", "description", "goods_description"], bill_of_lading: ["product_description", "goods_description", "description"] } },
+              // FOB: first matching amount field + currency.
+              // total_excl_vat is the Vreugdenhil label (= FOB when VAT = 0).
+              // total_fob_value / total_invoice_value are canonical fallbacks.
+              // Do NOT include both total_excl_vat and total_incl_vat — they are
+              // the same value when VAT = 0 and would show twice.
+              { id: "fob_value",         label: "FOB Value & Currency",
+                docFields: { invoice: ["total_excl_vat", "total_fob_value", "total_invoice_value", "currency"] } },
+              // Incoterm: invoice → "Shipping Condition", packing list → "Delivery terms".
+              // BOL has no formal incoterm field (states "Freight Collect" instead) — excluded.
+              { id: "incoterm",          label: "Incoterm",
+                docFields: { invoice: ["incoterm", "shipping_condition"], packing_list: ["incoterm", "delivery_terms"] } },
+              { id: "insurance",         label: "Insurance",                 docFields: { invoice: "insurance_value" } },
+              { id: "freight",           label: "Freight",                   docFields: { invoice: "freight_value" } },
+              // Net weight: invoice → "Total Net Weight", BOL → "NETT WEIGHT", PL → "Total sent Net weight"
+              { id: "net_weight",        label: "Net Weight",
+                docFields: { invoice: ["net_weight", "total_net_weight"], packing_list: ["net_weight", "total_sent_net_weight"], bill_of_lading: ["net_weight", "nett_weight"] } },
+              // Gross weight: invoice → "Total Gross Weight", BOL → "GROSS WEIGHT", PL → "Total sent Gross weight"
+              { id: "gross_weight",      label: "Gross Weight",
+                docFields: { invoice: ["gross_weight", "total_gross_weight"], packing_list: ["gross_weight", "total_sent_gross_weight"], bill_of_lading: ["gross_weight"] } },
+              { id: "country_of_origin", label: "Country of Origin",         docFields: { certificate_of_origin: "country_of_origin" } },
+              // Quantity: invoice → "Total Units", BOL → "TOTALS" (page-2 totals block), PL → "Total sent Units"
+              { id: "quantity",          label: "Quantity",
+                docFields: { invoice: ["quantity", "total_units"], packing_list: ["quantity", "total_sent_units"], bill_of_lading: ["quantity", "total_units", "totals"] } },
+              { id: "container_count",   label: "Number of Containers",      docFields: { packing_list: ["container_count", "container_numbers"], bill_of_lading: ["container_count", "container_numbers"] } },
+              // ── BOE only (Step 6) ──────────────────────────────────────────
+              { id: "declarant_name",    label: "Declarant Name",            docFields: {}, boeOnly: true },
+              { id: "declarant_address", label: "Declarant Address",         docFields: {}, boeOnly: true },
+              { id: "hs_code",           label: "H.S. Code",                 docFields: {}, boeOnly: true },
+              { id: "import_duty",       label: "Import Duty",               docFields: {}, boeOnly: true },
+              { id: "vat_nhil",          label: "VAT/NHIL",                  docFields: {}, boeOnly: true },
+              { id: "cpc",               label: "CPC",                       docFields: {}, boeOnly: true },
+            ]
+
+            // Discrepancy lookup: "doc::field" -> discrepancy
+            const discLookup = (discrepancies ?? []).reduce((acc, d) => {
+              const key = `${d.source_document ?? ""}::${d.field_name ?? d.field ?? ""}`
+              acc[key] = d
+              return acc
+            }, {} as Record<string, ValidationDiscrepancy>)
+
+            // Incoterm rule check — absence of insurance/freight is correct for FCA
+            const incotermRulePassed = (validationResults ?? []).some(
+              (r) => (r.field_name === "freight_insurance" || r.validator_name === "incoterm_validator") && r.passed
+            )
+
+            const mismatches = (discrepancies ?? []).filter(
+              (d) => !(d.source_value === null && d.target_value === null)
+            )
+
+            // Resolve single or multi-field spec from extracted doc data.
+            // Falls back to items[] for two special cases:
+            //   1. Description fields — Claude places product descriptions in line-item rows.
+            //   2. container_count / container_numbers — PL has no top-level count field;
+            //      derive from items[] when absent.
+            const _DESC_FIELD_IDS = new Set(["description", "goods_description", "product_description", "article_description"])
+            const _CONTAINER_IDS  = new Set(["container_count", "container_numbers", "container_no", "container_nos"])
+            const _DESC_SKIP = new Set(["CONTAINER SAID TO CONTAIN", ""])
+            const resolveVal = (spec: string | string[], data: Record<string, any>, items?: any[]): string | null => {
+              const specs = Array.isArray(spec) ? spec : [spec]
+              const parts = specs.map((f) => { const v = data[f]; return v != null ? unwrap(v) : null }).filter(Boolean)
+              if (parts.length) return parts.join(" / ")
+              if (!items || !items.length) return null
+
+              // Fallback 1: product description from line-item rows.
+              // Use unwrap() so both plain strings and {value, confidence} objects work.
+              if (specs.some((s) => _DESC_FIELD_IDS.has(s))) {
+                for (const item of items) {
+                  if (!item || typeof item !== "object") continue
+                  for (const k of ["description", "goods_description", "product_description", "article_description"]) {
+                    const raw = (item as Record<string, any>)[k]
+                    if (raw == null) continue
+                    const v = unwrap(raw)
+                    if (v && !_DESC_SKIP.has(v.trim().toUpperCase()))
+                      return v.trim()
+                  }
+                }
+              }
+
+              // Fallback 2: container count / numbers from items[] rows.
+              // Packing list has no top-level container_count; extract container_no from each row.
+              // Each container may have multiple batch rows — deduplicate with a Set.
+              if (specs.some((s) => _CONTAINER_IDS.has(s))) {
+                const seen = new Set<string>()
+                for (const item of items) {
+                  if (!item || typeof item !== "object") continue
+                  for (const k of ["container_no", "container_number", "container_nos"]) {
+                    const raw = (item as Record<string, any>)[k]
+                    if (!raw) continue
+                    const v = unwrap(raw)
+                    if (v && v.trim()) { seen.add(v.trim()); break }
+                  }
+                }
+                if (seen.size) {
+                  const unique = Array.from(seen)
+                  return `${unique.length} / ${unique.join(", ")}`
+                }
+              }
+
+              return null
+            }
+
+            const entryHasDisc = (entry: ChecklistEntry, doc: string): boolean => {
+              const spec = entry.docFields[doc]
+              if (!spec) return false
+              return (Array.isArray(spec) ? spec : [spec]).some((f) => !!discLookup[`${doc}::${f}`])
+            }
 
             return (
-              <Card className="p-0 overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                  <ClipboardCheck className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="font-semibold text-sm text-foreground">
-                    Checks Run ({validationResults.length})
-                  </h3>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {validationResults.filter((r: any) => r.passed).length} passed ·{" "}
-                    {validationResults.filter((r: any) => !r.passed).length} failed
-                  </span>
-                </div>
-
-                {Object.entries(groups).map(([validatorName, checks]) => (
-                  <div key={validatorName} className="border-b border-border last:border-b-0">
-                    <div className="px-4 py-2 bg-muted/30 flex items-center gap-2">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        {validatorLabel(validatorName)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        ({checks.filter((r) => r.passed).length}/{checks.length})
-                      </span>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {checks.map((r: any, idx: number) => (
-                        <div key={idx} className="px-4 py-3">
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-0.5">
-                              {r.passed ? (
-                                <CheckCircle className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <AlertCircle className="w-4 h-4 text-destructive" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-foreground">
-                                  {r.field_name ?? r.field ?? "—"}
-                                </span>
-                                {r.source_document && (
-                                  <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                    {r.source_document}
-                                  </span>
-                                )}
-                              </div>
-                              {r.message && (
-                                <p className="text-xs text-muted-foreground mt-1">{r.message}</p>
-                              )}
-                              {r.passed && r.source_value !== null && r.source_value !== undefined && (
-                                <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-                                  <span className="text-muted-foreground">Value:</span>
-                                  <code className="font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
-                                    {String(r.source_value)}
-                                  </code>
-                                  {r.target_value !== null && r.target_value !== undefined && (
-                                    <>
-                                      <span className="text-muted-foreground">→</span>
-                                      <code className="font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
-                                        {String(r.target_value)}
-                                      </code>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                              {!r.passed && (r.source_value !== null || r.target_value !== null) && (
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                  <div className="p-2 bg-card rounded border border-border text-xs">
-                                    <p className="text-muted-foreground mb-0.5 text-[10px] uppercase font-semibold">
-                                      {r.source_document ?? "Source"}
-                                    </p>
-                                    <code className="font-mono text-foreground break-all">
-                                      {r.source_value !== null && r.source_value !== undefined ? String(r.source_value) : "—"}
-                                    </code>
-                                  </div>
-                                  {r.target_value !== null && r.target_value !== undefined && (
-                                    <div className="p-2 bg-card rounded border border-border text-xs">
-                                      <p className="text-muted-foreground mb-0.5 text-[10px] uppercase font-semibold">
-                                        {r.target_document ?? "Target"}
-                                      </p>
-                                      <code className="font-mono text-foreground break-all">
-                                        {String(r.target_value)}
-                                      </code>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <span
-                              className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0 ${
-                                r.passed
-                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                  : "bg-destructive/10 text-destructive"
-                              }`}
-                            >
-                              {r.passed ? "PASS" : "FAIL"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+              <>
+                <Card className="overflow-hidden">
+                  <div className="px-5 py-3.5 border-b border-border flex items-center gap-3 bg-muted/20">
+                    <ClipboardCheck className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <h3 className="font-semibold text-foreground text-sm">Ghana Customs Checklist</h3>
+                    <span className="text-[11px] text-muted-foreground">
+                      {CHECKLIST.filter((c) => !c.boeOnly).length} vendor doc checks · {CHECKLIST.filter((c) => c.boeOnly).length} deferred to BOE (Step 6)
+                    </span>
+                    <div className="flex items-center gap-3 ml-auto text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" /> Present</span>
+                      <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-amber-500" /> Conflict</span>
+                      <span className="flex items-center gap-1"><X className="w-3 h-3 text-destructive" /> Missing</span>
                     </div>
                   </div>
-                ))}
-              </Card>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b-2 border-border bg-muted/30">
+                          <th className="sticky left-0 z-10 bg-muted/30 text-center px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground border-r border-border w-10 select-none">#</th>
+                          <th className="sticky left-10 z-10 bg-muted/30 text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground border-r border-border min-w-[190px]">Checklist Item</th>
+                          {docs.map((doc) => (
+                            <th key={doc} className="text-left px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground min-w-[240px] border-r border-border/40 last:border-r-0">
+                              <div className="flex items-center gap-1.5">
+                                <FileText className="w-3 h-3" />
+                                {DOC_LABEL[doc] ?? doc.replace(/_/g, " ")}
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {CHECKLIST.map((entry, i) => {
+                          const isFirstBoe = entry.boeOnly && !CHECKLIST[i - 1]?.boeOnly
+                          const rowHasIssue = !entry.boeOnly && docs.some((doc) => entryHasDisc(entry, doc))
+                          const rowBg = entry.boeOnly ? "bg-muted/5" : rowHasIssue ? "bg-red-50/30 dark:bg-red-900/5" : i % 2 === 1 ? "bg-muted/10" : ""
+                          const stickyBg = entry.boeOnly ? "bg-muted/10" : rowHasIssue ? "bg-red-50/60 dark:bg-red-900/10" : i % 2 === 1 ? "bg-muted/20" : "bg-background"
+
+                          return (
+                            <React.Fragment key={entry.id}>
+                              {isFirstBoe && (
+                                <tr className="border-b border-border">
+                                  <td colSpan={2 + docs.length} className="sticky left-0 px-4 py-1.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-widest select-none">
+                                    BOE Validation — Step 6
+                                  </td>
+                                </tr>
+                              )}
+                            <tr className={`border-b border-border/40 last:border-b-0 ${rowBg}`}>
+                              <td className={`sticky left-0 z-10 text-center px-3 py-2 text-[11px] font-mono text-muted-foreground border-r border-border w-10 select-none ${stickyBg}`}>{i + 1}</td>
+                              <td className={`sticky left-10 z-10 px-4 py-2.5 text-[12px] font-semibold border-r border-border whitespace-nowrap ${stickyBg} ${entry.boeOnly ? "text-muted-foreground/60" : "text-foreground"}`}>
+                                {entry.label}
+                              </td>
+
+                              {docs.map((doc) => {
+                                if (entry.boeOnly) {
+                                  return <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0"><span className="text-muted-foreground/25 font-mono text-sm">—</span></td>
+                                }
+
+                                const spec = entry.docFields[doc]
+                                if (!spec) {
+                                  return <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0"><span className="text-muted-foreground/25 font-mono text-sm">—</span></td>
+                                }
+
+                                const docData  = extractedDocuments[doc]?.fields ?? {}
+                                const docItems = extractedDocuments[doc]?.items  ?? []
+                                const val = resolveVal(spec, docData, docItems)
+                                const isEmpty = !val || val.trim() === ""
+                                const isConflict = entryHasDisc(entry, doc) && !isEmpty
+                                const isMissing = isEmpty
+
+                                // Insurance/freight: absent is correct for FCA
+                                if ((entry.id === "insurance" || entry.id === "freight") && isEmpty && incotermRulePassed) {
+                                  return (
+                                    <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0">
+                                      <span className="flex items-center gap-1.5 text-[12px] text-green-600 dark:text-green-400">
+                                        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <span className="font-mono">Compliant</span>
+                                      </span>
+                                    </td>
+                                  )
+                                }
+
+                                return (
+                                  <td key={doc} className="px-4 py-2.5 align-middle border-r border-border/30 last:border-r-0">
+                                    {isMissing ? (
+                                      <span className="flex items-center gap-1.5 text-[12px] text-destructive font-medium">
+                                        <X className="w-3.5 h-3.5 flex-shrink-0" />
+                                        Missing
+                                      </span>
+                                    ) : isConflict ? (
+                                      <span className="flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-400">
+                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                        <span className="font-mono break-all leading-snug">{val}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-start gap-1.5 text-[12px] text-foreground">
+                                        <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                                        <span className="font-mono break-all leading-snug">{val}</span>
+                                      </span>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                            </React.Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+
+                {/* Value conflict details */}
+                {mismatches.length > 0 && (
+                  <Card className="overflow-hidden">
+                    <div className="px-5 py-3.5 border-b border-border flex items-center gap-2 bg-amber-50/40 dark:bg-amber-900/10">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <h3 className="font-semibold text-sm text-foreground">Value Conflicts</h3>
+                      <span className="text-[11px] text-muted-foreground ml-1">
+                        {mismatches.length} field{mismatches.length !== 1 ? "s" : ""} with conflicting values across documents
+                      </span>
+                    </div>
+                    <div className="divide-y divide-border/50">
+                      {mismatches.map((d) => {
+                        // A "plain dict" means { doc_type: value } — not a scalar,
+                        // not a {value, confidence} wrapper, not an array.
+                        const isPlainDict = (v: any): v is Record<string, any> =>
+                          v !== null && v !== undefined &&
+                          typeof v === "object" && !Array.isArray(v) &&
+                          !("value" in v)
+
+                        // Expand a value into per-document card entries.
+                        // If val is a plain dict → one card per doc key.
+                        // If val is scalar and we know the doc → one card.
+                        // If val is scalar and doc is unknown → skip (can't label it).
+                        const expandSide = (
+                          val: any,
+                          docName: string | null | undefined,
+                          role: "source" | "target" | "peer"
+                        ): { docKey: string; label: string; value: string; role: typeof role }[] => {
+                          if (val === null || val === undefined) return []
+                          if (isPlainDict(val)) {
+                            return Object.entries(val).map(([doc, v]) => ({
+                              docKey: doc,
+                              label: DOC_LABEL[doc] ?? doc.replace(/_/g, " "),
+                              value: formatValue(v),
+                              role,
+                            }))
+                          }
+                          // Scalar value — label with doc name if known, else "Expected Value"
+                          return [{
+                            docKey: docName ?? role,
+                            label: docName ? (DOC_LABEL[docName] ?? docName.replace(/_/g, " ")) : "Expected Value",
+                            value: formatValue(val),
+                            role,
+                          }]
+                        }
+
+                        // Build flat card list:
+                        // • Pure n-way: source_value is dict, target_value absent → all peers
+                        // • Mixed/pairwise: expand each side; source entries = reference, target = conflict
+                        const isPureNWay = isPlainDict(d.source_value) && (d.target_value === null || d.target_value === undefined)
+
+                        const cards: { docKey: string; label: string; value: string; role: "source" | "target" | "peer" }[] =
+                          isPureNWay
+                            ? expandSide(d.source_value, null, "peer")
+                            : [
+                                ...expandSide(d.source_value, d.source_document, "source"),
+                                ...expandSide(d.target_value, d.target_document, "target"),
+                              ]
+
+                        return (
+                          <div key={d.id} className="px-5 py-4">
+                            <div className="flex items-start gap-2 mb-1">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm font-semibold text-foreground">
+                                {(d.field_name ?? d.field ?? "—").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                              </p>
+                            </div>
+                            {d.message && <p className="text-xs text-muted-foreground mb-2 leading-relaxed pl-5">{d.message}</p>}
+                            <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: `repeat(${Math.min(cards.length, 3)}, 1fr)` }}>
+                              {cards.map(({ docKey, label, value, role }) => (
+                                <div
+                                  key={docKey}
+                                  className={`rounded-lg border-2 overflow-hidden ${
+                                    role === "source"
+                                      ? "border-blue-400 dark:border-blue-600"
+                                      : role === "target"
+                                      ? "border-amber-400 dark:border-amber-600"
+                                      : "border-border"
+                                  }`}
+                                >
+                                  {/* Card header — document name is the primary identity */}
+                                  <div
+                                    className={`px-4 py-2.5 border-b flex items-center justify-between gap-3 ${
+                                      role === "source"
+                                        ? "bg-blue-50 dark:bg-blue-900/25 border-blue-200 dark:border-blue-700"
+                                        : role === "target"
+                                        ? "bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-700"
+                                        : "bg-muted/40 border-border"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileText
+                                        className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                          role === "source"
+                                            ? "text-blue-500 dark:text-blue-400"
+                                            : role === "target"
+                                            ? "text-amber-500 dark:text-amber-400"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      />
+                                      <p
+                                        className={`text-[12px] font-bold truncate ${
+                                          role === "source"
+                                            ? "text-blue-800 dark:text-blue-300"
+                                            : role === "target"
+                                            ? "text-amber-800 dark:text-amber-300"
+                                            : "text-foreground"
+                                        }`}
+                                      >
+                                        {label}
+                                      </p>
+                                    </div>
+                                    {role !== "peer" && (
+                                      <span
+                                        className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0 ${
+                                          role === "source"
+                                            ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                                            : "bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300"
+                                        }`}
+                                      >
+                                        {role === "source" ? "Source" : "Conflict"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Card body — extracted value */}
+                                  <div className="px-4 py-3 bg-background">
+                                    <code className="text-sm font-mono text-foreground break-all leading-relaxed">{value}</code>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </Card>
+                )}
+              </>
             )
           })()}
 
-          {discrepancies && discrepancies.length > 0 && (
-            <Card className="p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <h3 className="font-semibold text-sm text-foreground">Discrepancies ({discrepancies.length})</h3>
-              </div>
-              <div className="divide-y divide-border">
-                {discrepancies.map((d: ValidationDiscrepancy) => (
-                  <div key={d.id} className="px-4 py-3 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-foreground">{d.field_name ?? d.field ?? "—"}</span>
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                          d.severity === "critical"
-                            ? "bg-destructive/10 text-destructive"
-                            : d.severity === "major"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                        }`}
-                      >
-                        {d.severity}
-                      </span>
-                      {d.status && <span className="text-[10px] text-muted-foreground uppercase">{d.status}</span>}
-                    </div>
-                    {d.message && <p className="text-xs text-muted-foreground">{d.message}</p>}
-                    {(d.source_value !== undefined || d.target_value !== undefined) && (
-                      <div className="flex gap-4 text-xs mt-1">
-                        {d.source_value !== undefined && (
-                          <div>
-                            <span className="text-muted-foreground">{d.source_document ?? "Source"}: </span>
-                            <code className="font-mono text-foreground">{String(d.source_value)}</code>
-                          </div>
-                        )}
-                        {d.target_value !== undefined && (
-                          <div>
-                            <span className="text-muted-foreground">{d.target_document ?? "Target"}: </span>
-                            <code className="font-mono text-foreground">{String(d.target_value)}</code>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
+          {/* Checks Run — reuse collapsible panel (starts collapsed, failed-only view) */}
+          {validationResults && validationResults.length > 0 && (
+            <ValidationChecksPanel results={validationResults} />
           )}
 
+          {/* Workflow Notes */}
           {summary?.messages && summary.messages.length > 0 && (
             <Card className="p-4">
               <h3 className="font-semibold text-sm text-foreground mb-2">Workflow Notes</h3>
               <ul className="space-y-1">
                 {summary.messages.map((msg: string, i: number) => (
                   <li key={i} className="text-xs text-muted-foreground flex gap-2">
-                    <span className="text-muted-foreground/50">•</span>
+                    <span className="text-muted-foreground/40">•</span>
                     <span>{msg}</span>
                   </li>
                 ))}
@@ -1543,40 +2426,37 @@ export default function VendorValidationForm() {
             </Card>
           )}
 
-          <Card className="p-4 space-y-3">
-            {shipmentId && (
-              <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 rounded-lg border border-border">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Shipment ID</p>
-                  <code className="text-sm font-mono text-foreground break-all">{shipmentId}</code>
-                </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(shipmentId)}
-                  className="flex-shrink-0 p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                  title="Copy shipment ID"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+          {/* close completeView === "results" fragment */}
+          </>}
 
+          {/* ── Action footer ── always visible regardless of active tab ── */}
+          <Card className="p-5 space-y-3">
             {finalStatus !== "failed" ? (
-              <a href={`/validation/boe${shipmentId ? `?shipment_id=${shipmentId}` : ""}`}>
+              <a href={`/validation/boe${shipmentId ? `?shipment_id=${shipmentId}` : ""}`} className="block">
                 <Button className="w-full bg-primary hover:bg-primary/90">
                   Proceed to Step 6 — BOE Validation
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </a>
             ) : (
-              <Button variant="outline" onClick={handleReset} className="w-full">
+              <Button className="w-full" variant="destructive" onClick={handleReset}>
                 Fix Documents &amp; Retry
               </Button>
             )}
+
+            <div className="flex gap-2">
+              {extractedDocuments && Object.keys(extractedDocuments).length > 0 && (
+                <Button variant="outline" onClick={() => setStep("field_review")} className="flex-1 text-sm">
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Extracted Fields
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleReset} className="flex-1 text-sm">
+                New Validation
+              </Button>
+            </div>
           </Card>
 
-          <Button variant="outline" onClick={handleReset} className="w-full">
-            New Validation
-          </Button>
         </div>
       )}
     </div>

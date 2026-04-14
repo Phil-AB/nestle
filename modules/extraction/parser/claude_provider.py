@@ -688,6 +688,17 @@ class ClaudeProvider(IParserProvider):
             "4. If a field is absent, omit it rather than returning null.\n"
             "5. Capture every line item in the 'items' array.\n"
             "6. Include full raw text of the document in the 'raw_text' field.\n"
+            "7. For each field in 'fields', return an object with 'value' and 'confidence' "
+            "instead of a raw value. Confidence (0.0–1.0) reflects extraction certainty:\n"
+            "   - 1.0: clear printed text, unambiguous\n"
+            "   - 0.9: printed but slightly obscured or requires minor interpretation\n"
+            "   - 0.7: handwritten, faded, or requires interpretation\n"
+            "   - 0.5: inferred or uncertain\n"
+            "   - 0.3 or lower: barely visible, context-guessed\n"
+            "   Example: {\"value\": \"INV-12345\", \"confidence\": 0.97}\n"
+            "8. If a field's label is visible but its value is visually redacted "
+            "(black bar, [REDACTED] stamp, white-out patch, or any obscured region), "
+            "return that field as {\"value\": null, \"redacted\": true} — do NOT omit it.\n"
         )
 
     def _build_extract_system_prompt(self, document_type: str) -> str:
@@ -697,10 +708,28 @@ class ClaudeProvider(IParserProvider):
             "Extract the requested fields from the document following the schema exactly.\n"
             "Rules:\n"
             "1. Return ONLY a single valid JSON object — no markdown, no explanation.\n"
-            "2. Use the exact field names from the schema (already in snake_case).\n"
+            "2. Use the EXACT field label as printed on the document, converted to snake_case. "
+            "Do NOT rename, re-label, or semantically map a field to a different name. "
+            "If the document says 'Total Excl. VAT', the key is 'total_excl_vat' — "
+            "NOT 'total_fob_value'. If it says 'Your Order Number', the key is "
+            "'your_order_number' — NOT 'po_number'. If it says 'Seller', the key is "
+            "'seller' — NOT 'shipper_name'.\n"
             "3. Preserve original values — do not normalise dates, currencies, or codes.\n"
             "4. For missing fields return null rather than omitting them.\n"
             "5. For array fields (items/line items) extract every row from the document.\n"
+            "6. For each header field (in 'fields'), return an object with 'value' and "
+            "'confidence' instead of a raw value. Confidence (0.0–1.0) reflects how clearly "
+            "the field was readable and unambiguous:\n"
+            "   - 1.0: clear printed text, exact match to label\n"
+            "   - 0.9: printed but slightly obscured or minor interpretation needed\n"
+            "   - 0.7: handwritten, faded, or requires interpretation\n"
+            "   - 0.5: inferred or uncertain\n"
+            "   - 0.3 or lower: barely visible or context-guessed\n"
+            "   Example: {\"value\": \"INV-12345\", \"confidence\": 0.97}\n"
+            "   For missing fields still use null (not a confidence object).\n"
+            "7. If a field's label is visible but its value is visually redacted "
+            "(black bar, [REDACTED] stamp, white-out patch, or any obscured region), "
+            "return {\"value\": null, \"redacted\": true} for that field instead of null.\n"
         )
 
     def _build_extract_user_message(
@@ -720,13 +749,43 @@ class ClaudeProvider(IParserProvider):
 
         if mode == "open":
             return (
-                "Extract ALL fields and line items you can identify in this document.\n"
-                "Return a JSON object with:\n"
-                "- ``fields``: flat key-value pairs for all header/summary fields\n"
-                "- ``items``: array of line-item objects\n"
-                "- ``tables``: array of table objects with ``headers`` and ``rows``\n"
-                "- ``raw_text``: full plain-text content\n\n"
-                "Return ONLY valid JSON."
+                "Extract all information from this document and return a JSON object with these keys:\n\n"
+                "- ``fields``: object where each entry is an explicitly-labeled header/summary field. "
+                "CRITICAL: Use the EXACT field label as printed on the document, converted to "
+                "snake_case. Do NOT rename, re-label, or semantically map a field to a different "
+                "name. Examples: 'Total Excl. VAT' → 'total_excl_vat' (NOT 'total_fob_value'); "
+                "'Your Order Number' → 'your_order_number' (NOT 'po_number'); "
+                "'Shipping Condition' → 'shipping_condition' (NOT 'incoterm'); "
+                "'Seller' → 'seller' (NOT 'shipper_name'); "
+                "'Buyer' → 'buyer' (NOT 'consignee_name').\n"
+                "Address blocks: Extract every named address block as a separate field using "
+                "the block's label as the key (e.g. 'Delivery address' → 'delivery_address', "
+                "'Bill-to address' → 'bill_to_address', 'Ship-to' → 'ship_to'). "
+                "The value is the full multi-line address text joined with ', '. "
+                "If the document has multiple address blocks, extract ALL of them — "
+                "do NOT merge or drop any.\n"
+                "For EVERY field, return {\"value\": <extracted_value>, \"confidence\": <0.0-1.0>} "
+                "instead of a raw value. Confidence reflects how clearly the field was readable "
+                "(1.0 = clear printed text; 0.9 = minor obscuring; 0.7 = handwritten/faded; "
+                "0.5 = inferred; 0.3 or lower = barely visible). "
+                "Do NOT add computed, inferred, or document-type metadata fields. "
+                "Do NOT duplicate the same value under multiple key names. "
+                "If a field label is visible but its value is redacted (black bar, [REDACTED] stamp, "
+                "white-out, or any obscured region), include it as {\"value\": null, \"redacted\": true} "
+                "rather than a confidence object.\n\n"
+                "- ``items``: array of row-level objects. Every line item, container row, and batch "
+                "detail row must be a separate object in this array. Each object must be a flat dict "
+                "with enough context columns to be self-contained — for example, a packing-list batch "
+                "row must include its container_no; a BOL container row must include container_no and "
+                "seal_no. Do NOT leave row-level data only in ``tables``. "
+                "For EVERY cell value in items, use {\"value\": <cell_value>, \"confidence\": <0.0-1.0>} "
+                "the same way as header fields. For redacted cells use {\"value\": null, \"redacted\": true}.\n\n"
+                "- ``tables``: array of table objects (``headers`` + ``rows``) ONLY for tabular data "
+                "that does NOT fit as flat row objects in ``items`` — e.g. tax calculation tables, "
+                "freight rate tables, summary totals tables. "
+                "For redacted cells in tables, use {\"value\": null, \"redacted\": true}.\n\n"
+                "- ``raw_text``: full plain-text content of the document.\n\n"
+                "Return ONLY valid JSON — no markdown fences, no commentary."
             )
 
         # Focused mode — build explicit field list
@@ -748,7 +807,12 @@ class ClaudeProvider(IParserProvider):
         if items_def:
             field_name = items_def.get("field_name", "items")
             lines.append(f"\n=== LINE ITEMS (field: '{field_name}') ===")
-            lines.append(f"  Return as a JSON array under the key '{field_name}'.")
+            lines.append(
+                f"  Return as a JSON array under the key '{field_name}'. "
+                "For EVERY cell value in each row, use {\"value\": <cell_value>, \"confidence\": <0.0-1.0>} "
+                "(same confidence scale as header fields). Missing cells use null; redacted cells use "
+                "{\"value\": null, \"redacted\": true}."
+            )
             for fname, fdef in items_def.get("fields", {}).items():
                 req_tag = "[REQUIRED]" if fdef.get("required") else "[optional]"
                 desc = fdef.get("description", "")
@@ -759,6 +823,15 @@ class ClaudeProvider(IParserProvider):
                 lines.append(line)
 
         lines.append(
+            "\nCONFIDENCE RULE: For every field in ``fields``, return "
+            "{\"value\": <extracted_value>, \"confidence\": <0.0-1.0>} instead of a raw value. "
+            "Confidence reflects extraction certainty: 1.0=clear print, 0.9=minor obscuring, "
+            "0.7=handwritten/faded, 0.5=uncertain/inferred, 0.3=barely visible. "
+            "For absent/missing fields still return null (not a confidence object).\n"
+            "\nREDACTION RULE: If a field's label is visible but its value is redacted "
+            "(black bar, [REDACTED] stamp, white-out, or any obscured region), "
+            "return {\"value\": null, \"redacted\": true} for that field instead of null. "
+            "The same applies to individual cells inside ``items``.\n"
             "\nReturn the JSON with top-level keys:\n"
             f"  - ``fields``: object containing all header fields above\n"
             f"  - ``items``: array of line-item objects (use field name above for the key)\n"

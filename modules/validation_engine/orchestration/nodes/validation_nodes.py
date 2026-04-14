@@ -1,6 +1,6 @@
 """Workflow nodes for validation execution"""
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 from datetime import datetime
 from ...core.engine import get_validation_engine
 from ...core.session_manager import get_session_manager
@@ -12,6 +12,53 @@ from ..state_definitions import ValidationWorkflowState, WorkflowStatus
 from shared.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _apply_use_case_synonyms(
+    documents: Dict[str, Dict[str, Any]],
+    synonyms: Dict[str, List[str]],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Apply use-case-specific synonym mappings so that validators can find
+    fields by their canonical names even when extraction used document-specific
+    labels.
+
+    For example, if the invoice has ``your_order_number`` but the validator
+    looks for ``po_number``, this adds ``po_number`` pointing to the same value.
+
+    Original field names are **preserved** so the UI still shows the document's
+    actual labels.  Canonical names are added *in addition* to the originals.
+    """
+    # Build reverse lookup: alias (lowercased) → canonical name
+    reverse: Dict[str, str] = {}
+    for canonical, aliases in synonyms.items():
+        for alias in aliases:
+            reverse[alias.lower()] = canonical
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for doc_type, doc_data in documents.items():
+        remapped: Dict[str, Any] = {}
+
+        for field_name, value in doc_data.items():
+            key_lower = field_name.lower()
+            canonical = reverse.get(key_lower)
+
+            # If this field is an alias of a *different* canonical name, add
+            # the canonical mapping (only if not already present — the field
+            # whose own name IS the canonical always wins).
+            if canonical and canonical.lower() != key_lower:
+                if canonical not in remapped:
+                    remapped[canonical] = value
+                    logger.debug(
+                        f"Use-case synonym: {doc_type}.{field_name} → {canonical}"
+                    )
+
+            # Always keep the original field name
+            remapped[field_name] = value
+
+        result[doc_type] = remapped
+
+    return result
 
 
 async def initialize_node(state: ValidationWorkflowState) -> Dict[str, Any]:
@@ -51,10 +98,29 @@ async def normalize_node(state: ValidationWorkflowState) -> Dict[str, Any]:
         # Get normalization engine
         norm_engine = get_normalization_engine()
 
-        # Normalize all documents
+        # Normalize all documents (global synonyms, formats, units)
         normalized_docs = await norm_engine.normalize_documents(
             documents=state["documents"]
         )
+
+        # Apply use-case-specific synonym mappings.
+        # The global NormalizationEngine handles same-label variants
+        # (e.g., "Order No" → "order_number") and format/unit normalization.
+        # Cross-concept mappings like "your_order_number" → "po_number" come
+        # from the use-case config and are applied here as a second pass.
+        uc_config = state.get("config", {})
+        if isinstance(uc_config, dict):
+            uc_config = uc_config.get("use_case", uc_config)
+        uc_synonyms = (
+            (uc_config or {}).get("normalization", {}).get("synonyms", {})
+            if isinstance(uc_config, dict) else {}
+        )
+        if uc_synonyms:
+            normalized_docs = _apply_use_case_synonyms(normalized_docs, uc_synonyms)
+            logger.info(
+                f"Applied {len(uc_synonyms)} use-case synonym mappings to "
+                f"{len(normalized_docs)} documents"
+            )
 
         return {
             "current_step": "normalize",
@@ -71,11 +137,25 @@ async def normalize_node(state: ValidationWorkflowState) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Normalization failed: {str(e)}")
+
+        # Even when global normalization fails, apply use-case synonyms so
+        # validators can at least resolve field names on the raw documents.
+        fallback_docs = state["documents"]
+        uc_config = state.get("config", {})
+        if isinstance(uc_config, dict):
+            uc_config = uc_config.get("use_case", uc_config)
+        uc_synonyms = (
+            (uc_config or {}).get("normalization", {}).get("synonyms", {})
+            if isinstance(uc_config, dict) else {}
+        )
+        if uc_synonyms:
+            fallback_docs = _apply_use_case_synonyms(fallback_docs, uc_synonyms)
+
         return {
             "current_step": "normalize",
             "failed_steps": ["normalize"],
             "normalized": False,
-            "normalized_documents": state["documents"],  # Use originals
+            "normalized_documents": fallback_docs,
             "normalization_errors": [{
                 "step": "normalize",
                 "error": str(e),
@@ -123,8 +203,12 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
             # Execute validators in this step
             for validator_name in validators:
                 try:
-                    # Get validator config
-                    validator_config = step_config.get("config", {})
+                    # Merge step-level severity into validator config so validators
+                    # inherit the correct default instead of always falling back to MINOR.
+                    validator_config = {
+                        **step_config.get("config", {}),
+                        "severity": step_severity,
+                    }
 
                     # Get validator instance
                     validator = validator_registry.get_validator(
@@ -180,10 +264,11 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
                     result_dicts = [r.dict() for r in results]
                     all_results.extend(result_dicts)
 
-                    # Extract discrepancies
+                    # Extract discrepancies and run them through the classifier
                     for result in results:
                         if not result.passed and not result.auto_fixed:
                             from ...core.base import Discrepancy
+                            from ...discrepancy import get_discrepancy_classifier
                             discrepancy = Discrepancy(
                                 field_name=result.field_name or "unknown",
                                 source_document=result.source_document,
@@ -193,6 +278,11 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
                                 difference=result.discrepancy,
                                 severity=result.severity,
                                 confidence=result.confidence
+                            )
+                            # Classify type first, then severity (type must be set
+                            # before severity rules check discrepancy_type)
+                            discrepancy = await get_discrepancy_classifier().classify(
+                                discrepancy, context
                             )
                             all_discrepancies.append(discrepancy.dict())
 
@@ -209,9 +299,6 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
         passed = sum(1 for r in all_results if r["passed"])
         all_passed = passed == len(all_results)
 
-        # Separate critical discrepancies
-        critical = [d for d in all_discrepancies if d["severity"] == Severity.CRITICAL]
-
         return {
             "current_step": "validate",
             "completed_steps": ["validate"],
@@ -219,11 +306,9 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
             "validation_results": all_results,
             "all_validations_passed": all_passed,
             "discrepancies": all_discrepancies,
-            "critical_discrepancies": critical,
             "messages": [
                 f"Validation completed: {passed}/{len(all_results)} passed, "
-                f"{len(all_discrepancies)} discrepancies found "
-                f"({len(critical)} critical)"
+                f"{len(all_discrepancies)} discrepancies found"
             ],
             "updated_at": datetime.utcnow().isoformat()
         }
@@ -263,13 +348,9 @@ async def analyze_discrepancies_node(state: ValidationWorkflowState) -> Dict[str
             "updated_at": datetime.utcnow().isoformat()
         }
 
-    # Count by severity
-    critical = sum(1 for d in discrepancies if d["severity"] == Severity.CRITICAL)
-    major = sum(1 for d in discrepancies if d["severity"] == Severity.MAJOR)
-    minor = sum(1 for d in discrepancies if d["severity"] == Severity.MINOR)
-
-    # Determine if user confirmation required
-    requires_user = critical > 0 or major > 0
+    # No severity tiers — every discrepancy requires attention.
+    # Any failure triggers user confirmation before the shipment can proceed.
+    requires_user = len(discrepancies) > 0
 
     return {
         "current_step": "analyze_discrepancies",
@@ -278,7 +359,7 @@ async def analyze_discrepancies_node(state: ValidationWorkflowState) -> Dict[str
         "requires_user_confirmation": requires_user,
         "messages": [
             f"Analyzed {len(discrepancies)} discrepancies: "
-            f"{critical} critical, {major} major, {minor} minor"
+            f"{len(discrepancies)} requiring attention"
         ],
         "updated_at": datetime.utcnow().isoformat()
     }
@@ -318,9 +399,8 @@ async def generate_report_node(state: ValidationWorkflowState) -> Dict[str, Any]
     """
     logger.info(f"Generating report for session {state['session_id']}")
 
-    # Determine final status, accounting for user confirmations on discrepancies.
-    # A critical discrepancy that was explicitly confirmed by the user no longer
-    # blocks the overall result — treat it as resolved.
+    # No severity tiers — any unresolved discrepancy blocks the shipment.
+    # A discrepancy confirmed by the user is treated as reviewed/accepted.
     user_confirmations: Dict[str, Any] = state.get("user_confirmations", {})
     confirmed_ids = {
         disc_id
@@ -328,16 +408,15 @@ async def generate_report_node(state: ValidationWorkflowState) -> Dict[str, Any]
         if isinstance(conf, dict) and conf.get("confirmed") is True
     }
 
-    unresolved_critical = [
-        d for d in (state.get("critical_discrepancies") or [])
-        if d.get("id") not in confirmed_ids
-    ]
+    all_discrepancies = state.get("discrepancies") or []
+    unresolved = [d for d in all_discrepancies if d.get("id") not in confirmed_ids]
 
-    if state.get("all_validations_passed") and not unresolved_critical:
+    if state.get("all_validations_passed") and not all_discrepancies:
         final_status = "passed"
-    elif unresolved_critical:
+    elif unresolved:
         final_status = "failed"
     else:
+        # All discrepancies were reviewed and confirmed by the user
         final_status = "requires_attention"
 
     return {

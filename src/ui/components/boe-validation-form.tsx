@@ -38,6 +38,34 @@ function unwrap(v: any): string {
   return String(v)
 }
 
+/**
+ * Format a discrepancy source_value / target_value for display.
+ * Handles:
+ *  - null / undefined → "—"
+ *  - {value: ...} envelopes → unwrapped scalar
+ *  - plain dicts (n-way matcher: {doc: val, ...}) → "doc1: val1 · doc2: val2"
+ *  - arrays → joined with ", "
+ *  - primitives → String()
+ */
+function formatValue(v: any): string {
+  if (v === null || v === undefined) return "—"
+  // Unwrap confidence envelope
+  if (typeof v === "object" && !Array.isArray(v) && "value" in v) {
+    return String(v.value ?? "—")
+  }
+  if (Array.isArray(v)) {
+    return v.map((item) => formatValue(item)).join(", ")
+  }
+  if (typeof v === "object") {
+    // e.g. {bill_of_entry: "1901.90", invoice: "1901.9"} from n-way matcher
+    // or   {invoice: "Nestlé SA", bill_of_lading: "Nestle S.A."} from shipper validator
+    return Object.entries(v)
+      .map(([doc, val]) => `${doc.replace(/_/g, " ")}: ${val}`)
+      .join(" · ")
+  }
+  return String(v)
+}
+
 function deriveConfidence(v: any): number {
   if (v === null || v === undefined) return 0
   if (typeof v === "object") {
@@ -79,6 +107,181 @@ function SeverityBadge({ severity }: { severity: string }) {
     >
       {severity}
     </span>
+  )
+}
+
+// ─── EditableItemCell ─────────────────────────────────────────────────────────
+
+function EditableItemCell({
+  raw,
+  edited,
+  isEdited,
+  confidence,
+  readOnly,
+  onChange,
+}: {
+  raw: any
+  edited: string | undefined
+  isEdited: boolean
+  confidence: number
+  readOnly?: boolean
+  onChange?: (value: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+  const displayValue = edited !== undefined ? edited : unwrap(raw)
+
+  const startEdit = () => {
+    if (readOnly || !onChange) return
+    setDraft(displayValue)
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  const commit = () => {
+    onChange?.(draft)
+    setEditing(false)
+  }
+
+  const cancel = () => setEditing(false)
+
+  return (
+    <td className={`px-2 py-1.5 font-mono group relative ${isEdited ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}`}>
+      {editing ? (
+        <div className="flex items-center gap-1">
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit()
+              if (e.key === "Escape") cancel()
+            }}
+            className="h-6 text-xs py-0 font-mono bg-background border border-border rounded px-1 w-full min-w-[60px]"
+            autoComplete="off"
+          />
+          <button onClick={commit} className="text-green-600 hover:text-green-700 flex-shrink-0">
+            <Check className="w-3 h-3" />
+          </button>
+          <button onClick={cancel} className="text-muted-foreground hover:text-destructive flex-shrink-0">
+            <X className="w-2.5 h-2.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`truncate text-xs ${displayValue ? "text-foreground" : "text-muted-foreground italic"}`}
+            title={displayValue || "—"}
+          >
+            {displayValue || "—"}
+          </span>
+          {isEdited && (
+            <span className="text-[8px] font-bold uppercase text-amber-600 dark:text-amber-400 flex-shrink-0">
+              edited
+            </span>
+          )}
+          <ConfidenceBadge score={confidence} />
+          {!readOnly && onChange && (
+            <button
+              onClick={startEdit}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground flex-shrink-0 ml-auto"
+              title="Edit cell"
+            >
+              <Pencil className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
+      )}
+    </td>
+  )
+}
+
+// ─── EditableLineItemsTable ───────────────────────────────────────────────────
+
+const SKIP_ITEM_COLS = new Set([
+  "_row_index", "_table_index", "column_index", "column_number",
+  "row_index", "table_block_index", "table_bbox",
+  "normalized_header", "original_header", "original_page",
+])
+
+function EditableLineItemsTable({
+  items,
+  edits,
+  onCellChange,
+  readOnly,
+}: {
+  items: Array<Record<string, any>>
+  edits?: Record<number, Record<string, string>>
+  onCellChange?: (rowIndex: number, column: string, value: string) => void
+  readOnly?: boolean
+}) {
+  if (!items || items.length === 0) return null
+
+  const seen = new Set<string>()
+  const columns: string[] = []
+  for (const row of items) {
+    for (const k of Object.keys(row)) {
+      if (!SKIP_ITEM_COLS.has(k) && !k.startsWith("_") && !seen.has(k)) {
+        seen.add(k)
+        columns.push(k)
+      }
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+        Line Items — {items.length} row{items.length !== 1 ? "s" : ""}
+        {!readOnly && (
+          <span className="ml-2 normal-case font-normal text-muted-foreground/70">
+            (hover a cell to edit)
+          </span>
+        )}
+      </p>
+      <div className="overflow-x-auto rounded border border-border">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-muted/60">
+              <th className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border w-7">#</th>
+              {columns.map((col) => (
+                <th
+                  key={col}
+                  className="text-left px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border whitespace-nowrap"
+                >
+                  {col.replace(/_/g, " ")}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((row, rowIdx) => (
+              <tr key={rowIdx} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+                <td className="px-2 py-1.5 text-[10px] text-muted-foreground font-mono">{rowIdx + 1}</td>
+                {columns.map((col) => {
+                  const raw = row[col]
+                  const editedRow = edits?.[rowIdx]
+                  const edited = editedRow?.[col]
+                  const isEdited = edited !== undefined && edited !== unwrap(raw)
+                  const conf = deriveConfidence(raw)
+                  return (
+                    <EditableItemCell
+                      key={col}
+                      raw={raw}
+                      edited={edited}
+                      isEdited={isEdited}
+                      confidence={conf}
+                      readOnly={readOnly}
+                      onChange={onCellChange ? (v) => onCellChange(rowIdx, col, v) : undefined}
+                    />
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -287,21 +490,7 @@ function ExtractedFieldsReference({ docMeta }: { docMeta: ExtractedDocumentMeta 
 
           {docMeta.items && docMeta.items.length > 0 && (
             <div className="px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                Line Items ({docMeta.items.length})
-              </p>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {docMeta.items.map((item, i) => (
-                  <div
-                    key={i}
-                    className="text-[11px] font-mono text-muted-foreground bg-muted/40 rounded px-2 py-1 truncate"
-                  >
-                    {JSON.stringify(item, (_, v) =>
-                      typeof v === "object" && v !== null && "value" in v ? v.value : v
-                    ).slice(0, 200)}
-                  </div>
-                ))}
-              </div>
+              <EditableLineItemsTable items={docMeta.items} readOnly />
             </div>
           )}
         </div>
@@ -315,11 +504,15 @@ function ExtractedFieldsReference({ docMeta }: { docMeta: ExtractedDocumentMeta 
 function BOEFieldPanel({
   docMeta,
   edits,
+  itemEdits,
   onFieldChange,
+  onItemChange,
 }: {
   docMeta: ExtractedDocumentMeta
   edits: Record<string, string>
+  itemEdits: Record<number, Record<string, string>>
   onFieldChange: (key: string, val: string) => void
+  onItemChange: (rowIndex: number, column: string, val: string) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -375,24 +568,11 @@ function BOEFieldPanel({
           )}
 
           {docMeta.items && docMeta.items.length > 0 && (
-            <div className="py-2.5 border-t border-border mt-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Line Items — {docMeta.items.length} row
-                {docMeta.items.length !== 1 ? "s" : ""}
-              </span>
-              <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
-                {docMeta.items.map((item, i) => (
-                  <div
-                    key={i}
-                    className="text-[11px] font-mono text-muted-foreground bg-muted/40 rounded px-2 py-1 truncate"
-                  >
-                    {JSON.stringify(item, (_, v) =>
-                      typeof v === "object" && v !== null && "value" in v ? v.value : v
-                    ).slice(0, 200)}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EditableLineItemsTable
+              items={docMeta.items}
+              edits={itemEdits}
+              onCellChange={onItemChange}
+            />
           )}
         </div>
       )}
@@ -475,12 +655,12 @@ function ValidationResultsPanel({ results }: { results: any[] }) {
                   <div className="flex gap-3 mt-1.5 flex-wrap">
                     {result.source_value !== undefined && (
                       <span className="text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded text-foreground">
-                        Got: {String(result.source_value).slice(0, 80)}
+                        Got: {formatValue(result.source_value).slice(0, 120)}
                       </span>
                     )}
                     {result.target_value !== undefined && result.target_value !== null && (
                       <span className="text-[10px] font-mono bg-muted/60 px-1.5 py-0.5 rounded text-foreground">
-                        Expected: {String(result.target_value).slice(0, 80)}
+                        Expected: {formatValue(result.target_value).slice(0, 120)}
                       </span>
                     )}
                   </div>
@@ -570,16 +750,16 @@ function DiscrepancyCard({
               <p className="text-muted-foreground mb-0.5 text-[10px]">
                 {disc.source_document ?? "Source"}
               </p>
-              <p className="font-mono font-medium text-foreground truncate">
-                {String(disc.source_value ?? "—")}
+              <p className="font-mono font-medium text-foreground truncate" title={formatValue(disc.source_value)}>
+                {formatValue(disc.source_value)}
               </p>
             </div>
             <div className="p-2 bg-card rounded border border-border">
               <p className="text-muted-foreground mb-0.5 text-[10px]">
                 {disc.target_document ?? "Expected"}
               </p>
-              <p className="font-mono font-medium text-foreground truncate">
-                {String(disc.target_value ?? "—")}
+              <p className="font-mono font-medium text-foreground truncate" title={formatValue(disc.target_value)}>
+                {formatValue(disc.target_value)}
               </p>
             </div>
           </div>
@@ -744,6 +924,8 @@ export default function BOEValidationForm() {
   // Extracted BOE fields + edits
   const [extractedBOE, setExtractedBOE] = useState<ExtractedDocumentMeta | null>(null)
   const [fieldEdits, setFieldEdits] = useState<Record<string, string>>({})
+  // Per-row, per-column line item edits: { rowIndex: { column: newValue } }
+  const [lineItemEdits, setLineItemEdits] = useState<Record<number, Record<string, string>>>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -775,6 +957,13 @@ export default function BOEValidationForm() {
 
   const handleFieldChange = useCallback((key: string, val: string) => {
     setFieldEdits((prev) => ({ ...prev, [key]: val }))
+  }, [])
+
+  const handleLineItemChange = useCallback((rowIndex: number, column: string, val: string) => {
+    setLineItemEdits((prev) => ({
+      ...prev,
+      [rowIndex]: { ...(prev[rowIndex] ?? {}), [column]: val },
+    }))
   }, [])
 
   // ── Apply API result to state ─────────────────────────────────────────────
@@ -815,6 +1004,7 @@ export default function BOEValidationForm() {
       if (res.extracted_boe && Object.keys(res.extracted_boe.fields ?? {}).length > 0) {
         setExtractedBOE(res.extracted_boe)
         setFieldEdits({})
+        setLineItemEdits({})
         setPendingResult(res)
         setStep("field_review")
       } else {
@@ -836,11 +1026,28 @@ export default function BOEValidationForm() {
     setSaveError(null)
 
     try {
-      if (Object.keys(fieldEdits).length > 0 && extractedBOE.document_id) {
-        await apiClient.updateDocumentFields(extractedBOE.document_id, fieldEdits, {
-          updated_by: "field_review",
-          update_reason: "User reviewed and corrected extracted BOE fields",
-        })
+      const hasFieldEdits = Object.keys(fieldEdits).length > 0
+      const hasItemEdits = Object.keys(lineItemEdits).length > 0
+
+      if ((hasFieldEdits || hasItemEdits) && extractedBOE.document_id) {
+        // Flatten line item edits to [{row_index, column, value}]
+        const itemUpdates = Object.entries(lineItemEdits).flatMap(([rowIdx, cols]) =>
+          Object.entries(cols).map(([column, value]) => ({
+            row_index: Number(rowIdx),
+            column,
+            value,
+          }))
+        )
+
+        await apiClient.updateDocumentFields(
+          extractedBOE.document_id,
+          fieldEdits,
+          {
+            updated_by: "field_review",
+            update_reason: "User reviewed and corrected extracted BOE fields",
+          },
+          itemUpdates.length > 0 ? itemUpdates : undefined
+        )
       }
       if (pendingResult) applyResult(pendingResult)
     } catch (e) {
@@ -887,6 +1094,7 @@ export default function BOEValidationForm() {
     setPendingResult(null)
     setExtractedBOE(null)
     setFieldEdits({})
+    setLineItemEdits({})
     setSessionId(null)
     setDiscrepancies([])
     setConfirmations({})
@@ -1110,7 +1318,13 @@ export default function BOEValidationForm() {
             ))}
           </div>
 
-          <BOEFieldPanel docMeta={extractedBOE} edits={fieldEdits} onFieldChange={handleFieldChange} />
+          <BOEFieldPanel
+            docMeta={extractedBOE}
+            edits={fieldEdits}
+            itemEdits={lineItemEdits}
+            onFieldChange={handleFieldChange}
+            onItemChange={handleLineItemChange}
+          />
 
           {saveError && (
             <Card className="p-4 border-l-4 border-destructive bg-destructive/5">
