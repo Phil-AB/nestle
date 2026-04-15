@@ -7,4 +7,4 @@
 - before you make any changes or fix anything, investigate and verify first
 - when I ask you to run a test, i expect you to read the documents directly to know what to expect, before you run the docuemnts through the system so that if there is a mistake, you can easily catch it
 - UI for extraction and validation needs every field to have a confidence number, also a review feature where each field is editable before it gets saved to the database.
-
+- DO NOT HARDCODE ANYTHING.

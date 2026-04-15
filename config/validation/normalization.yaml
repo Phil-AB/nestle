@@ -27,10 +27,12 @@ normalization:
     # Global synonym dictionary
     # Format: canonical_name: [list of synonyms]
     #
-    # RULE: Only list variants of the SAME label (abbreviations, case, spacing).
-    # Do NOT map semantically different labels to the same canonical name.
-    # Cross-concept matching (e.g. "Your Order Number" ↔ "po_number") is
-    # handled by the use-case field mappings in config/validation/use_cases/.
+    # RULE: List all known label variants for the same logical field.
+    # Includes both same-label variants (abbreviations, case) AND
+    # semantically equivalent labels from different document types
+    # (e.g. "Your Order Number" and "Customer Ref." both → po_number).
+    # This allows the SynonymMapper to resolve any document label to
+    # its canonical name for the UI checklist, regardless of supplier.
     synonyms:
       # Customs and trade
       hs_code:
@@ -57,6 +59,10 @@ normalization:
         - "net_wt"
         - "total_net_weight"    # SAP-style invoice header total
         - "Total Net Weight"
+        - "nett_weight_kg"      # BOL totals block
+        - "NETT WEIGHT"         # BOL page-2 totals
+        - "Nett Weight"
+        - "total_sent_net_weight"  # Packing list grand totals
 
       gross_weight:
         - "Gross Weight"
@@ -65,6 +71,9 @@ normalization:
         - "gross_wt"
         - "total_gross_weight"  # SAP-style invoice header total
         - "Total Gross Weight"
+        - "gross_weight_kg"     # BOL totals block
+        - "GROSS WEIGHT"        # BOL page-2 totals
+        - "total_sent_gross_weight"  # Packing list grand totals
 
       tare_weight:
         - "Tare Weight"
@@ -80,6 +89,9 @@ normalization:
         - "Total Units"
         - "Total Qty"
         - "total_qty"
+        - "total_sent_units"   # Packing list grand totals
+        - "totals_bags"        # BOL page-2 totals
+        - "Totals"
 
       unit_price:
         - "Unit Price"
@@ -94,6 +106,10 @@ normalization:
       product_description:
         - "Product Description"
         - "product_description"
+        - "description"
+        - "goods_description"
+        - "description_of_goods"
+        - "kind_of_packages_description_of_goods"
 
       product_name:
         - "Product Name"
@@ -146,18 +162,32 @@ normalization:
         - "PO No"
         - "Purchase Order"
         - "po_number"
+        - "your_order_number"    # Invoice label "Your Order Number"
+        - "Your Order Number"
+        - "customer_ref"        # PL/BOL label "Customer ref."
+        - "customer_reference"
+        - "Customer ref."
+        - "Customer Ref"
+        - "CUSTOMER REF."
 
       order_number:
         - "Order Number"
         - "Order No"
         - "order_number"
         - "order_no"
+        - "our_order_number"    # Invoice label "Our Order Number"
+        - "Our Order Number"
+        - "Order no."
+        - "ORDER NO."
 
       contract_number:
         - "Contract Number"
         - "Contract No"
         - "contract_number"
         - "contract_no"
+        - "Contract no."
+        - "Contract No"
+        - "CONTRACT NO."
 
       boe_number:
         - "BOE Number"
@@ -173,7 +203,12 @@ normalization:
         - "Container No"
         - "container_number"
 
-      # Plural form — comma-separated list of container IDs from BOL / packing list
+      container_count:
+        - "container_count"
+        - "total_no_of_containers"
+        - "Total No. of Containers"
+        - "number_of_containers"
+
       container_numbers:
         - "container_numbers"
         - "Container Numbers"
@@ -196,6 +231,17 @@ normalization:
         - "Bill of Lading Number"
         - "Bl. No."
         - "B/L Number"
+        - "bl_no"
+        - "booking_number"
+        - "booking_no"
+        - "Booking No."
+        - "Booking No"
+
+      booking_number:
+        - "booking_number"
+        - "Booking No"
+        - "Booking No."
+        - "booking_no"
 
       # Parties — each role keeps its own label
       shipper_name:
@@ -210,18 +256,27 @@ normalization:
         - "Supplier"
         - "supplier"
         - "supplier_name"
+        - "shipper"              # BOL single field
 
       shipper_address:
         - "shipper_address"
         - "Shipper Address"
+        - "seller_address"      # Invoice extraction
 
       consignee_name:
         - "consignee_name"
         - "Consignee"
+        - "consignee"           # BOL single field
+        - "buyer_name"
+        - "Buyer"
+        - "buyer"
+        - "bill_to_name"
 
       consignee_address:
         - "consignee_address"
         - "Consignee Address"
+        - "bill_to_address"
+        - "delivery_address"
 
       # Financial totals — only match the exact label
       total_invoice_value:
@@ -229,6 +284,8 @@ normalization:
         - "Invoice Total"
         - "total_invoice_value"
         - "invoice_total"
+        - "total_incl_vat"      # Invoice label "Total Incl. VAT"
+        - "Total Incl. VAT"
 
       total_fob_value:
         - "Total FOB"
@@ -237,6 +294,8 @@ normalization:
         - "FOB Amount"
         - "total_fob_value"
         - "fob_value"
+        - "total_excl_vat"      # Invoice label "Total Excl. VAT"
+        - "Total Excl. VAT"
 
       # Document dates
       document_date:
@@ -255,11 +314,16 @@ normalization:
         - "Currency"
         - "currency"
 
-      # Incoterms — only match fields literally labeled "Incoterm/Incoterms".
+      # Incoterms — match fields labeled "Incoterm" or equivalent trade terms
       incoterm:
         - "Incoterm"
         - "Incoterms"
         - "incoterm"
+        - "shipping_condition"  # Invoice label "Shipping Condition"
+        - "Shipping Condition"
+        - "delivery_terms"      # Packing list label "Delivery terms"
+        - "Delivery terms"
+        - "Delivery Terms"
 
       # BOE-specific field names (GRA form)
       bill_of_lading:
@@ -271,6 +335,44 @@ normalization:
         - "Customs Procedure Code"
         - "customs_code"
         - "cpc_code"
+
+  # Value-level cleanup applied after extraction.
+  # These fix VALUE content issues, not field names.
+  # The SynonymMapper handles name normalization separately.
+  # Rules are keyed by document type. Each rule targets a specific field
+  # and applies regex substitutions to clean the extracted value.
+  value_cleanups:
+    enabled: true
+
+    rules:
+      bill_of_lading:
+        # Strip container preamble from product description values
+        product_description:
+          - pattern: '(?i)^\d+\s*(?:ft\.?|foot|feet)?\s*(?:high\s+cube|standard|open\s+top)?\s*container\s+(?:said\s+to\s+contain\s+)?\d+\s*(?:bags?|packages?|units?|cartons?|pallets?)\s*'
+            replacement: ""
+          - pattern: '(?:,\s*)?Article\s+no\.?:\s*\S+(?:\s*Nett\s+Weight\s+KG:\s*[\d,.]+)?'
+            replacement: ""
+        # Strip contact details from consignee values
+        consignee:
+          - pattern: '\s*,?\s*(?:Tel[.:]?|Phone[.:]?|Fax[.:]?|E?-?mail[.:]?)\s*[.:]?\s*.*$'
+            replacement: ""
+        # Strip contact details from consignee_name (if prompt produced it with details)
+        consignee_name:
+          - pattern: '\s*,?\s*(?:Tel[.:]?|Phone[.:]?|Fax[.:]?|E?-?mail[.:]?)\s*[.:]?\s*.*$'
+            replacement: ""
+
+      invoice:
+        # Currency dedup: "EUR 467,775.00 EUR" -> "EUR 467,775.00"
+        total_excl_vat:
+          - pattern: '^([A-Z]{3})\s+([\d,.]+(?:\.\d+)?)\s+\1$'
+            replacement: "\\1 \\2"
+        total_incl_vat:
+          - pattern: '^([A-Z]{3})\s+([\d,.]+(?:\.\d+)?)\s+\1$'
+            replacement: "\\1 \\2"
+        # Strip address from shipper_name if it contains one
+        shipper_name:
+          - pattern: '\n.*'
+            replacement: ""
 
   # Unit conversion configuration
   unit_conversion:

@@ -212,6 +212,11 @@ class FormatNormalizer:
         # Parse string
         value_str = str(value).strip()
 
+        # Currency dedup: "EUR 467,775.00 EUR" -> "EUR 467,775.00"
+        _dedup = re.match(r'^([A-Z]{3})\s*([\d,.]+(?:\.\d+)?)\s+\1$', value_str, re.IGNORECASE)
+        if _dedup:
+            value_str = f"{_dedup.group(1)} {_dedup.group(2)}"
+
         # Remove currency symbols
         cleaned = value_str
         for symbol in ["$", "€", "£", "¥", "USD", "EUR", "GBP", "JPY"]:

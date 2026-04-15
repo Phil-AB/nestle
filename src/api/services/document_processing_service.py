@@ -338,6 +338,68 @@ class DocumentProcessingService:
                 fields[new_key] = fields.pop(old_key)
                 logger.info(f"PL post-process: {old_key} → {new_key}")
 
+    def _apply_value_cleanups(self, fields: dict, document_type: str) -> None:
+        """
+        Config-driven value-level cleanup applied after extraction.
+
+        Reads regex cleanup rules from normalization.yaml under
+        ``value_cleanups.rules.<document_type>`` and applies them to
+        field values. Handles both plain values and {value, confidence} envelopes.
+
+        This fixes VALUE content issues (container preamble, contact details,
+        currency duplication) — field name normalization is handled by the
+        SynonymMapper separately.
+        """
+        import re
+        try:
+            from modules.validation_engine.core.config_loader import get_config_loader
+            config_loader = get_config_loader()
+            norm_config = config_loader.load_normalization_config()
+        except Exception:
+            logger.debug("Could not load normalization config for value cleanups")
+            return
+
+        cleanup_config = norm_config.get("value_cleanups", {})
+        if not cleanup_config.get("enabled", True):
+            return
+
+        rules = cleanup_config.get("rules", {}).get(document_type, {})
+        if not rules:
+            return
+
+        for field_name, cleanups in rules.items():
+            if field_name not in fields:
+                continue
+
+            raw = fields[field_name]
+            # Unwrap value from {value, confidence} envelope
+            if isinstance(raw, dict) and "value" in raw:
+                val_str = str(raw["value"]) if raw["value"] is not None else ""
+                wrapper = raw
+            else:
+                val_str = str(raw) if raw is not None else ""
+                wrapper = None
+
+            if not val_str:
+                continue
+
+            cleaned = val_str
+            for cleanup in cleanups:
+                pattern = cleanup.get("pattern", "")
+                replacement = cleanup.get("replacement", "")
+                if pattern:
+                    cleaned = re.sub(pattern, replacement, cleaned).strip()
+
+            if cleaned != val_str:
+                if wrapper is not None:
+                    wrapper["value"] = cleaned
+                else:
+                    fields[field_name] = cleaned
+                logger.info(
+                    f"Value cleanup ({document_type}): cleaned {field_name} "
+                    f"[{len(val_str)} → {len(cleaned)} chars]"
+                )
+
     def _derive_party_names(self, fields: dict) -> None:
         """
         Deterministic fallback: derive party names from address fields when
@@ -558,6 +620,10 @@ class DocumentProcessingService:
             if document_type.lower().replace("-", "_").replace(" ", "_") == "packing_list":
                 self._post_process_packing_list(result["fields"])
 
+            # Value-level cleanup from config (container preamble, contact details, currency dedup)
+            dt_norm = document_type.lower().replace("-", "_").replace(" ", "_")
+            self._apply_value_cleanups(result["fields"], dt_norm)
+
             # Party name fallback — for all document types.
             # When structured output returns null for shipper_name / consignee_name
             # but the address field is populated, extract the company name from
@@ -687,6 +753,23 @@ class DocumentProcessingService:
                     )
                 except Exception as e:
                     logger.error(f"BOE section extraction failed (continuing): {e}")
+
+            # Deterministic confidence scoring — replaces Claude's self-assessed
+            # visual scores with computed scores based on verifiable signals
+            # (presence, format match, cross-document validation potential).
+            # Must run after all post-processing so fields are in final state.
+            from modules.extraction.parser.confidence_scorer import score_fields, score_items
+            score_fields(result["fields"])
+            score_items(result.get("items", []))
+            logger.info(f"Confidence scoring applied to {len(result['fields'])} fields")
+
+            # Strip provider-level block confidence (Reducto parse_confidence /
+            # extract_confidence). These are OCR quality scores for entire blocks,
+            # not per-field scores. They predate our deterministic scorer and
+            # produce misleading badges on every cell in the UI.
+            for block in result.get("blocks", []):
+                block.pop("confidence", None)
+                block.pop("granular_confidence", None)
 
             # Save to database if enabled
             if self.use_database:

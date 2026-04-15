@@ -1626,14 +1626,6 @@ async def validate_vendor_docs(
         extracted_documents_meta: Dict[str, Dict[str, Any]] = {}
         invoice_doc_id: Optional[str] = None
 
-        # Synonym mapper used to normalise field names for the frontend checklist.
-        # We apply it to extracted_documents_meta.fields so the UI can look up
-        # canonical names (incoterm, net_weight, …) instead of raw extractor names
-        # (shipping_condition, nett_weight, …).  The raw names are still stored in
-        # the DB and used internally by the validation pipeline.
-        from modules.validation_engine.normalization.normalizers.synonym_mapper import SynonymMapper
-        _synonym_mapper = SynonymMapper()
-
         async with get_db_session() as db:
             for doc_type, result in extraction_results:
                 if result.get("status") != "complete":
@@ -1649,13 +1641,13 @@ async def validate_vendor_docs(
                 # data (e.g. tax tables, freight tables) that doesn't fit as flat items.
                 tables = result.get("raw_provider_response", {}).get("tables", [])
                 extracted_docs[doc_type] = {**fields, "items": items}
-                # Normalise field names for the UI so the Ghana Customs checklist
-                # table can look up canonical names (incoterm, net_weight, etc.)
-                # instead of whatever raw label the extractor produced.
-                normalized_fields = _synonym_mapper.map_document_fields(fields, doc_type)
+                # Send RAW extraction fields to the UI — do NOT rename via synonym mapper.
+                # The TSX checklist already knows how to look up variant field names
+                # (your_order_number, shipping_condition, etc.) via its docFields mappings.
+                # The SynonymMapper is used only by the validation engine internally.
                 extracted_documents_meta[doc_type] = {
                     "document_id": doc_id,
-                    "fields": normalized_fields,
+                    "fields": fields,
                     "items": items,
                     "tables": tables,
                 }

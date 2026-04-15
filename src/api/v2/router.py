@@ -5,37 +5,13 @@ Includes all v2 endpoints.
 """
 
 from fastapi import APIRouter
-from src.api.v2.endpoints import generation, population, insights, profiles, analytics, integration, automation, validation
+from src.api.v2.endpoints import profiles, integration, automation, validation
 
 api_v2_router = APIRouter()
-
-# Include generation endpoints
-api_v2_router.include_router(
-    generation.router,
-    prefix="/api/v2"
-)
-
-# Include population endpoints
-api_v2_router.include_router(
-    population.router,
-    prefix="/api/v2"
-)
-
-# Include banking insights endpoints
-api_v2_router.include_router(
-    insights.router,
-    prefix="/api/v2"
-)
 
 # Include document profile management endpoints
 api_v2_router.include_router(
     profiles.router,
-    prefix="/api/v2"
-)
-
-# Include analytics endpoints
-api_v2_router.include_router(
-    analytics.router,
     prefix="/api/v2"
 )
 

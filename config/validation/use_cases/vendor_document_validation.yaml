@@ -190,6 +190,7 @@ use_case:
         - "description"
         - "goods_description"
         - "description_of_goods"
+        - "kind_of_packages_description_of_goods"
 
       net_weight:
         - "net_weight"

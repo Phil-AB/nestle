@@ -2046,56 +2046,71 @@ export default function VendorValidationForm() {
             type ChecklistEntry = {
               id: string
               label: string
+              // docFields: field names to look up in extractedDocuments for VALUE display.
               docFields: Partial<Record<string, string | string[]>>
+              // backendFields: canonical field names the backend validation engine uses.
+              // These drive pass/fail/missing status from validation_results.
+              backendFields: string[]
               boeOnly?: boolean
             }
             const CHECKLIST: ChecklistEntry[] = [
               // ── Vendor documents (Step 2) ──────────────────────────────────
-              // docFields lists canonical name first, then every document-specific
-              // label Claude may extract verbatim (exact label → snake_case).
-              // Shipper is physically redacted on PL and BOL for all Nestlé Ghana supplier docs.
-              // Only the invoice carries the full shipper block.
+              // Shipper: on invoice and BOL (BOL may have redacted marker).
+              // PL shipper block is physically redacted and NOT required by backend.
               { id: "shippers_address",  label: "Shipper's Name & Address",
-                docFields: { invoice: ["shipper_name", "shipper_address"] } },
+                backendFields: ["shipper_name", "shipper_address"],
+                docFields: { invoice: ["shipper_name", "shipper_address"], bill_of_lading: ["shipper_name", "shipper_address"] } },
               { id: "consignee_address", label: "Consignee Name & Address",
+                backendFields: ["consignee_name", "consignee_address"],
                 docFields: { invoice: ["consignee_name", "consignee_address"], packing_list: ["consignee_name", "consignee_address", "bill_to_name", "bill_to_address"], bill_of_lading: ["consignee_name", "consignee_address"] } },
               // PO: invoice → "Your Order Number", BOL/PL → "Customer ref." / "CUSTOMER REF."
               { id: "po_number",         label: "PO / Reference No.",
+                backendFields: ["po_number"],
                 docFields: { invoice: ["po_number", "your_order_number", "customer_ref", "customer_reference"], packing_list: ["po_number", "customer_ref", "customer_reference"], bill_of_lading: ["po_number", "customer_ref", "customer_reference"] } },
               // Product description: in line-item table rows (items[]) — resolveVal handles items fallback
               { id: "product_desc",      label: "Product Description",
-                docFields: { invoice: ["product_description", "description", "goods_description"], packing_list: ["product_description", "description", "goods_description"], bill_of_lading: ["product_description", "goods_description", "description"] } },
-              // FOB: first matching amount field + currency.
-              // total_excl_vat is the Vreugdenhil label (= FOB when VAT = 0).
-              // total_fob_value / total_invoice_value are canonical fallbacks.
-              // Do NOT include both total_excl_vat and total_incl_vat — they are
-              // the same value when VAT = 0 and would show twice.
+                backendFields: ["product_description"],
+                docFields: { invoice: ["product_description", "description", "goods_description"], packing_list: ["product_description", "description", "goods_description", "description_of_goods"], bill_of_lading: ["product_description", "goods_description", "description", "kind_of_packages_description_of_goods"] } },
+              // FOB: total_fob_value is the canonical name; currency is a companion field.
               { id: "fob_value",         label: "FOB Value & Currency",
+                backendFields: ["total_invoice_value", "total_fob_value", "currency"],
                 docFields: { invoice: ["total_excl_vat", "total_fob_value", "total_invoice_value", "currency"] } },
               // Incoterm: invoice → "Shipping Condition", packing list → "Delivery terms".
               // BOL has no formal incoterm field (states "Freight Collect" instead) — excluded.
               { id: "incoterm",          label: "Incoterm",
+                backendFields: ["incoterm"],
                 docFields: { invoice: ["incoterm", "shipping_condition"], packing_list: ["incoterm", "delivery_terms"] } },
-              { id: "insurance",         label: "Insurance",                 docFields: { invoice: "insurance_value" } },
-              { id: "freight",           label: "Freight",                   docFields: { invoice: "freight_value" } },
+              { id: "insurance",         label: "Insurance",
+                backendFields: ["insurance_value", "freight_insurance"],
+                docFields: { invoice: "insurance_value" } },
+              { id: "freight",           label: "Freight",
+                backendFields: ["freight_value", "freight_insurance"],
+                docFields: { invoice: "freight_value" } },
               // Net weight: invoice → "Total Net Weight", BOL → "NETT WEIGHT", PL → "Total sent Net weight"
               { id: "net_weight",        label: "Net Weight",
+                backendFields: ["net_weight"],
                 docFields: { invoice: ["net_weight", "total_net_weight"], packing_list: ["net_weight", "total_sent_net_weight"], bill_of_lading: ["net_weight", "nett_weight"] } },
               // Gross weight: invoice → "Total Gross Weight", BOL → "GROSS WEIGHT", PL → "Total sent Gross weight"
               { id: "gross_weight",      label: "Gross Weight",
+                backendFields: ["gross_weight"],
                 docFields: { invoice: ["gross_weight", "total_gross_weight"], packing_list: ["gross_weight", "total_sent_gross_weight"], bill_of_lading: ["gross_weight"] } },
-              { id: "country_of_origin", label: "Country of Origin",         docFields: { certificate_of_origin: "country_of_origin" } },
+              { id: "country_of_origin", label: "Country of Origin",
+                backendFields: ["country_of_origin"],
+                docFields: { certificate_of_origin: "country_of_origin" } },
               // Quantity: invoice → "Total Units", BOL → "TOTALS" (page-2 totals block), PL → "Total sent Units"
               { id: "quantity",          label: "Quantity",
+                backendFields: ["quantity"],
                 docFields: { invoice: ["quantity", "total_units"], packing_list: ["quantity", "total_sent_units"], bill_of_lading: ["quantity", "total_units", "totals"] } },
-              { id: "container_count",   label: "Number of Containers",      docFields: { packing_list: ["container_count", "container_numbers"], bill_of_lading: ["container_count", "container_numbers"] } },
+              { id: "container_count",   label: "Number of Containers",
+                backendFields: ["container_count", "container_numbers"],
+                docFields: { packing_list: ["container_count", "container_numbers"], bill_of_lading: ["container_count", "container_numbers"] } },
               // ── BOE only (Step 6) ──────────────────────────────────────────
-              { id: "declarant_name",    label: "Declarant Name",            docFields: {}, boeOnly: true },
-              { id: "declarant_address", label: "Declarant Address",         docFields: {}, boeOnly: true },
-              { id: "hs_code",           label: "H.S. Code",                 docFields: {}, boeOnly: true },
-              { id: "import_duty",       label: "Import Duty",               docFields: {}, boeOnly: true },
-              { id: "vat_nhil",          label: "VAT/NHIL",                  docFields: {}, boeOnly: true },
-              { id: "cpc",               label: "CPC",                       docFields: {}, boeOnly: true },
+              { id: "declarant_name",    label: "Declarant Name",    backendFields: [], docFields: {}, boeOnly: true },
+              { id: "declarant_address", label: "Declarant Address", backendFields: [], docFields: {}, boeOnly: true },
+              { id: "hs_code",           label: "H.S. Code",         backendFields: [], docFields: {}, boeOnly: true },
+              { id: "import_duty",       label: "Import Duty",       backendFields: [], docFields: {}, boeOnly: true },
+              { id: "vat_nhil",          label: "VAT/NHIL",          backendFields: [], docFields: {}, boeOnly: true },
+              { id: "cpc",               label: "CPC",               backendFields: [], docFields: {}, boeOnly: true },
             ]
 
             // Discrepancy lookup: "doc::field" -> discrepancy
@@ -2104,6 +2119,53 @@ export default function VendorValidationForm() {
               acc[key] = d
               return acc
             }, {} as Record<string, ValidationDiscrepancy>)
+
+            // Backend validation result lookup: "doc::fieldName" → result object.
+            // The backend runs LLM + rule-based checks and returns one result per
+            // (field_name, source_document) pair. We use this to drive checklist
+            // pass/fail/missing status instead of inferring it from raw field presence.
+            const valResultLookup = (validationResults ?? []).reduce((acc: Record<string, any>, r: any) => {
+              const doc = r.source_document ?? ""
+              const field = r.field_name ?? ""
+              if (doc && field) {
+                const key = `${doc}::${field}`
+                if (!acc[key]) acc[key] = r
+              }
+              return acc
+            }, {} as Record<string, any>)
+
+            /**
+             * Look up backend validation status for a checklist entry on a specific doc.
+             * Returns { status, backendVal } where:
+             *   status   = "passed" | "failed" | null (null = not validated for this doc)
+             *   backendVal = source_value from the validation result, for use as display
+             *                fallback when resolveVal can't find the field in extractedDocuments
+             */
+            const backendStatus = (
+              entry: ChecklistEntry, doc: string
+            ): { status: "passed" | "failed" | null; backendVal: string | null } => {
+              for (const fieldName of entry.backendFields) {
+                const r = valResultLookup[`${doc}::${fieldName}`]
+                if (r !== undefined) {
+                  // source_value may be a plain scalar, an object envelope, or a dict of doc→values
+                  let bv: string | null = null
+                  const sv = r.source_value
+                  if (sv !== null && sv !== undefined) {
+                    if (typeof sv === "object" && !Array.isArray(sv) && "value" in sv) {
+                      bv = sv.value != null ? String(sv.value) : null
+                    } else if (typeof sv === "object" && !Array.isArray(sv)) {
+                      // n-way matcher returns {doc: value, doc2: value2} — pick this doc's value
+                      const v = sv[doc]
+                      bv = v != null ? String(unwrap(v)) : null
+                    } else {
+                      bv = String(sv)
+                    }
+                  }
+                  return { status: r.passed ? "passed" : "failed", backendVal: bv }
+                }
+              }
+              return { status: null, backendVal: null }
+            }
 
             // Incoterm rule check — absence of insurance/freight is correct for FCA
             const incotermRulePassed = (validationResults ?? []).some(
@@ -2119,13 +2181,17 @@ export default function VendorValidationForm() {
             //   1. Description fields — Claude places product descriptions in line-item rows.
             //   2. container_count / container_numbers — PL has no top-level count field;
             //      derive from items[] when absent.
-            const _DESC_FIELD_IDS = new Set(["description", "goods_description", "product_description", "article_description"])
+            const _DESC_FIELD_IDS = new Set(["description", "goods_description", "product_description", "article_description", "description_of_goods", "kind_of_packages_description_of_goods"])
             const _CONTAINER_IDS  = new Set(["container_count", "container_numbers", "container_no", "container_nos"])
             const _DESC_SKIP = new Set(["CONTAINER SAID TO CONTAIN", ""])
             const resolveVal = (spec: string | string[], data: Record<string, any>, items?: any[]): string | null => {
               const specs = Array.isArray(spec) ? spec : [spec]
               const parts = specs.map((f) => { const v = data[f]; return v != null ? unwrap(v) : null }).filter(Boolean)
-              if (parts.length) return parts.join(" / ")
+              if (parts.length) {
+                // Deduplicate identical values (e.g. total_excl_vat and total_incl_vat both "EUR 467,775.00")
+                const unique = [...new Set(parts.map((p) => p.trim()))].filter(Boolean)
+                return unique.join(" / ")
+              }
               if (!items || !items.length) return null
 
               // Fallback 1: product description from line-item rows.
@@ -2133,7 +2199,7 @@ export default function VendorValidationForm() {
               if (specs.some((s) => _DESC_FIELD_IDS.has(s))) {
                 for (const item of items) {
                   if (!item || typeof item !== "object") continue
-                  for (const k of ["description", "goods_description", "product_description", "article_description"]) {
+                  for (const k of ["description", "goods_description", "product_description", "article_description", "description_of_goods", "kind_of_packages_description_of_goods"]) {
                     const raw = (item as Record<string, any>)[k]
                     if (raw == null) continue
                     const v = unwrap(raw)
@@ -2172,6 +2238,16 @@ export default function VendorValidationForm() {
               return (Array.isArray(spec) ? spec : [spec]).some((f) => !!discLookup[`${doc}::${f}`])
             }
 
+            // Returns true if the matched field was extracted from behind a visual redaction
+            const isFieldRedacted = (spec: string | string[], data: Record<string, any>): boolean => {
+              const specs = Array.isArray(spec) ? spec : [spec]
+              for (const f of specs) {
+                const v = data[f]
+                if (v != null && typeof v === "object" && v.redacted === true) return true
+              }
+              return false
+            }
+
             return (
               <>
                 <Card className="overflow-hidden">
@@ -2207,7 +2283,10 @@ export default function VendorValidationForm() {
                       <tbody>
                         {CHECKLIST.map((entry, i) => {
                           const isFirstBoe = entry.boeOnly && !CHECKLIST[i - 1]?.boeOnly
-                          const rowHasIssue = !entry.boeOnly && docs.some((doc) => entryHasDisc(entry, doc))
+                          // Row highlight: any backend failure or discrepancy on any doc
+                          const rowHasIssue = !entry.boeOnly && docs.some(
+                            (doc) => backendStatus(entry, doc).status === "failed" || entryHasDisc(entry, doc)
+                          )
                           const rowBg = entry.boeOnly ? "bg-muted/5" : rowHasIssue ? "bg-red-50/30 dark:bg-red-900/5" : i % 2 === 1 ? "bg-muted/10" : ""
                           const stickyBg = entry.boeOnly ? "bg-muted/10" : rowHasIssue ? "bg-red-50/60 dark:bg-red-900/10" : i % 2 === 1 ? "bg-muted/20" : "bg-background"
 
@@ -2231,19 +2310,33 @@ export default function VendorValidationForm() {
                                   return <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0"><span className="text-muted-foreground/25 font-mono text-sm">—</span></td>
                                 }
 
-                                const spec = entry.docFields[doc]
-                                if (!spec) {
+                                // Backend status: driven by validation_results (LLM + rule-based).
+                                // null = this doc/field wasn't validated by the backend (not required).
+                                const { status: bStatus, backendVal } = backendStatus(entry, doc)
+
+                                // If the backend has no result for this doc+field, show "—" (not applicable).
+                                if (bStatus === null && !entry.docFields[doc]) {
                                   return <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0"><span className="text-muted-foreground/25 font-mono text-sm">—</span></td>
                                 }
 
+                                // Extract value for display from extractedDocuments.
+                                // When resolveVal finds nothing (field stored under a different alias),
+                                // fall back to the source_value the backend already resolved.
+                                const spec = entry.docFields[doc]
                                 const docData  = extractedDocuments[doc]?.fields ?? {}
                                 const docItems = extractedDocuments[doc]?.items  ?? []
-                                const val = resolveVal(spec, docData, docItems)
+                                const resolvedVal = spec ? resolveVal(spec, docData, docItems) : null
+                                const val = (resolvedVal && resolvedVal.trim()) ? resolvedVal : (backendVal ?? null)
                                 const isEmpty = !val || val.trim() === ""
-                                const isConflict = entryHasDisc(entry, doc) && !isEmpty
-                                const isMissing = isEmpty
+                                const isRedactedField = !!spec && isFieldRedacted(spec, docData)
+                                const wasRedacted = !isEmpty && isRedactedField
 
-                                // Insurance/freight: absent is correct for FCA
+                                // Status: backend result takes priority over raw field presence.
+                                // Discrepancy (conflict) is still driven by discLookup.
+                                const isConflict = entryHasDisc(entry, doc) && !isEmpty
+                                const isMissing = bStatus === "failed" || (bStatus === null && isEmpty)
+
+                                // Insurance/freight: absent is correct when incoterm rule passed
                                 if ((entry.id === "insurance" || entry.id === "freight") && isEmpty && incotermRulePassed) {
                                   return (
                                     <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0">
@@ -2255,9 +2348,20 @@ export default function VendorValidationForm() {
                                   )
                                 }
 
+                                // Redacted field with no value: show Redacted badge, not green checkmark
+                                if (isEmpty && isRedactedField) {
+                                  return (
+                                    <td key={doc} className="px-4 py-2.5 border-r border-border/30 last:border-r-0">
+                                      <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                                        <RedactedBadge />
+                                      </span>
+                                    </td>
+                                  )
+                                }
+
                                 return (
                                   <td key={doc} className="px-4 py-2.5 align-middle border-r border-border/30 last:border-r-0">
-                                    {isMissing ? (
+                                    {isMissing && !isConflict ? (
                                       <span className="flex items-center gap-1.5 text-[12px] text-destructive font-medium">
                                         <X className="w-3.5 h-3.5 flex-shrink-0" />
                                         Missing
@@ -2265,12 +2369,18 @@ export default function VendorValidationForm() {
                                     ) : isConflict ? (
                                       <span className="flex items-start gap-1.5 text-[12px] text-amber-700 dark:text-amber-400">
                                         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                        <span className="font-mono break-all leading-snug">{val}</span>
+                                        <span className="font-mono break-all leading-snug">
+                                          {val}
+                                          {wasRedacted && <span className="ml-1.5 px-1 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Redacted</span>}
+                                        </span>
                                       </span>
                                     ) : (
                                       <span className="flex items-start gap-1.5 text-[12px] text-foreground">
                                         <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                                        <span className="font-mono break-all leading-snug">{val}</span>
+                                        <span className="font-mono break-all leading-snug">
+                                          {val}
+                                          {wasRedacted && <span className="ml-1.5 px-1 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Redacted</span>}
+                                        </span>
                                       </span>
                                     )}
                                   </td>
