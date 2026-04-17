@@ -302,35 +302,57 @@ class BOESectionExtractor:
             out["port_of_discharge"] = val_str
 
         # ── Exporter / Shipper ───────────────────────────────────────────────
-        # Key: "exporter_address"
-        # Value: "VREUGDENHIL DAIRY FOODS, ARKERPOORT 5, 3861 PS, P.O. BOX 64 3860 AB"
-        # → shipper_name = first comma-part, shipper_address = remainder
+        # Claude may split the exporter block into two separate fields:
+        #   "exporter_name"    = "VREUGDENHIL DAIRY FOODS"
+        #   "exporter_address" = "ARKERPOORT 5, 3861 PS, P.O. BOX 64 3860 AB"
+        # Or combine them into one field:
+        #   "exporter_address" = "VREUGDENHIL DAIRY FOODS, ARKERPOORT 5, …"
+        #
+        # Dedicated name field — always wins (overrides any address-derived value)
+        # so iteration order does not matter.
+        if key == "exporter_name":
+            name = val_str.strip()
+            if name and re.search(r'[A-Za-z]', name):
+                out["shipper_name"] = name
+
         if key == "exporter_address":
-            if "shipper_name" not in out:
+            # Only derive name from address when no dedicated name field was seen yet.
+            # When the value starts with "NAME, STREET, …" the first comma-part is the name.
+            if "shipper_name" not in out and "," in val_str:
                 parts = val_str.split(",", 1)
                 name = parts[0].strip()
                 if name and re.search(r'[A-Za-z]', name):
                     out["shipper_name"] = name
-            if "shipper_address" not in out and "," in val_str:
-                out["shipper_address"] = val_str.split(",", 1)[1].strip()
+            if "shipper_address" not in out:
+                out["shipper_address"] = val_str
 
         # ── Importer / Consignee ─────────────────────────────────────────────
-        # Key: "importer_address" or "consignee_actual_exporter"
-        # Value: "NESTLE GHANA LIMITED, NO.33 SOUTH LEGON COMMERCIAL AREA, …"
-        # → consignee_name = first comma-part, consignee_address = remainder
+        # Same split-field pattern as exporter above.
+        if key == "importer_name":
+            name = val_str.strip()
+            if name and re.search(r'[A-Za-z]', name):
+                out["consignee_name"] = name
+
         if key in ("importer_address", "consignee_actual_exporter"):
-            if "consignee_name" not in out:
+            if "consignee_name" not in out and "," in val_str:
                 parts = val_str.split(",", 1)
                 name = parts[0].strip()
                 if name and re.search(r'[A-Za-z]', name):
                     out["consignee_name"] = name
-            if "consignee_address" not in out and "," in val_str:
-                out["consignee_address"] = val_str.split(",", 1)[1].strip()
+            if "consignee_address" not in out:
+                out["consignee_address"] = val_str
 
         # ── Declarant / Representative ───────────────────────────────────────
-        # Key: "declarant_representative" (EXACT — do NOT match "_no" suffix)
-        # Value: "CARGO CENTER GHANA LIMITED, UNN OFFICE NEAR TEMA HARBOUR, …"
-        # Some values may start with "CH000258 COMPANY NAME" (reg number prefix)
+        # Claude may split this into:
+        #   "declarant_representative_name"    = "CARGO CENTER GHANA LIMITED"
+        #   "declarant_representative_address" = "UNN OFFICE NEAR TEMA HARBOUR, …"
+        # Or combine them in "declarant_representative".
+        # Dedicated name field — always wins over combined-field extraction.
+        if key == "declarant_representative_name":
+            name = val_str.strip()
+            if name and re.search(r'[A-Za-z]', name):
+                out["declarant_name"] = name
+
         if key == "declarant_representative" and "declarant_name" not in out:
             # Strip leading CH-number prefix if present
             clean = re.sub(r'^CH\d{4,8}\s*', '', val_str, flags=re.IGNORECASE).strip()
@@ -739,10 +761,15 @@ class BOESectionExtractor:
             return
 
         # ── Field 9: Declarant / Representative ─────────────────────────────
-        # Exact key match only — "declarant_representative_no" must NOT match here.
-        # (The "_no" suffix field holds the CH-number, handled separately.)
-        if (key == "declarant_representative" or key.startswith("9_declarant")) \
-                and "declarant_name" not in out:
+        # Matches both the combined field and the split name variant.
+        # "declarant_representative_name" always wins (no guard); combined field
+        # only fills in when not already set.
+        # Explicit exclusion of "_no" and "_address" suffix variants.
+        is_declarant_name_field = key == "declarant_representative_name"
+        is_declarant_combined = (
+            key == "declarant_representative" or key.startswith("9_declarant")
+        ) and not key.endswith(("_no", "_address"))
+        if is_declarant_name_field or (is_declarant_combined and "declarant_name" not in out):
             first_line = val_str.split("\n")[0].strip()
             if first_line and re.search(r'[A-Za-z]', first_line):
                 out["declarant_name"] = first_line

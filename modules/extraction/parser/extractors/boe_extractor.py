@@ -69,7 +69,8 @@ class BOEExtractor(BaseDocumentExtractor):
     # GRA BOE raw field is "declarant_representative" (Field 9 label).
     _DECLARANT_KEYS = (
         "declarant_name", "declarant",
-        "declarant_representative",          # GRA BOE Field 9 raw label
+        "declarant_representative_name",     # Claude split-field variant
+        "declarant_representative",          # GRA BOE Field 9 raw label (combined)
         "representative_name", "representative",
         "clearing_agent", "customs_agent",
     )
