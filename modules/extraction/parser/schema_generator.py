@@ -2,6 +2,7 @@
 Dynamic schema generator from configuration.
 
 Generates universal provider-agnostic schemas from document_config.yaml.
+Supports open mode (extract everything) and focused mode (checklist fields only).
 """
 
 from typing import Dict, Any, List
@@ -280,6 +281,74 @@ class SchemaGenerator:
         except ValueError:
             # Unknown document type - no minimum requirement
             return 0
+
+    def generate_checklist_schema(self, document_type: str) -> Dict[str, Any]:
+        """
+        Generate a focused schema containing only the fields from the import checklist.
+
+        Loads field definitions from config/checklist.yaml for the given document
+        type and returns a schema in focused mode format.
+
+        Args:
+            document_type: Type of document (e.g. "invoice", "boe")
+
+        Returns:
+            Focused schema dict with only checklist fields, or open schema as
+            fallback if the document type has no checklist entries.
+        """
+        from shared.utils.checklist_config import get_checklist_config
+
+        checklist = get_checklist_config()
+        header_fields, item_fields = checklist.get_checklist_fields(document_type)
+
+        if not header_fields and not item_fields:
+            logger.info(
+                f"No checklist fields found for '{document_type}' — "
+                f"fall back to open extraction"
+            )
+            return self.generate_schema(document_type, extract_mode="open")
+
+        logger.info(
+            f"Checklist schema for '{document_type}': "
+            f"{len(header_fields)} header fields, {len(item_fields)} item fields"
+        )
+
+        fields: Dict[str, Any] = {}
+        for field_name in header_fields:
+            fields[field_name] = {
+                "type": self._infer_field_type(field_name),
+                "required": False,
+            }
+
+        doc_type_lower = document_type.lower().strip()
+        has_items = bool(item_fields)
+
+        schema: Dict[str, Any] = {
+            "mode": "focused",
+            "extract_all": False,
+            "fields": fields,
+            "metadata": {
+                "document_type": document_type,
+                "unique_field": self._get_unique_field(doc_type_lower),
+                "min_items": 0,
+                "has_config": True,
+                "source": "checklist",
+            },
+        }
+
+        if has_items:
+            item_field_defs: Dict[str, Any] = {}
+            for field_name in item_fields:
+                item_field_defs[field_name] = {
+                    "type": self._infer_field_type(field_name),
+                    "required": False,
+                }
+            schema["items"] = {
+                "field_name": "items",
+                "fields": item_field_defs,
+            }
+
+        return schema
 
     def get_all_schemas(self, extract_mode: str = "open") -> Dict[str, Dict[str, Any]]:
         """

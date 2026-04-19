@@ -83,6 +83,34 @@ class DocumentProcessingService:
                 self._schema_generator = None
         return self._schema_generator
 
+    def _resolve_extraction_mode(self, requested_mode: str) -> str:
+        """
+        Resolve the effective extraction mode.
+
+        Reads the configured mode from providers.yaml when the caller
+        passes the default ("open"). If the provider config specifies
+        "focused", the checklist schema is used instead.
+
+        Args:
+            requested_mode: Mode passed by the caller.
+
+        Returns:
+            "open" or "focused"
+        """
+        try:
+            from shared.utils.provider_config import get_provider_config
+            pc = get_provider_config()
+            active = pc.get_active_provider()
+            options = pc.get_provider_options(active)
+            configured_mode = options.get("extraction_mode", "open")
+        except Exception:
+            configured_mode = "open"
+
+        if requested_mode != "open":
+            return requested_mode
+
+        return configured_mode
+
     def _get_storage_service(self):
         """Lazy load storage service (only if database mode)."""
         if not self.use_database:
@@ -525,25 +553,27 @@ class DocumentProcessingService:
 
             file_name = file_path.name
 
-            # Force OPEN mode for better structure recognition
-            # OPEN mode extracts everything without schema constraints, resulting in:
-            # - Better table structure recognition (exporter/consignee as proper columns)
-            # - More complete field extraction
-            # - Document type is still used for classification, not extraction limitation
-            forced_mode = "open"
-            if extraction_mode != "open":
-                logger.info(
-                    f"⚠️ Forcing OPEN extraction mode (requested: {extraction_mode}) "
-                    f"for better structure recognition. Document type '{document_type}' "
-                    f"will be used for classification only, not extraction constraints."
-                )
+            # Resolve extraction mode from provider config if caller used default
+            effective_mode = self._resolve_extraction_mode(extraction_mode)
+            logger.info(
+                f"Extraction mode: {effective_mode} "
+                f"(requested: {extraction_mode}) for {document_type}"
+            )
 
-            logger.info(f"Generating schema for {document_type} in OPEN mode")
+            # Generate schema based on mode
             try:
-                schema = schema_gen.generate_schema(document_type, "open")
-                logger.debug(f"Schema generated successfully for {document_type} (OPEN mode)")
+                if effective_mode == "focused":
+                    schema = schema_gen.generate_checklist_schema(document_type)
+                else:
+                    schema = schema_gen.generate_schema(document_type, "open")
+                logger.debug(
+                    f"Schema generated for {document_type} ({effective_mode} mode)"
+                )
             except Exception as e:
-                logger.warning(f"Schema generation issue for {document_type}: {e}. Using open mode fallback.")
+                logger.warning(
+                    f"Schema generation issue for {document_type}: {e}. "
+                    f"Falling back to open mode."
+                )
                 schema = schema_gen.generate_schema(document_type, "open")
 
             # Extract fields using parser

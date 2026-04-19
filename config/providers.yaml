@@ -45,6 +45,10 @@ providers:
 
     # Claude-specific options
     options:
+      # Extraction mode: "open" (extract everything) or "focused" (checklist fields only)
+      extraction_mode: focused
+      # Path to checklist config (used when extraction_mode is "focused")
+      checklist_config: "config/checklist.yaml"
       # Supported input formats
       supported_formats:
         - pdf
