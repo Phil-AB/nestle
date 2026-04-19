@@ -5,40 +5,44 @@
 # Used when extraction_mode is "focused" — only these fields are extracted.
 #
 # Source: GRA Ghana Import Checklist for Declarations (2025)
-# Documents: Invoice, Packing List, Bill of Lading, Bill of Entry
+# "Which document to check" column specifies exactly where each field is verified.
+# Documents: Invoice, Packing List, Bill of Lading/AWB, Bill of Entry
 
 name: "Import Checklist for Declarations"
 version: "2025"
 description: "Ghana GRA declaration checklist - fields to validate for every import"
 
 checklist:
+  # 1. Shipper's Address — Invoice, Packing List, BL/AWB
   - id: shipper_address
     label: "Shipper's Address"
     status: "Correct"
-    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    source_documents: [invoice, packing_list, bill_of_lading]
     fields:
       invoice: [shipper_name, shipper_address]
       packing_list: [shipper_name]
       bill_of_lading: [shipper_name, shipper_address]
-      boe: [shipper_name, shipper_address]
 
+  # 2. Consignee Address — Invoice, Packing List, BL/AWB
   - id: consignee_address
     label: "Consignee Address"
     status: "Correct"
-    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    source_documents: [invoice, packing_list, bill_of_lading]
     fields:
       invoice: [consignee_name, consignee_address]
       packing_list: [consignee_name]
       bill_of_lading: [consignee_name, consignee_address]
-      boe: [consignee_name, consignee_address]
 
+  # 3. Declarant Address — TBC (only appears on BOE)
   - id: declarant_address
     label: "Declarant Address"
     status: "Correct"
+    notes: "Source TBC — only found on BOE"
     source_documents: [boe]
     fields:
       boe: [declarant_name, declarant_address, declarant_reg_number]
 
+  # 4. PO Number — Invoice
   - id: po_number
     label: "PO Number"
     status: "Correct"
@@ -46,6 +50,7 @@ checklist:
     fields:
       invoice: [po_number, order_number]
 
+  # 5. Product Description — Invoice
   - id: product_description
     label: "Product Description"
     status: "Correct"
@@ -54,23 +59,28 @@ checklist:
     fields:
       invoice: [product_description]
 
+  # 6. H.S. Code — Invoice, Packing List, BL/AWB
   - id: hs_code
     label: "H.S. Code"
     status: "Correct"
-    source_documents: [invoice, packing_list]
+    notes: "Confirm with Concessionary duty list"
+    source_documents: [invoice, packing_list, bill_of_lading]
     item_level: true
     fields:
       invoice: [hs_code]
       packing_list: [hs_code]
+      bill_of_lading: [hs_code]
 
+  # 7. Import Duty — Taxes section on BOE
   - id: import_duty
     label: "Import Duty"
     status: "Not Applicable"
-    notes: "Import duty rate should be 0 for BOEs with CPC codes 40W01, 40U01. Import duty rate for CPC code 40C01 should be 2%"
+    notes: "Import duty rate should be 0 for BOEs with CPC codes 40W01, 40U01. Import duty rate for CPC code 40C01 should be 2%. For zero duty confirm ETLS Approval Number."
     source_documents: [boe]
     fields:
-      boe: [duty_rate, duty_amount, cpc_code]
+      boe: [duty_rate, duty_amount, cpc_code, etls_approval_number]
 
+  # 8. VAT/NHIL — TBC (BOE taxes section)
   - id: vat_nhil
     label: "VAT/NHIL"
     status: "Not Applicable"
@@ -79,6 +89,7 @@ checklist:
     fields:
       boe: [vat_amount, vat_rate, nhil_amount, nhil_rate]
 
+  # 9. Commodity Code (CPC) — TBC (BOE)
   - id: cpc_code
     label: "Commodity Code (CPC)"
     status: "Correct"
@@ -87,57 +98,60 @@ checklist:
     fields:
       boe: [cpc_code]
 
+  # 10. FOB Value & Currency — Invoice
   - id: fob_value_currency
     label: "FOB Value & Currency"
     status: "Correct"
-    source_documents: [invoice, boe]
+    source_documents: [invoice]
     fields:
       invoice: [total_fob_value, currency]
-      boe: [fob_value, fob_value_local, currency]
 
+  # 11. Incoterm — Invoice
   - id: incoterm
     label: "Incoterm"
     status: "Correct"
-    source_documents: [invoice, boe]
+    source_documents: [invoice]
     fields:
       invoice: [incoterm]
-      boe: [incoterm]
 
+  # 12. Insurance — Invoice
   - id: insurance
     label: "Insurance"
     status: "Correct"
-    notes: "CIF uses insurance value on invoice. CFR/FCA: apply 0.875% for Sea & Road, 1% for Air on C&F"
-    source_documents: [invoice, boe]
+    notes: "CIF: use insurance value on invoice. CFR/FCA: apply 0.875% for Sea & Road, 1% for Air on C&F"
+    source_documents: [invoice]
     fields:
       invoice: [insurance_value, freight_value, incoterm]
-      boe: [insurance_value, freight_value, incoterm]
 
+  # 13. Freight — Invoice / Contract
   - id: freight
     label: "Freight"
     status: "Correct"
-    source_documents: [invoice, boe]
+    source_documents: [invoice]
     fields:
       invoice: [freight_value]
-      boe: [freight_value]
 
+  # 14. Cargo Gross & Net Weight — Packing list & Bill of lading weights should align
   - id: cargo_weights
     label: "Cargo Gross & Net Weight"
     status: "Correct"
     notes: "Packing list & Bill of lading weights should align"
-    source_documents: [packing_list, bill_of_lading, boe]
+    source_documents: [packing_list, bill_of_lading]
     fields:
       packing_list: [total_gross_weight, total_net_weight, weight_unit]
       bill_of_lading: [gross_weight, net_weight]
-      boe: [gross_weight, net_weight]
 
+  # 15. Origin of Goods (Country) — Bill of lading. Ensure section 17 on BOE matches port of loading on BL.
   - id: origin_of_goods
     label: "Origin of Goods (Country)"
     status: "Correct"
-    notes: "Ensure section 17 on BOE matches port of loading on BL"
-    source_documents: [boe]
+    notes: "Bill of lading. Ensure section 17 on BOE matches port of loading on BL."
+    source_documents: [bill_of_lading]
     fields:
+      bill_of_lading: [port_of_loading]
       boe: [country_of_origin]
 
+  # 16. Quantity of Goods — Invoice, Packing List, BL/AWB
   - id: quantity
     label: "Quantity of Goods"
     status: "Correct"
@@ -148,6 +162,7 @@ checklist:
       packing_list: [quantity]
       bill_of_lading: [total_packages]
 
+  # 17. Number of Containers — Bill of lading
   - id: container_count
     label: "Number of Containers"
     status: "Not Applicable"
