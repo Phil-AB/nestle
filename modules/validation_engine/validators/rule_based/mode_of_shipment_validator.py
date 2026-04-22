@@ -42,17 +42,24 @@ class ModeOfShipmentValidator(IValidator):
     """
 
     # Default mode mappings
+    # Includes both text patterns (Field 21 entry/exit office) and
+    # numeric GRA ICUMS transport mode codes (Field 14):
+    #   10 = sea, 20 = rail, 30 = road, 40 = air, 50 = post, 70 = fixed pipeline
     DEFAULT_MODE_MAPPINGS = {
         "KIA": "air",  # Kotoka International Airport
         "KOTOKA": "air",
         "AIRPORT": "air",
+        "40": "air",   # GRA ICUMS Field 14 code — air transport
         "TMA": "sea",  # Tema Port
         "TEMA": "sea",
         "PORT": "sea",
         "HARBOR": "sea",
         "HARBOUR": "sea",
+        "10": "sea",   # GRA ICUMS Field 14 code — sea transport
+        "20": "sea",   # GRA ICUMS Field 14 code — rail (treated as sea for doc purposes)
         "BORDER": "road",
         "LAND": "road",
+        "30": "road",  # GRA ICUMS Field 14 code — road transport
     }
 
     # Expected documents per mode

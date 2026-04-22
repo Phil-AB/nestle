@@ -1,12 +1,14 @@
 # =============================================================================
 # Import Checklist for Declarations
 # =============================================================================
-# Maps checklist items to extraction fields per document type.
-# Used when extraction_mode is "focused" — only these fields are extracted.
+# Source: "Import Checklist for Declarations NEW- Current 2025.xlsm - Checklist"
+# Exactly 17 GRA checklist items plus internal extraction helpers.
 #
-# Source: GRA Ghana Import Checklist for Declarations (2025)
-# "Which document to check" column specifies exactly where each field is verified.
-# Documents: Invoice, Packing List, Bill of Lading/AWB, Bill of Entry
+# EXTRACTION HINTS PRINCIPLE: hints describe WHAT a field means semantically,
+# never WHERE it lives on a specific document layout. This keeps the system
+# universal across all suppliers and document formats.
+#
+# Documents: invoice, packing_list, bill_of_lading, boe (= bill_of_entry)
 
 name: "Import Checklist for Declarations"
 version: "2025"
@@ -17,155 +19,285 @@ checklist:
   - id: shipper_address
     label: "Shipper's Address"
     status: "Correct"
-    source_documents: [invoice, packing_list, bill_of_lading]
+    which_doc: "Invoice, Packing List, BL/AWB"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    extraction_hints:
+      invoice: "Extract the shipper, exporter, or seller name and full address — the party dispatching the goods. If the block is physically redacted or obscured, return the field with redacted: true."
+      packing_list: "Extract the shipper or exporter name and address. This block is sometimes redacted on packing lists — if so, return with redacted: true."
+      bill_of_lading: "Extract the shipper name and address from the shipper block. This block is frequently redacted on bills of lading — if so, return with redacted: true."
+      boe: "Extract the exporter or shipper name and address as declared on the customs entry."
     fields:
       invoice: [shipper_name, shipper_address]
-      packing_list: [shipper_name]
+      packing_list: [shipper_name, shipper_address]
       bill_of_lading: [shipper_name, shipper_address]
+      boe: [shipper_name, shipper_address]
 
   # 2. Consignee Address — Invoice, Packing List, BL/AWB
   - id: consignee_address
     label: "Consignee Address"
     status: "Correct"
-    source_documents: [invoice, packing_list, bill_of_lading]
+    which_doc: "Invoice, Packing List, BL/AWB"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    extraction_hints:
+      invoice: "Extract the consignee or buyer (bill-to) name and address — the party purchasing and receiving legal title to the goods."
+      packing_list: "Extract the consignee or buyer (bill-to) name and address. If both a bill-to address and a separate delivery or ship-to address appear, extract the bill-to (consignee) address, not the delivery address."
+      bill_of_lading: "Extract the consignee name and address — the party to whom the goods are consigned."
+      boe: "Extract the importer or consignee name and address as declared on the customs entry."
     fields:
       invoice: [consignee_name, consignee_address]
-      packing_list: [consignee_name]
+      packing_list: [consignee_name, consignee_address]
       bill_of_lading: [consignee_name, consignee_address]
+      boe: [consignee_name, consignee_address]
 
-  # 3. Declarant Address — TBC (only appears on BOE)
+  # 3. Declarant Address — BOE only
   - id: declarant_address
     label: "Declarant Address"
     status: "Correct"
-    notes: "Source TBC — only found on BOE"
+    which_doc: "TBC"
     source_documents: [boe]
+    extraction_hints:
+      boe: "Extract the declarant or customs agent name, address, and registration or licence number. The declarant is the party who submitted this customs declaration on behalf of the importer."
     fields:
       boe: [declarant_name, declarant_address, declarant_reg_number]
 
-  # 4. PO Number — Invoice
+  # 4. PO Number — Invoice (primary), cross-checked across PL and BOL
+  # Also captures document identity fields needed for completeness and consistency checks.
   - id: po_number
     label: "PO Number"
     status: "Correct"
-    source_documents: [invoice]
+    which_doc: "Invoice"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    extraction_hints:
+      invoice: "Extract the buyer's purchase order reference into po_number — this is the reference number the buying party assigned to this order (often labeled 'Your Order Number', 'Customer Reference', or 'PO Number'). Extract the seller's own internal order or delivery reference into order_number (often labeled 'Our Order Number', 'Order No', or 'Delivery No'). Also extract the contract number, the invoice number, and the invoice date."
+      packing_list: "Extract the buyer's purchase order or customer reference into po_number — this is the reference number the importer/buyer uses for this order (often labeled 'Customer Ref', 'Customer Reference', or 'Your Order'). Extract the seller's own internal order number into order_number (often labeled 'Order No' or 'Order Number'). Also extract the contract number."
+      bill_of_lading: "Extract the buyer's purchase order or customer reference into po_number — the importer's reference for this shipment (often labeled 'Customer Ref' or 'Customer Reference'). Extract the carrier or seller's order reference into order_number. Also extract the contract number and the bill of lading number."
+      boe: "Extract the commercial invoice number referenced on this customs declaration, the BOE declaration number, and the date of declaration."
     fields:
-      invoice: [po_number, order_number]
+      invoice: [invoice_number, invoice_date, po_number, order_number, contract_number, total_invoice_value]
+      packing_list: [po_number, order_number, contract_number, customer_ref, customer_reference]
+      bill_of_lading: [bl_number, po_number, order_number, contract_number, customer_ref, customer_reference]
+      boe: [invoice_number, declaration_number, declaration_date]
 
-  # 5. Product Description — Invoice
+  # 5. Product Description — Invoice (primary), cross-checked across PL and BOL
   - id: product_description
     label: "Product Description"
     status: "Correct"
-    source_documents: [invoice]
+    which_doc: "Invoice"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
     item_level: true
+    extraction_hints:
+      invoice: "Extract the product name and description for each line item exactly as written. Invoices sometimes use abbreviated internal codes — extract what is shown, do not expand abbreviations."
+      packing_list: "Extract the full product description for each line item as written on the document."
+      bill_of_lading: "Extract the goods description for each container or line entry as written."
+      boe: "Extract the declared goods description for each line item as it appears on the customs entry."
     fields:
       invoice: [product_description]
+      packing_list: [product_description, description]
+      bill_of_lading: [product_description, goods_description, kind_of_packages_description_of_goods]
+      boe: [product_description]
 
-  # 6. H.S. Code — Invoice, Packing List, BL/AWB
+  # 6. H.S. Code — Invoice, Packing List, BL/AWB, BOE
   - id: hs_code
-    label: "H.S. Code"
+    label: "H.S. Code (Confirm with Concessionary duty list)"
     status: "Correct"
-    notes: "Confirm with Concessionary duty list"
-    source_documents: [invoice, packing_list, bill_of_lading]
+    which_doc: "Invoice, Packing List, BL/AWB"
+    notes: "Confirm HS codes against Master Concession list (config/data/master_concession.yaml). For CPC 40V02 cross-check against VAT deferment list (config/data/vat_deferment_list.yaml, URV 0014)."
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
     item_level: true
+    extraction_hints:
+      invoice: "Extract the Harmonised System (HS or HSN) tariff code for each line item. This is a numeric customs classification code. Not all invoices carry HS codes — if absent, return null."
+      packing_list: "Extract the Harmonised System (HS or HSN) tariff code for each line item if present. Return null if not shown."
+      bill_of_lading: "Extract the Harmonised System (HS or HSN) tariff code if declared on the bill of lading. Return null if not shown."
+      boe: "Extract the declared HS or tariff code for each goods line item on the customs entry."
     fields:
       invoice: [hs_code]
       packing_list: [hs_code]
       bill_of_lading: [hs_code]
+      boe: [hs_code]
 
-  # 7. Import Duty — Taxes section on BOE
+  # 7. Import Duty — BOE taxes section
   - id: import_duty
-    label: "Import Duty"
+    label: "Import Duty (for zero duty confirm ETLS Approval Number)"
     status: "Not Applicable"
-    notes: "Import duty rate should be 0 for BOEs with CPC codes 40W01, 40U01. Import duty rate for CPC code 40C01 should be 2%. For zero duty confirm ETLS Approval Number."
+    which_doc: "Taxes section on BOE: Import duty rate should be 0 for BOEs with CPC codes 40W01, 40U01. Import duty rate for CPC code 40C01 should be 2%"
+    notes: |
+      Rate depends on CPC code (see config/data/cpc_codes.yaml):
+        40W01 — 0%  (duty-free; confirm ETLS Approval Number and HS code against Master Concession)
+        40U01 — 0%  (duty-free; confirm ETLS Approval Number and HS code against Master Concession)
+        40E68 — 5%  (check HS code against Master Concession document)
+        40V02 — VAT deferred; amount payable is 0 (check HS code against VAT deferment list)
+        40C01 — 2%
+        40D01 — N/A
     source_documents: [boe]
+    extraction_hints:
+      boe: "Extract the import duty rate, the calculated duty amount, the CPC (Customs Procedure Code), the ETLS approval reference number (if present), the customs/CIF value, the total amount payable, and the total amount exempted from the taxes or duty section of the customs entry."
     fields:
-      boe: [duty_rate, duty_amount, cpc_code, etls_approval_number]
+      boe: [duty_rate, duty_amount, cpc_code, etls_approval_number, customs_value, amount_payable, amount_exempted]
 
-  # 8. VAT/NHIL — TBC (BOE taxes section)
+  # 8. VAT/NHIL — BOE taxes section
   - id: vat_nhil
-    label: "VAT/NHIL"
+    label: "VAT/NHIL (Confirm with VAT/NHIL Relief list)"
     status: "Not Applicable"
-    notes: "Confirm with VAT/NHIL Relief list"
+    which_doc: "TBC"
+    notes: "For CPC code 40V02 VAT is deferred — amount payable is 0. Confirm HS code on the VAT deferment list (config/data/vat_deferment_list.yaml, URV 0014). VAT = 15% of (Customs Value + Duty). NHIL = 2.5% of (Customs Value + Duty)."
     source_documents: [boe]
+    extraction_hints:
+      boe: >
+        From the tax computation table on the customs entry, extract the following
+        by matching on the tax description or tax code:
+        - vat_amount: the Amount Payable for Import VAT (the VAT tax line, often tax code 02).
+          Do NOT extract the total row. Do NOT extract the Exempted/Suspended column.
+          For CPC 40V02 this value is expected to be 0 because VAT is deferred.
+        - vat_rate: the rate (%) applied to the VAT tax line.
+        - nhil_amount: the Amount Payable for NHIL (National Health Insurance Levy, often tax code 47).
+        - nhil_rate: the rate (%) applied to the NHIL tax line.
+        - get_fund_levy: the Amount Payable for the GET Fund levy (Ghana Education Trust Fund, often tax code 88).
     fields:
-      boe: [vat_amount, vat_rate, nhil_amount, nhil_rate]
+      boe: [vat_amount, vat_rate, nhil_amount, nhil_rate, get_fund_levy]
 
-  # 9. Commodity Code (CPC) — TBC (BOE)
+  # 9. Commodity Code (CPC) — BOE
   - id: cpc_code
-    label: "Commodity Code (CPC)"
+    label: "Commodity Code (CPC) (Check with CPC list)"
     status: "Correct"
-    notes: "Check with CPC list"
+    which_doc: "TBC"
+    notes: "Validate CPC code against approved codes in config/data/cpc_codes.yaml. Valid codes for Nestle Ghana: 40W01, 40U01 (duty-free), 40E68 (5% duty), 40V02 (VAT deferred), 40C01 (2% duty), 40D01."
     source_documents: [boe]
+    extraction_hints:
+      boe: "Extract the Customs Procedure Code (CPC) — the code that determines the customs regime and duty treatment for this entry."
     fields:
-      boe: [cpc_code]
+      boe: [cpc_code, customs_code]
 
-  # 10. FOB Value & Currency — Invoice
+  # 10. FOB Value & Currency — Invoice (cross-checked against BOE)
   - id: fob_value_currency
     label: "FOB Value & Currency"
     status: "Correct"
-    source_documents: [invoice]
+    which_doc: "Invoice"
+    source_documents: [invoice, boe]
+    extraction_hints:
+      invoice: "Extract the total FOB (Free On Board) value of the goods and the invoice currency. For FCA or EXW incoterms this equals the total invoice value excluding VAT."
+      boe: "Extract two FOB figures: (1) the FOB value in the original foreign currency (e.g. EUR) — labeled 'FOB Fcy CC' or 'Total FOB Fcy' — into total_fob_value and fob_value; (2) the FOB value converted to local/national currency (e.g. GHS) — labeled 'FOB Ncy' or 'FOB Import Ncy' — into fob_ncy. Also extract the currency code."
     fields:
       invoice: [total_fob_value, currency]
+      boe: [total_fob_value, fob_value, fob_ncy, currency]
 
-  # 11. Incoterm — Invoice
+  # 11. Incoterm — Invoice (primary), cross-checked against BOE
   - id: incoterm
     label: "Incoterm"
     status: "Correct"
-    source_documents: [invoice]
+    which_doc: "Invoice"
+    source_documents: [invoice, packing_list, boe]
+    extraction_hints:
+      invoice: "Extract the trade term (Incoterm) governing delivery responsibility and cost — for example CIF, FOB, FCA, CFR, EXW. Include the named place if stated."
+      packing_list: "Extract the delivery or trade term if stated on the packing list."
+      boe: "Extract the Incoterm or delivery condition as declared on the customs entry."
     fields:
       invoice: [incoterm]
+      packing_list: [incoterm, delivery_terms]
+      boe: [incoterm]
 
-  # 12. Insurance — Invoice
+  # 12. Insurance — Invoice (cross-checked against BOE)
   - id: insurance
     label: "Insurance"
     status: "Correct"
+    which_doc: "Check freight and insurance on the invoice for CIF incoterm. For CFR, check invoice for freight."
     notes: "CIF: use insurance value on invoice. CFR/FCA: apply 0.875% for Sea & Road, 1% for Air on C&F"
-    source_documents: [invoice]
+    source_documents: [invoice, boe]
+    extraction_hints:
+      invoice: "Extract the insurance value if charged on the invoice. If the incoterm is FCA or FOB, insurance is the buyer's responsibility and will not appear — return null in that case."
+      boe: "Extract the insurance amount declared on the customs entry."
     fields:
       invoice: [insurance_value, freight_value, incoterm]
+      boe: [insurance_value]
 
-  # 13. Freight — Invoice / Contract
+  # 13. Freight — Invoice / Contract (cross-checked against BOE)
   - id: freight
     label: "Freight"
     status: "Correct"
-    source_documents: [invoice]
+    which_doc: "Invoice/Contract"
+    source_documents: [invoice, boe]
+    extraction_hints:
+      invoice: "Extract the freight or shipping charge if billed on the invoice. If the incoterm is FCA or FOB (freight collect), freight will not appear on the invoice — return null in that case."
+      boe: "Extract the freight amount declared on the customs entry."
     fields:
       invoice: [freight_value]
+      boe: [freight_value]
 
-  # 14. Cargo Gross & Net Weight — Packing list & Bill of lading weights should align
+  # 14. Cargo Gross & Net Weight — Packing List & BOL (must align), also Invoice and BOE
   - id: cargo_weights
     label: "Cargo Gross & Net Weight"
     status: "Correct"
-    notes: "Packing list & Bill of lading weights should align"
-    source_documents: [packing_list, bill_of_lading]
+    which_doc: "Packing list & Bill of lading weights should align"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
+    extraction_hints:
+      invoice: "Extract the total net weight and total gross weight for the entire shipment. These are shipment-level grand totals, not per-line-item weights."
+      packing_list: "Extract the total net weight and total gross weight for the entire shipment. These are the grand totals across all containers and line items, not per-container subtotals."
+      bill_of_lading: "Extract the total net weight and total gross weight for the entire shipment from the shipment summary."
+      boe: "Extract the gross mass or gross weight declared for this customs entry."
     fields:
-      packing_list: [total_gross_weight, total_net_weight, weight_unit]
+      invoice: [net_weight, gross_weight]
+      packing_list: [total_gross_weight, total_net_weight, gross_weight, net_weight, weight_unit]
       bill_of_lading: [gross_weight, net_weight]
+      boe: [gross_weight, net_weight]
 
-  # 15. Origin of Goods (Country) — Bill of lading. Ensure section 17 on BOE matches port of loading on BL.
+  # 15. Origin of Goods — BOL (BOE Section 17 must match)
   - id: origin_of_goods
     label: "Origin of Goods (Country)"
     status: "Correct"
-    notes: "Bill of lading. Ensure section 17 on BOE matches port of loading on BL."
-    source_documents: [bill_of_lading]
+    which_doc: "Bill of lading. Ensure section 17 on BOE matches port of loading on BL."
+    source_documents: [bill_of_lading, boe]
+    extraction_hints:
+      bill_of_lading: "Extract the port of loading (the port where the goods were loaded onto the vessel) and the country of origin if explicitly stated."
+      boe: "Extract the declared country of origin of the goods and the mode of transport or entry/exit code."
     fields:
-      bill_of_lading: [port_of_loading]
-      boe: [country_of_origin]
+      bill_of_lading: [port_of_loading, country_of_origin]
+      boe: [country_of_origin, origin, entry_exit_code]
 
-  # 16. Quantity of Goods — Invoice, Packing List, BL/AWB
+  # 16. Quantity of Goods — Invoice, Packing List, BL/AWB, BOE
+  # item_level: true extracts per-line quantities into the items array.
+  # The quantity_totals internal item below separately extracts the shipment grand total
+  # as a header field so validators can read invoice.quantity directly.
   - id: quantity
     label: "Quantity of Goods"
     status: "Correct"
-    source_documents: [invoice, packing_list, bill_of_lading]
+    which_doc: "Invoice, Packing List, BL/AWB"
+    source_documents: [invoice, packing_list, bill_of_lading, boe]
     item_level: true
+    extraction_hints:
+      invoice: "Extract the quantity for each line item into the items array. Also extract the total shipment quantity as a header-level field (grand total for the entire order)."
+      packing_list: "Extract the quantity for each line item into the items array. Also extract the total shipment quantity as a header-level field (grand total across all containers and items, not a per-container subtotal)."
+      bill_of_lading: "Extract the total quantity of goods for the entire shipment. This is the total number of bags, units, or pieces — not the number of containers."
+      boe: "Extract the declared quantity for each goods line item."
     fields:
-      invoice: [quantity]
-      packing_list: [quantity]
-      bill_of_lading: [total_packages]
+      invoice: [quantity, total_units]
+      packing_list: [quantity, total_units, total_sent_units]
+      bill_of_lading: [quantity]
+      boe: [quantity]
 
-  # 17. Number of Containers — Bill of lading
+  # Internal: Quantity Grand Totals — header-level extraction
+  # Not a GRA checklist item. Ensures the shipment-level total quantity is available
+  # as a header field (invoice.quantity, packing_list.quantity) for the Step 2
+  # consistency validators. SynonymMapper normalises total_units → quantity.
+  - id: quantity_totals
+    label: "Quantity Grand Totals"
+    internal: true
+    source_documents: [invoice, packing_list]
+    extraction_hints:
+      invoice: "Extract the total quantity for the entire shipment as a single summary figure. This is the grand total of all goods ordered, not a per-line breakdown."
+      packing_list: "Extract the total quantity for the entire shipment as a single summary figure. This is the grand total across all containers and line items."
+    fields:
+      invoice: [total_units]
+      packing_list: [total_sent_units]
+
+  # 17. Number of Containers — Bill of Lading (cross-checked against BOE)
   - id: container_count
     label: "Number of Containers"
     status: "Not Applicable"
-    source_documents: [bill_of_lading]
+    which_doc: "Bill of lading"
+    source_documents: [bill_of_lading, boe]
+    extraction_hints:
+      packing_list: "Extract the total number of containers as an integer value only. For container_numbers, return only the list of container ID codes — do not include any surrounding label text."
+      bill_of_lading: "Extract the total number of containers as an integer value only. For container_numbers, return only the list of container ID codes — do not include any surrounding label text."
     fields:
+      packing_list: [container_count, container_numbers]
       bill_of_lading: [container_count, container_numbers]
+      boe: [container_count]

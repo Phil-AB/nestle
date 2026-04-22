@@ -6,7 +6,7 @@ Combines all v1 endpoint routers.
 
 from fastapi import APIRouter
 
-from src.api.v1.endpoints import documents, ground_truth
+from src.api.v1.endpoints import documents
 
 # Create main v1 router
 api_router = APIRouter()
@@ -25,7 +25,6 @@ async def api_v1_info():
         "version": "1.0.0",
         "endpoints": {
             "documents": "/api/v1/documents",
-            "ground_truth": "/api/v1/ground-truth",
             "health": "/health",
             "docs": "/docs"
         }
@@ -33,7 +32,6 @@ async def api_v1_info():
 
 # Include endpoint routers
 api_router.include_router(documents.router)
-api_router.include_router(ground_truth.router, prefix="/ground-truth", tags=["ground-truth"])
 
 # Future routers can be added here:
 # api_router.include_router(export.router)

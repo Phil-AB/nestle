@@ -460,7 +460,8 @@ use_case:
       # Invoice: "FFP 28% MQAV004F-1 25kg bag" (abbreviated SAP description)
       # Packing list + BOL: "Instant Fat Filled Powder 28% veg. fat, vit & min
       # enriched, MQAV004F-1, 25 kg bag" (full description)
-      # Fuzzy matching is required to reconcile these two forms.
+      # Threshold set low (0.5) because abbreviated invoice codes share few tokens
+      # with the full product name, even though they refer to the same product.
       - name: "product_description_consistency"
         description: "Product description must be semantically consistent across all documents"
         validators:
@@ -472,6 +473,7 @@ use_case:
             - "packing_list"
             - "bill_of_lading"
           match_type: "fuzzy"
+          fuzzy_threshold: 0.5
           require_all: false
         on_failure: "flag_and_continue"
 

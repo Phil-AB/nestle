@@ -1,0 +1,106 @@
+# =============================================================================
+# Ghana GRA Customs Procedure Codes (CPC) — Nestle Ghana
+# =============================================================================
+# Source: Nestle Ghana internal CPC reference (CPC_codes.md)
+# These are the CPC codes applicable to Nestle Ghana import declarations.
+# Used by the customs_code_validator to verify duty rates and eligibility.
+
+name: "Ghana GRA Customs Procedure Codes"
+applicant: "Nestle Ghana Limited"
+version: "2025"
+description: "CPC codes used on Nestle Ghana Bills of Entry and what to validate for each"
+
+codes:
+  # ── Zero-duty (Master Concession) ─────────────────────────────────────────
+
+  - code: "40W01"
+    label: "Duty-Free Import — Master Concession"
+    duty_rate: 0.00
+    amount_payable: 0
+    vat_deferred: false
+    requires_etls_approval: true
+    check_against: "master_concession"
+    reference_file: "config/data/master_concession.yaml"
+    what_to_check: >
+      Import duty rate is 0%; amount payable is 0.
+      Confirm ETLS Approval Number is present on BOE.
+      Confirm each HS code appears in the Master Concession approved list
+      (ref: MD202601CUSTCU030000003304, expires 2026-12-31).
+
+  - code: "40U01"
+    label: "Duty-Free Import — Master Concession"
+    duty_rate: 0.00
+    amount_payable: 0
+    vat_deferred: false
+    requires_etls_approval: true
+    check_against: "master_concession"
+    reference_file: "config/data/master_concession.yaml"
+    what_to_check: >
+      Import duty rate is 0%; amount payable is 0.
+      Confirm ETLS Approval Number is present on BOE.
+      Confirm each HS code appears in the Master Concession approved list
+      (ref: MD202601CUSTCU030000003304, expires 2026-12-31).
+
+  # ── 5% duty (ECOWAS CET) ──────────────────────────────────────────────────
+
+  - code: "40E68"
+    label: "Import — 5% Duty Rate"
+    duty_rate: 0.05
+    amount_payable: null
+    vat_deferred: false
+    requires_etls_approval: false
+    check_against: "master_concession"
+    reference_file: "config/data/master_concession.yaml"
+    what_to_check: >
+      Import duty rate is 5%.
+      Check HS code against the Master Concession document to confirm the
+      correct tariff classification and rate.
+
+  # ── VAT deferred ──────────────────────────────────────────────────────────
+
+  - code: "40V02"
+    label: "VAT Deferred Import"
+    duty_rate: null
+    amount_payable: 0
+    vat_deferred: true
+    requires_etls_approval: false
+    check_against: "vat_deferment_list"
+    reference_file: "config/data/vat_deferment_list.yaml"
+    what_to_check: >
+      VAT is deferred; amount payable is 0.
+      Check each HS code against the VAT deferment list (URV 0014,
+      config/data/vat_deferment_list.yaml) to confirm eligibility.
+
+  # ── 2% duty ───────────────────────────────────────────────────────────────
+
+  - code: "40C01"
+    label: "Import — 2% Duty Rate"
+    duty_rate: 0.02
+    amount_payable: null
+    vat_deferred: false
+    requires_etls_approval: false
+    check_against: null
+    reference_file: null
+    what_to_check: "Import duty rate is 2%."
+
+  # ── N/A ───────────────────────────────────────────────────────────────────
+
+  - code: "40D01"
+    label: "N/A"
+    duty_rate: null
+    amount_payable: null
+    vat_deferred: false
+    requires_etls_approval: false
+    check_against: null
+    reference_file: null
+    what_to_check: "N/A — no specific validation required."
+
+# ── Lookup index ──────────────────────────────────────────────────────────────
+# Quick-reference: which codes require zero duty
+zero_duty_codes: ["40W01", "40U01"]
+# Which codes require eligibility cross-check
+eligibility_check_codes: ["40W01", "40U01", "40E68", "40V02"]
+# Which codes require ETLS approval number on BOE
+etls_required_codes: ["40W01", "40U01"]
+# Which codes defer VAT
+vat_deferred_codes: ["40V02"]

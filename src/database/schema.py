@@ -46,6 +46,7 @@ class Shipment(Base):
         UUID(as_uuid=False), primary_key=True, default=generate_uuid
     )
     shipment_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    boe_number: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True, index=True)
     supplier_name: Mapped[str | None] = mapped_column(String(255))
     consignee_name: Mapped[str | None] = mapped_column(String(255))
     incoterm: Mapped[str | None] = mapped_column(String(10))  # CFR, CIF, FCA

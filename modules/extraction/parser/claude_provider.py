@@ -286,7 +286,8 @@ class ClaudeProvider(IParserProvider):
             content_block = self._build_document_block(file_bytes, file_name)
             claude_schema = self.translate_schema(schema)
 
-            system_prompt = self._build_extract_system_prompt(document_type)
+            extraction_mode = claude_schema.get("mode", "focused")
+            system_prompt = self._build_extract_system_prompt(document_type, mode=extraction_mode)
             user_message = self._build_extract_user_message(claude_schema, schema)
 
             raw_response = await asyncio.to_thread(
@@ -704,19 +705,32 @@ class ClaudeProvider(IParserProvider):
             "return that field as {\"value\": null, \"redacted\": true} — do NOT omit it.\n"
         )
 
-    def _build_extract_system_prompt(self, document_type: str) -> str:
+    def _build_extract_system_prompt(self, document_type: str, mode: str = "focused") -> str:
         """Build the system prompt for schema-guided field extraction."""
+        if mode == "open":
+            rule2 = (
+                "2. Use the EXACT field label as printed on the document, converted to snake_case. "
+                "Do NOT rename, re-label, or semantically map a field to a different name. "
+                "If the document says 'Total Excl. VAT', the key is 'total_excl_vat' — "
+                "NOT 'total_fob_value'. If it says 'Your Order Number', the key is "
+                "'your_order_number' — NOT 'po_number'. If it says 'Seller', the key is "
+                "'seller' — NOT 'shipper_name'.\n"
+            )
+        else:
+            rule2 = (
+                "2. Field names in the schema are CANONICAL names — they may differ from the "
+                "label printed on the document. Use each field's description to identify which "
+                "document label corresponds to it. For example, 'po_number' maps to 'Your Order "
+                "Number' on an invoice, or 'Customer ref.' on a packing list. Extract the value "
+                "under the canonical field name given, not the document's own label.\n"
+            )
+
         base = (
             f"You are a precise document data-extraction engine for {document_type} documents.\n\n"
             "Extract the requested fields from the document following the schema exactly.\n"
             "Rules:\n"
             "1. Return ONLY a single valid JSON object — no markdown, no explanation.\n"
-            "2. Use the EXACT field label as printed on the document, converted to snake_case. "
-            "Do NOT rename, re-label, or semantically map a field to a different name. "
-            "If the document says 'Total Excl. VAT', the key is 'total_excl_vat' — "
-            "NOT 'total_fob_value'. If it says 'Your Order Number', the key is "
-            "'your_order_number' — NOT 'po_number'. If it says 'Seller', the key is "
-            "'seller' — NOT 'shipper_name'.\n"
+            + rule2 +
             "3. Preserve original values — do not normalise dates, currencies, or codes.\n"
             "4. For missing fields return null rather than omitting them.\n"
             "5. For array fields (items/line items) extract every row from the document.\n"

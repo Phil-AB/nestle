@@ -1,0 +1,1275 @@
+# GRA Customs Division — Master Concession
+# Nestle Ghana Ltd approved duty-free import list for manufacturing purposes
+#
+# This file is the authoritative reference for concession eligibility checks.
+# Used by the CPC 40U01/40W01 validator to verify that items claiming zero duty
+# are approved under this concession.
+
+metadata:
+  document_type: "Master Concession"
+  process: "CU03 Process 10"
+  application_reference: "MD202601CUSTCU030000003304"
+  version: 3
+  approval_status: "AP-Approved"
+  approval_date: "2026-01-06"
+  expiry_date: "2026-12-31"
+  application_code: "TMA1"
+  purpose: "APPROVED FOR MANUFACTURING PURPOSES ONLY"
+
+declarant:
+  name: "DAMCO LOGISTICS GHANA LIMITED"
+  tin: "C0004763831"
+  address: "4TH FLOOR GPHA TOWERS HARBOUR ROAD, TEMA"
+  email: "getrude.ackumey@lns.maersk.com"
+
+importer:
+  name: "NESTLE GHANA LIMITED"
+  tin: "C0003137171"
+  address: "NO.33 SOUTH LEGON COMMERCIAL AREA, MOTORWAY EXTENS DZORWULU"
+
+# All 244 approved line items
+# Fields: item_no, hs_code, description, category
+items:
+
+  # ── HDPE CLOSURES ──────────────────────────────────────────────────────────
+  - item_no: 1
+    hs_code: "3923500000"
+    description: "CLOSURE HDPE DIAMETER 99MM"
+    category: "packaging_closures"
+
+  - item_no: 2
+    hs_code: "3923500000"
+    description: "CLOSURE HDPE DIAMETER 73MM"
+    category: "packaging_closures"
+
+  - item_no: 3
+    hs_code: "3923500000"
+    description: "NESTLE CLOSURE TPLPEELOFFPULLRING0.18M"
+    category: "packaging_closures"
+
+  # ── METAL ENDS ─────────────────────────────────────────────────────────────
+  - item_no: 4
+    hs_code: "8309909000"
+    description: "PEEL OFF ENDS 99MM"
+    category: "packaging_metal_ends"
+
+  - item_no: 5
+    hs_code: "8309909000"
+    description: "END METAL ROUND PENNY LEVER 99MM"
+    category: "packaging_metal_ends"
+
+  - item_no: 6
+    hs_code: "8309909000"
+    description: "END METAL ROUND PENNY LEVER 73MM"
+    category: "packaging_metal_ends"
+
+  - item_no: 7
+    hs_code: "8309909000"
+    description: "END METAL ROUND DIAMETER 63MM"
+    category: "packaging_metal_ends"
+
+  - item_no: 8
+    hs_code: "8309909000"
+    description: "END METAL D73MM DOUBLE SIDE COATED NBPA"
+    category: "packaging_metal_ends"
+
+  - item_no: 9
+    hs_code: "8309909000"
+    description: "END METAL EOE 63MM X 0.18MM GAL PULL TAB"
+    category: "packaging_metal_ends"
+
+  - item_no: 10
+    hs_code: "8309909000"
+    description: "EEND METAL ROUND D63MM W INT NBPA"
+    category: "packaging_metal_ends"
+
+  - item_no: 11
+    hs_code: "8309909000"
+    description: "NESTLE BOTTOM END 99MM"
+    category: "packaging_metal_ends"
+
+  - item_no: 12
+    hs_code: "8309909000"
+    description: "NESTLE BOTTOM.LID CREAM 73MM"
+    category: "packaging_metal_ends"
+
+  # ── LACQUERS & SOLVENTS ────────────────────────────────────────────────────
+  - item_no: 13
+    hs_code: "3208201000"
+    description: "LACQUER"
+    category: "packaging_lacquers"
+
+  - item_no: 14
+    hs_code: "3208201000"
+    description: "NONBPA PPG 2238.899A INTERNAL SS LACQUER"
+    category: "packaging_lacquers"
+
+  - item_no: 15
+    hs_code: "3208201000"
+    description: "ACRLATE NON BPA 338.000 SS LACQUER"
+    category: "packaging_lacquers"
+
+  - item_no: 16
+    hs_code: "3814009000"
+    description: "FOOD GRADE SOLVENT 366.011"
+    category: "packaging_lacquers"
+
+  # ── WIRE, TAPE & ADHESIVES ─────────────────────────────────────────────────
+  - item_no: 17
+    hs_code: "7408190000"
+    description: "COPPER WIRE 1.24MM X4"
+    category: "packaging_accessories"
+
+  - item_no: 18
+    hs_code: "3919100000"
+    description: "TAPE OPP SELF ADHESIVE"
+    category: "packaging_accessories"
+
+  - item_no: 19
+    hs_code: "3214101000"
+    description: "DAREX / ADHESIVE WATERBASE SEALING COMPOUND"
+    category: "packaging_accessories"
+
+  # ── PRINTED LAMINATES (PET/AI/PE, PET/MPET/PE etc.) ───────────────────────
+  - item_no: 20
+    hs_code: "7607201000"
+    description: "LAM PET/AI/PE FFS CERELAC BL FRTPC 50GN1"
+    category: "packaging_laminates"
+
+  - item_no: 21
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NIDO FORTI CHOCO 35G"
+    category: "packaging_laminates"
+
+  - item_no: 22
+    hs_code: "7607201000"
+    description: "LAM PET/AI/PE FFS CERELAC BL WHEAT 50GN1"
+    category: "packaging_laminates"
+
+  - item_no: 23
+    hs_code: "7607201000"
+    description: "LAM PET/AI/PE FFS CERELAC BL RICE 50G N1"
+    category: "packaging_laminates"
+
+  - item_no: 24
+    hs_code: "7607201000"
+    description: "LAM PET/AI/PE FFS CERELAC BL MAIZE 50GNI"
+    category: "packaging_laminates"
+
+  - item_no: 25
+    hs_code: "7607201000"
+    description: "LAM PET/AI/PE FFS CERELAC BL HONEY 50GN1"
+    category: "packaging_laminates"
+
+  - item_no: 26
+    hs_code: "7607201000"
+    description: "LAMINATE PET/PE/MPET/PE 400 X 290X445MM"
+    category: "packaging_laminates"
+
+  - item_no: 27
+    hs_code: "7607201000"
+    description: "LAMINATE PET/PE/MPET/PE 400 X 290X445MM"
+    category: "packaging_laminates"
+
+  - item_no: 28
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE MILO CEREAL 50G GH"
+    category: "packaging_laminates"
+
+  - item_no: 29
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE MILO CEREAL 450G GH"
+    category: "packaging_laminates"
+
+  - item_no: 30
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE CHOCOMILO 50 X 2.75G"
+    category: "packaging_laminates"
+
+  - item_no: 31
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO ACTIV GO 20G"
+    category: "packaging_laminates"
+
+  - item_no: 32
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO ACTIVGO 800G"
+    category: "packaging_laminates"
+
+  - item_no: 33
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO ACTIV GO 400G"
+    category: "packaging_laminates"
+
+  - item_no: 34
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO ACTIV GO 200G"
+    category: "packaging_laminates"
+
+  - item_no: 35
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NESCAFE BKFAST 36G GH"
+    category: "packaging_laminates"
+
+  - item_no: 36
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NESCAFE BRKFST 32GSCF"
+    category: "packaging_laminates"
+
+  - item_no: 37
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NESCAFE CRM18G N1"
+    category: "packaging_laminates"
+
+  - item_no: 38
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NIDO ESS 26G W/S GH"
+    category: "packaging_laminates"
+
+  - item_no: 39
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NIDO ESS 365G W/S GH"
+    category: "packaging_laminates"
+
+  - item_no: 40
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NIDO ESS NUTPK 14G GH"
+    category: "packaging_laminates"
+
+  - item_no: 41
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY COF 37G N1"
+    category: "packaging_laminates"
+
+  - item_no: 42
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY TEA 37G N1"
+    category: "packaging_laminates"
+
+  - item_no: 43
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL DAIRY PWDR 385G"
+    category: "packaging_laminates"
+
+  - item_no: 44
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE FFS NESTLE IDEAL 12G"
+    category: "packaging_laminates"
+
+  - item_no: 45
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE CHOCOLIM 1KG GH"
+    category: "packaging_laminates"
+
+  - item_no: 46
+    hs_code: "7607191000"
+    description: "LAMINATE CERELAC VARIANTS"
+    category: "packaging_laminates"
+
+  - item_no: 47
+    hs_code: "7607191000"
+    description: "LAMINATE COCOA BEVERAGES"
+    category: "packaging_laminates"
+
+  - item_no: 48
+    hs_code: "7607191000"
+    description: "LAMINATE NESCAFE"
+    category: "packaging_laminates"
+
+  - item_no: 49
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE CHOCOLIM 500G GH"
+    category: "packaging_laminates"
+
+  - item_no: 50
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL 20G GH"
+    category: "packaging_laminates"
+
+  - item_no: 51
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY TEA 37GN2"
+    category: "packaging_laminates"
+
+  - item_no: 52
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY CHC 37G N2"
+    category: "packaging_laminates"
+
+  - item_no: 53
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY COF 37G N2"
+    category: "packaging_laminates"
+
+  - item_no: 54
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NESCAFE BKFAST 36G UP"
+    category: "packaging_laminates"
+
+  - item_no: 55
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE CHOCOMIL 50 X 2.75G N1"
+    category: "packaging_laminates"
+
+  - item_no: 56
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO 3 IN 1 1KG GH"
+    category: "packaging_laminates"
+
+  - item_no: 57
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO 3 IN 1 MIX 40G"
+    category: "packaging_laminates"
+
+  - item_no: 58
+    hs_code: "3208201000"
+    description: "LAMINATE PET/PE/MPET/PE NESCAFE NP IKG"
+    category: "packaging_lacquers"
+
+  - item_no: 59
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE MILO ACTIV GO 440G"
+    category: "packaging_laminates"
+
+  - item_no: 60
+    hs_code: "7607201000"
+    description: "LAMINATE PET/MPET/PE COFFEE MATE 500G"
+    category: "packaging_laminates"
+
+  - item_no: 61
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE IDEAL DAIRY DEL 350G"
+    category: "packaging_laminates"
+
+  - item_no: 62
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL DAIRY DEL 26G"
+    category: "packaging_laminates"
+
+  - item_no: 63
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE IDEAL MILKY CHC 37G ST"
+    category: "packaging_laminates"
+
+  - item_no: 64
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE CERELAC BL WHT 25G"
+    category: "packaging_laminates"
+
+  - item_no: 65
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE CHCOLIM 20G"
+    category: "packaging_laminates"
+
+  - item_no: 66
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NESTLE IDEAL 12G ST"
+    category: "packaging_laminates"
+
+  - item_no: 67
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NIDO FORTGROW 12G GH P2"
+    category: "packaging_laminates"
+
+  - item_no: 68
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NIDO FORTGROW 20G GH P2"
+    category: "packaging_laminates"
+
+  - item_no: 69
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NIDO FORTGROW 26G GH P2"
+    category: "packaging_laminates"
+
+  - item_no: 70
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AL/PE NIDO FORTGROW 365G GH P2"
+    category: "packaging_laminates"
+
+  - item_no: 71
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE NIDO FRTGRW 402G GHP2"
+    category: "packaging_laminates"
+
+  - item_no: 72
+    hs_code: "7607201000"
+    description: "LAMINATE PET/AI/PE CERELAC BL BIS TY 50G"
+    category: "packaging_laminates"
+
+  # ── CORRUGATED CASES & TRAYS ───────────────────────────────────────────────
+  - item_no: 73
+    hs_code: "4819100000"
+    description: "TRAY BD FOLD MAGGI SHMP FORT 60X 10G GHSP"
+    category: "packaging_corrugated"
+
+  - item_no: 74
+    hs_code: "4819100000"
+    description: "TRAY CORR C MILK CAN 24 X 170G"
+    category: "packaging_corrugated"
+
+  - item_no: 75
+    hs_code: "4819100000"
+    description: "TRAY CORR C MILK CAN 24 X 410G"
+    category: "packaging_corrugated"
+
+  - item_no: 76
+    hs_code: "4819100000"
+    description: "CASE CORR BC CERELAC BL BIS TY 80 X 50G GH"
+    category: "packaging_corrugated"
+
+  - item_no: 77
+    hs_code: "4819100000"
+    description: "CASE CORR C CERELAC BL BIS TY 12 X 400G GH"
+    category: "packaging_corrugated"
+
+  - item_no: 78
+    hs_code: "4819100000"
+    description: "CASE COR BC NIDO FORT GROW 26 X 10 12G GHP2"
+    category: "packaging_corrugated"
+
+  - item_no: 79
+    hs_code: "4819100000"
+    description: "CASE CORR BC NIDO FORT GROW 18 X 20G GHP2"
+    category: "packaging_corrugated"
+
+  - item_no: 80
+    hs_code: "4819100000"
+    description: "CASE CORR BC NIDO FRT GROW 12 X 10 X 26 GHP2"
+    category: "packaging_corrugated"
+
+  - item_no: 81
+    hs_code: "4819100000"
+    description: "CASE CORR BC NIDO FRT GROW 12 X 365G GHP2"
+    category: "packaging_corrugated"
+
+  - item_no: 82
+    hs_code: "4819100000"
+    description: "CASE CORR BC NIDO FRT GROW 12 X 402G GH P2"
+    category: "packaging_corrugated"
+
+  - item_no: 83
+    hs_code: "4819100000"
+    description: "CASE CORR BC IDEAL DAIRY DELI 12 X 350G"
+    category: "packaging_corrugated"
+
+  - item_no: 84
+    hs_code: "4819100000"
+    description: "CASE CORR BC IDEAL DAIRY 12 X 10 X 26G"
+    category: "packaging_corrugated"
+
+  - item_no: 85
+    hs_code: "4819100000"
+    description: "CASE CORR C MAGGI SHRIMP 24 X 60 X 10G GH SP"
+    category: "packaging_corrugated"
+
+  # ── MILO CHAMPACK ──────────────────────────────────────────────────────────
+  - item_no: 86
+    hs_code: "7607191000"
+    description: "MILO CHAMPACK"
+    category: "packaging_laminates"
+
+  # ── PET/PE POUCHES ─────────────────────────────────────────────────────────
+  - item_no: 87
+    hs_code: "3920102000"
+    description: "POUNCH PET/PE NESCAFE CRM 32 X 18G N1"
+    category: "packaging_pouches"
+
+  - item_no: 88
+    hs_code: "3920102000"
+    description: "POUNCH PET/PE NESCAFE BREAKFAST 11 X 32 GH"
+    category: "packaging_pouches"
+
+  - item_no: 89
+    hs_code: "3920102000"
+    description: "PPOUNCH PET/PE NESCAFE BRKFST MT 11 X 36G GH"
+    category: "packaging_pouches"
+
+  - item_no: 90
+    hs_code: "3920102000"
+    description: "POUCH PET/PE NESCAFE CRM 32 X 18 N1"
+    category: "packaging_pouches"
+
+  - item_no: 91
+    hs_code: "3920102000"
+    description: "POUNCH PET/PE NESCAFE BREAKFAST 11 X 32 GH"
+    category: "packaging_pouches"
+
+  - item_no: 92
+    hs_code: "3920102000"
+    description: "POUNCH PET/PE NESCAFE BRKFST MT 11 X 36G GH"
+    category: "packaging_pouches"
+
+  # ── OPP WRAPPER FILMS ──────────────────────────────────────────────────────
+  - item_no: 93
+    hs_code: "7607201000"
+    description: "FILM OPP WRAPPER CHOCOMILO 2.75G THG GH KT"
+    category: "packaging_laminates"
+
+  - item_no: 94
+    hs_code: "7607201000"
+    description: "FILM OPP WRAP MAGGI SHRIMP 10G SAP GH SP"
+    category: "packaging_laminates"
+
+  - item_no: 95
+    hs_code: "7607201000"
+    description: "FILM OPP WRP ACTIVGO CHOCOMILO 2.75G THG"
+    category: "packaging_laminates"
+
+  # ── TINPLATE METAL ─────────────────────────────────────────────────────────
+  - item_no: 96
+    hs_code: "7210120000"
+    description: "TIPLATE METAL IDEAL IDEAL BAL 160G W. INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 97
+    hs_code: "7210120000"
+    description: "TINPLATE METAL END D63MM W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 98
+    hs_code: "7210120000"
+    description: "TIPLATE METAL END D63MM W. INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 99
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL ORIG 160G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 100
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA 160G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 101
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CARNATION 160G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 102
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA FM 160G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 103
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL ORIG390G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 104
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL VAL 390G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 105
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA 390G W INT NBPA"
+    category: "packaging_tinplate"
+
+  - item_no: 106
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL BIS TY 400G GH"
+    category: "packaging_tinplate"
+
+  - item_no: 107
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL ORIG 520G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 108
+    hs_code: "7210120000"
+    description: "TINPLATE METAL END MILK 976 X 910 X 0.18MM 08"
+    category: "packaging_tinplate"
+
+  - item_no: 109
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL WHEAT 400G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 110
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL FRT PC 400G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 111
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL MAIZE 400G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 112
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL HONEY 400G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 113
+    hs_code: "7210120000"
+    description: "TIPLATE METAL CERELAC BL RICE 400G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 114
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CERELAC BL MILLET 400G"
+    category: "packaging_tinplate"
+
+  - item_no: 115
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL ORIGINAL 160G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 116
+    hs_code: "7210120000"
+    description: "TINPLATE METAL CARNATIONAL TEA 160G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 117
+    hs_code: "7210120000"
+    description: "TIPLATE METAL IDEAL BALANCE 160G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 118
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA CREAM 160G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 119
+    hs_code: "7210120000"
+    description: "TINPLATE METAL MILO ACTIV GO 400G GH"
+    category: "packaging_tinplate"
+
+  - item_no: 120
+    hs_code: "7210120000"
+    description: "TINPLATE METAL BODY NESCAFE CLAS 50G N1"
+    category: "packaging_tinplate"
+
+  - item_no: 121
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL VALUE CMR 390G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 122
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA CREAM 390G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 123
+    hs_code: "7210120000"
+    description: "TINPLATE METAL IDEAL ORIG 390G LITHO N1"
+    category: "packaging_tinplate"
+
+  - item_no: 124
+    hs_code: "7210120000"
+    description: "TINPLATE METAL GLORIA FM 160G LITHO"
+    category: "packaging_tinplate"
+
+  - item_no: 125
+    hs_code: "7210120000"
+    description: "TINPLATE METAL MILO ACTIVGO GIRAFFE 440G"
+    category: "packaging_tinplate"
+
+  - item_no: 126
+    hs_code: "7210120000"
+    description: "TINPLATE METAL MILO ACTIV - GO 400G EUR"
+    category: "packaging_tinplate"
+
+  # ── DAIRY & MILK INGREDIENTS ───────────────────────────────────────────────
+  - item_no: 127
+    hs_code: "0403901100"
+    description: "BUTTERMILK PWDR SWEET 5% STER"
+    category: "raw_material_dairy"
+
+  - item_no: 128
+    hs_code: "0402101000"
+    description: "MILK SKIMMED PWDR MH INF DM"
+    category: "raw_material_dairy"
+
+  - item_no: 129
+    hs_code: "0405909000"
+    description: "ANHYDROUS MILK FAT DRUM 200"
+    category: "raw_material_dairy"
+
+  - item_no: 130
+    hs_code: "0402101000"
+    description: "MILK COW SKIMMED POWDER MH INFG 25G"
+    category: "raw_material_dairy"
+
+  - item_no: 131
+    hs_code: "0402101000"
+    description: "MILK SKIMMED PWDR MH"
+    category: "raw_material_dairy"
+
+  - item_no: 132
+    hs_code: "0402101000"
+    description: "MILK SKIMMED POWDER MH STER"
+    category: "raw_material_dairy"
+
+  - item_no: 133
+    hs_code: "0402101000"
+    description: "FILLED MILK POWDER 26% FAT 25KG HALAL"
+    category: "raw_material_dairy"
+
+  - item_no: 134
+    hs_code: "0402101000"
+    description: "FILLED MILK 18% PROTEIN"
+    category: "raw_material_dairy"
+
+  - item_no: 135
+    hs_code: "0404100000"
+    description: "WHEY POWDER DENMINRALIZE"
+    category: "raw_material_dairy"
+
+  - item_no: 136
+    hs_code: "0404100000"
+    description: "WHEY SWEET POWDER"
+    category: "raw_material_dairy"
+
+  # ── COCOA ──────────────────────────────────────────────────────────────────
+  - item_no: 137
+    hs_code: "1805009000"
+    description: "COCOA POWDER ALK 10-12% FAT CARGILL 2"
+    category: "raw_material_cocoa"
+
+  - item_no: 138
+    hs_code: "1805009000"
+    description: "COCOA POWDER NATURAL"
+    category: "raw_material_cocoa"
+
+  # ── PHOSPHATES & MINERALS ──────────────────────────────────────────────────
+  - item_no: 139
+    hs_code: "2835240000"
+    description: "DIPOTASSIUM PHOSPHATE"
+    category: "raw_material_minerals"
+
+  - item_no: 140
+    hs_code: "2836500000"
+    description: "CALCIUM CARBONATE POWDER"
+    category: "raw_material_minerals"
+
+  - item_no: 141
+    hs_code: "2835250000"
+    description: "DICALCIUM PHOSPHATE"
+    category: "raw_material_minerals"
+
+  - item_no: 142
+    hs_code: "2835250000"
+    description: "DIMAGNESIUM PHOSPATE"
+    category: "raw_material_minerals"
+
+  - item_no: 143
+    hs_code: "2835220000"
+    description: "DISODIUM PHOSPHATE ANHYDROUS"
+    category: "raw_material_minerals"
+
+  - item_no: 144
+    hs_code: "2836300000"
+    description: "SODIUM CARBONATE"
+    category: "raw_material_minerals"
+
+  - item_no: 145
+    hs_code: "2842900000"
+    description: "MAGNESIUM CARBONATE"
+    category: "raw_material_minerals"
+
+  - item_no: 146
+    hs_code: "2917190000"
+    description: "FERROUS FUMARATE"
+    category: "raw_material_minerals"
+
+  - item_no: 147
+    hs_code: "2842900000"
+    description: "FERRIC PYROPHOSPHATE"
+    category: "raw_material_minerals"
+
+  - item_no: 148
+    hs_code: "2835250000"
+    description: "DICALCIUM PHOSPHATE DIDHYDRATE"
+    category: "raw_material_minerals"
+
+  # ── FLAVORS & EXTRACTS ─────────────────────────────────────────────────────
+  - item_no: 149
+    hs_code: "2106909200"
+    description: "APPLE POWDER"
+    category: "raw_material_flavors"
+
+  - item_no: 150
+    hs_code: "0803902000"
+    description: "BANANA CRUNCHIES"
+    category: "raw_material_flavors"
+
+  - item_no: 151
+    hs_code: "2106909900"
+    description: "HONEY POWDER"
+    category: "raw_material_flavors"
+
+  - item_no: 152
+    hs_code: "2106909900"
+    description: "ORANGE POWDER (FLAKES)"
+    category: "raw_material_flavors"
+
+  - item_no: 153
+    hs_code: "1901903000"
+    description: "MALT EXTRACT LIQUID"
+    category: "raw_material_malt"
+
+  - item_no: 154
+    hs_code: "2106909900"
+    description: "TRACE ELEMENTS PREMIX"
+    category: "raw_material_premix"
+
+  - item_no: 155
+    hs_code: "0813300000"
+    description: "APPLE CRUNCHIES"
+    category: "raw_material_flavors"
+
+  - item_no: 156
+    hs_code: "1904100000"
+    description: "CORN CRUNCHIES 20KG GH"
+    category: "raw_material_cereals"
+
+  - item_no: 157
+    hs_code: "1104230000"
+    description: "CORN CRUNCHIES 20KG GH"
+    category: "raw_material_cereals"
+
+  # ── VITAMINS & PREMIXES ────────────────────────────────────────────────────
+  - item_no: 158
+    hs_code: "2912410000"
+    description: "VITAMIN PREMIX BEV 6298"
+    category: "raw_material_vitamins"
+
+  - item_no: 159
+    hs_code: "2936230000"
+    description: "MICRONUTRIENT PREMIX VP 6169"
+    category: "raw_material_vitamins"
+
+  - item_no: 160
+    hs_code: "2936230000"
+    description: "MICRONUTRIENT PREMIX VP 10310 25KG HALAL"
+    category: "raw_material_vitamins"
+
+  - item_no: 161
+    hs_code: "2936230000"
+    description: "VITAMIN PREMIX BEV 6066 BEV MR2 NON-GMO"
+    category: "raw_material_vitamins"
+
+  - item_no: 162
+    hs_code: "2936900000"
+    description: "VITAMIN PREMIX NUTR 19154 25KG"
+    category: "raw_material_vitamins"
+
+  - item_no: 163
+    hs_code: "2936210000"
+    description: "VITAMIN A ACETATE"
+    category: "raw_material_vitamins"
+
+  - item_no: 164
+    hs_code: "2936210000"
+    description: "VITAMIN A PALMITATE OLIY 1.7 MILLION l"
+    category: "raw_material_vitamins"
+
+  - item_no: 165
+    hs_code: "2936290000"
+    description: "VITAMIN D3 OILY"
+    category: "raw_material_vitamins"
+
+  # ── FLAVOR EXTRACTS (cont.) ────────────────────────────────────────────────
+  - item_no: 166
+    hs_code: "2106909200"
+    description: "FLAVOR CHOCOLATE POWDER"
+    category: "raw_material_flavors"
+
+  - item_no: 167
+    hs_code: "3302100000"
+    description: "FOOD FLAVOUR"
+    category: "raw_material_flavors"
+
+  - item_no: 168
+    hs_code: "2106909200"
+    description: "FLAVOR SUCROSE"
+    category: "raw_material_flavors"
+
+  - item_no: 169
+    hs_code: "2106909200"
+    description: "FLAVOR CHICORY"
+    category: "raw_material_flavors"
+
+  - item_no: 170
+    hs_code: "2106909200"
+    description: "FLAVOR CREAMY SENSAT"
+    category: "raw_material_flavors"
+
+  - item_no: 171
+    hs_code: "2106909200"
+    description: "FLAVOUR TEA BLACK"
+    category: "raw_material_flavors"
+
+  - item_no: 172
+    hs_code: "0902200000"
+    description: "INSTANT TEA POWDER"
+    category: "raw_material_tea"
+
+  - item_no: 173
+    hs_code: "2106909200"
+    description: "FLAVOR CARAMEL 502774TP0551 (l)"
+    category: "raw_material_flavors"
+
+  - item_no: 174
+    hs_code: "2106909200"
+    description: "FLAV MALT EVERFRESH 100JH-968-5990 25KG"
+    category: "raw_material_flavors"
+
+  - item_no: 175
+    hs_code: "2106909200"
+    description: "FLAVOR MOUNTHFEEL"
+    category: "raw_material_flavors"
+
+  # ── ENZYMES & PROBIOTICS ───────────────────────────────────────────────────
+  - item_no: 176
+    hs_code: "3507900000"
+    description: "ENZYME ALPHA AMYLASE BAN 800"
+    category: "raw_material_enzymes"
+
+  - item_no: 177
+    hs_code: "3507900000"
+    description: "ENZYMES ASPARAGINASE"
+    category: "raw_material_enzymes"
+
+  - item_no: 178
+    hs_code: "3507900000"
+    description: "PREVENTASE"
+    category: "raw_material_enzymes"
+
+  - item_no: 179
+    hs_code: "3002909000"
+    description: "PREBLEND PROBIOTICS"
+    category: "raw_material_enzymes"
+
+  # ── ANTIOXIDANTS ───────────────────────────────────────────────────────────
+  - item_no: 180
+    hs_code: "2936280000"
+    description: "ANTIOXIDANTS"
+    category: "raw_material_vitamins"
+
+  # ── STARCHES & CEREALS ─────────────────────────────────────────────────────
+  - item_no: 181
+    hs_code: "1108129000"
+    description: "MALTODEXTRIN CORN"
+    category: "raw_material_cereals"
+
+  - item_no: 182
+    hs_code: "1302390000"
+    description: "CARRAGEENAN LACTARIN MV306 INS407"
+    category: "raw_material_additives"
+
+  - item_no: 183
+    hs_code: "2923200000"
+    description: "LECITHIN SOY LIQUID"
+    category: "raw_material_additives"
+
+  - item_no: 184
+    hs_code: "1701991000"
+    description: "SUGAR WHITE FINE"
+    category: "raw_material_sugars"
+
+  - item_no: 185
+    hs_code: "1701991000"
+    description: "CASTOR SUGAR"
+    category: "raw_material_sugars"
+
+  - item_no: 186
+    hs_code: "2501002000"
+    description: "SALT"
+    category: "raw_material_additives"
+
+  - item_no: 187
+    hs_code: "1903000000"
+    description: "STARCH TAPIOCA MODIFIED INSTANT"
+    category: "raw_material_starches"
+
+  # ── COFFEE & BEVERAGES ─────────────────────────────────────────────────────
+  - item_no: 188
+    hs_code: "2101110000"
+    description: "NESCAFE CLASSIC KNRX585 27.5KG"
+    category: "raw_material_coffee"
+
+  - item_no: 189
+    hs_code: "2101110000"
+    description: "NESCAFE CLASSIC KNRF585 (NESCAFE BULK)"
+    category: "raw_material_coffee"
+
+  - item_no: 190
+    hs_code: "1511909900"
+    description: "OIL PALM OLEIN DF"
+    category: "raw_material_oils"
+
+  - item_no: 191
+    hs_code: "1901903000"
+    description: "PROTOMALT EXTRACT LIQUID"
+    category: "raw_material_malt"
+
+  - item_no: 192
+    hs_code: "2106909900"
+    description: "COFFEE MATE COFF CRMR CM113 30KG RO"
+    category: "raw_material_coffee"
+
+  - item_no: 193
+    hs_code: "1008290000"
+    description: "MILLET GRAIN DEHULLED"
+    category: "raw_material_cereals"
+
+  - item_no: 194
+    hs_code: "1005900000"
+    description: "YELLOW MAIZE"
+    category: "raw_material_cereals"
+
+  - item_no: 195
+    hs_code: "1005900000"
+    description: "GRAIN CORN"
+    category: "raw_material_cereals"
+
+  - item_no: 196
+    hs_code: "2811220000"
+    description: "SILICON DIOXIDE INS551 SIPERNAT 22S 15KG"
+    category: "raw_material_additives"
+
+  - item_no: 197
+    hs_code: "2106909200"
+    description: "SUCROGEM FLAVOR"
+    category: "raw_material_flavors"
+
+  - item_no: 198
+    hs_code: "2106909200"
+    description: "STEVIOL GLYCOSIDE"
+    category: "raw_material_flavors"
+
+  - item_no: 199
+    hs_code: "2833290000"
+    description: "ZINC SULPHATE MONOHYDRATE POWDER 25KG"
+    category: "raw_material_minerals"
+
+  - item_no: 200
+    hs_code: "2936290000"
+    description: "VITAMIN PREMIX 8096 25KG HALAL"
+    category: "raw_material_vitamins"
+
+  - item_no: 201
+    hs_code: "1702300000"
+    description: "GLUCOSE POWDER"
+    category: "raw_material_sugars"
+
+  - item_no: 202
+    hs_code: "2008990000"
+    description: "BANANA CRUNCHIES"
+    category: "raw_material_flavors"
+
+  - item_no: 203
+    hs_code: "2008990000"
+    description: "APPLE CRUNCHIES"
+    category: "raw_material_flavors"
+
+  - item_no: 204
+    hs_code: "2836990000"
+    description: "MAGNESIUM CARBONATE"
+    category: "raw_material_minerals"
+
+  - item_no: 205
+    hs_code: "2835390000"
+    description: "FERRIC PYROPHOSPHATE"
+    category: "raw_material_minerals"
+
+  - item_no: 206
+    hs_code: "0402911000"
+    description: "MILK SKIMMED POWDER"
+    category: "raw_material_dairy"
+
+  - item_no: 207
+    hs_code: "1702190000"
+    description: "WHEY POWDER DEMINERALISED"
+    category: "raw_material_dairy"
+
+  - item_no: 208
+    hs_code: "2835290000"
+    description: "DIMAGNESIUM PHOSHATE"
+    category: "raw_material_minerals"
+
+  - item_no: 209
+    hs_code: "1904900000"
+    description: "CORN CRUNCHIES"
+    category: "raw_material_cereals"
+
+  # ── GENERIC LAMINATES (additional variants) ────────────────────────────────
+  - item_no: 210
+    hs_code: "3921902000"
+    description: "CERELAC LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 211
+    hs_code: "3921902000"
+    description: "NIDO LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 212
+    hs_code: "3921902000"
+    description: "MILO CERELAC LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 213
+    hs_code: "3921902000"
+    description: "MILO 3 IN 1 LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 214
+    hs_code: "3921902000"
+    description: "MILO ACTIVE GO LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 215
+    hs_code: "3921902000"
+    description: "MILO ACTIGEN E LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 216
+    hs_code: "3921902000"
+    description: "CHOCOLIM LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 217
+    hs_code: "3921902000"
+    description: "CHOCOMILO LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 218
+    hs_code: "3921902000"
+    description: "NESCAFE BREAKFAST LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 219
+    hs_code: "3921902000"
+    description: "NESCAFE CREME LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 220
+    hs_code: "3921902000"
+    description: "NESCAFE CLASSIC LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 221
+    hs_code: "3921902000"
+    description: "IDEAL MILKY CHOCO LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 222
+    hs_code: "3921902000"
+    description: "IDEAL ORIGINAL LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 223
+    hs_code: "3921902000"
+    description: "IDEAL DAIRY DELIGHT LAMINATE"
+    category: "packaging_laminates"
+
+  - item_no: 224
+    hs_code: "4819100000"
+    description: "TRAY CORRUGATED"
+    category: "packaging_corrugated"
+
+  # ── ADDITIONAL CEREALS & INGREDIENTS ──────────────────────────────────────
+  - item_no: 225
+    hs_code: "1104290000"
+    description: "MILLET GRAIN DEHULLED"
+    category: "raw_material_cereals"
+
+  - item_no: 226
+    hs_code: "0402212900"
+    description: "FULL CREAM MILK POWDER"
+    category: "raw_material_dairy"
+
+  - item_no: 227
+    hs_code: "3504000000"
+    description: "ISOLATED SOY PROTEIN"
+    category: "raw_material_additives"
+
+  - item_no: 228
+    hs_code: "3208902100"
+    description: "POWDERED LACQUER"
+    category: "packaging_lacquers"
+
+  - item_no: 229
+    hs_code: "2106909200"
+    description: "FLAVOR POWDER 5980-B NGM 25KG"
+    category: "raw_material_flavors"
+
+  - item_no: 230
+    hs_code: "2106909200"
+    description: "FLAVOR COFFEE CRML PWD GIV S189928 25KG"
+    category: "raw_material_flavors"
+
+  - item_no: 231
+    hs_code: "3501900000"
+    description: "SODIUM CASEINATE"
+    category: "raw_material_dairy"
+
+  # ── TINPLATE METAL (generic variants) ─────────────────────────────────────
+  - item_no: 232
+    hs_code: "7310210000"
+    description: "TINPLATE METAL"
+    category: "packaging_tinplate"
+
+  - item_no: 233
+    hs_code: "1101000000"
+    description: "WHEAT FLOUR"
+    category: "raw_material_cereals"
+
+  - item_no: 234
+    hs_code: "7210709000"
+    description: "TINPLATE METAL"
+    category: "packaging_tinplate"
+
+  - item_no: 235
+    hs_code: "7210901000"
+    description: "TINPLATE METAL"
+    category: "packaging_tinplate"
+
+  - item_no: 236
+    hs_code: "7210909000"
+    description: "TINPLATE METAL"
+    category: "packaging_tinplate"
+
+  - item_no: 237
+    hs_code: "3921902000"
+    description: "BOPP FILM"
+    category: "packaging_laminates"
+
+  - item_no: 238
+    hs_code: "0813300000"
+    description: "APPLE FLAKES"
+    category: "raw_material_flavors"
+
+  - item_no: 239
+    hs_code: "2106909600"
+    description: "PROBIOTIC PREBLEND PP017 BOX 4X5KG"
+    category: "raw_material_enzymes"
+
+  - item_no: 240
+    hs_code: "8311300000"
+    description: "COPPER WIRE"
+    category: "packaging_accessories"
+
+  - item_no: 241
+    hs_code: "0903000000"
+    description: "COFFEE MATE (COFFEE CREAMER)"
+    category: "raw_material_coffee"
+
+  - item_no: 242
+    hs_code: "3920201000"
+    description: "SUPEX BOPP FILM"
+    category: "packaging_laminates"
+
+  - item_no: 243
+    hs_code: "1102901000"
+    description: "OIL MILLET OR SORGHUM"
+    category: "raw_material_cereals"
+
+  - item_no: 244
+    hs_code: "1102909000"
+    description: "OTHER CEREALS"
+    category: "raw_material_cereals"

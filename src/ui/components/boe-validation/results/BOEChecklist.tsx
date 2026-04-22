@@ -64,6 +64,7 @@ export function BOEChecklist({
       <div className="px-5 py-3.5 border-b border-border flex items-center gap-3 bg-muted/20">
         <ClipboardCheck className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         <h3 className="font-semibold text-foreground text-sm">BOE Checklist</h3>
+        <span className="text-[11px] text-muted-foreground">{BOE_CHECKLIST.length} checks</span>
         <div className="flex items-center gap-3 ml-auto text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" /> Present</span>
           <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-amber-500" /> Conflict</span>

@@ -282,6 +282,35 @@ class SchemaGenerator:
             # Unknown document type - no minimum requirement
             return 0
 
+    def _get_extraction_description(self, field_name: str, hints: Dict[str, str]) -> str:
+        """
+        Build a description for focused-mode extraction.
+
+        Priority:
+        1. Per-field extraction hint from checklist.yaml (most specific)
+        2. Field description from DocumentExtractionFields Pydantic schema
+        3. Empty string fallback
+
+        Args:
+            field_name: Canonical field name (e.g. "po_number").
+            hints: Dict of field_name → hint from get_extraction_hints().
+
+        Returns:
+            Description string for the field, or "" if none available.
+        """
+        if field_name in hints:
+            return hints[field_name]
+
+        try:
+            from modules.extraction.parser.ai_semantic_enhancer import DocumentExtractionFields
+            field_info = DocumentExtractionFields.model_fields.get(field_name)
+            if field_info and field_info.description:
+                return field_info.description
+        except Exception:
+            pass
+
+        return ""
+
     def generate_checklist_schema(self, document_type: str) -> Dict[str, Any]:
         """
         Generate a focused schema containing only the fields from the import checklist.
@@ -313,14 +342,30 @@ class SchemaGenerator:
             f"{len(header_fields)} header fields, {len(item_fields)} item fields"
         )
 
+        hints = checklist.get_extraction_hints(document_type)
+
         fields: Dict[str, Any] = {}
         for field_name in header_fields:
             fields[field_name] = {
                 "type": self._infer_field_type(field_name),
                 "required": False,
+                "description": self._get_extraction_description(field_name, hints),
             }
 
         doc_type_lower = document_type.lower().strip()
+        # For document types that don't have line items (e.g. bill_of_lading),
+        # promote item-level checklist fields to header fields so Claude extracts
+        # them as flat key-value pairs rather than looking for item rows.
+        if item_fields and not self._has_items(doc_type_lower):
+            for field_name in item_fields:
+                if field_name not in header_fields:
+                    header_fields.append(field_name)
+                    fields[field_name] = {
+                        "type": self._infer_field_type(field_name),
+                        "required": False,
+                        "description": self._get_extraction_description(field_name, hints),
+                    }
+            item_fields = []
         has_items = bool(item_fields)
 
         schema: Dict[str, Any] = {
@@ -342,6 +387,7 @@ class SchemaGenerator:
                 item_field_defs[field_name] = {
                     "type": self._infer_field_type(field_name),
                     "required": False,
+                    "description": self._get_extraction_description(field_name, hints),
                 }
             schema["items"] = {
                 "field_name": "items",

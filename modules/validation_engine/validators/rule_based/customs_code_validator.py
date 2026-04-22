@@ -156,6 +156,11 @@ class CustomsCodeValidator(IValidator):
             if "require_etls_approval" not in code_cfg:
                 code_cfg["require_etls_approval"] = False
 
+        # When True, skip amount calculations and only check ETLS approval numbers.
+        # Set in step configs that follow the main customs_code_validation step to
+        # avoid duplicate discrepancies for amount_payable/duty_amount.
+        self.etls_only = bool(config.get("etls_only", False))
+
         logger.info(
             f"CustomsCodeValidator initialized with {len(self.customs_codes)} customs codes, "
             f"{len(self.validations)} validations"
@@ -229,6 +234,14 @@ class CustomsCodeValidator(IValidator):
             code_config = self.customs_codes[customs_code]
             logger.debug(f"Validating customs code {customs_code}: {code_config['description']}")
 
+            if self.etls_only:
+                # Only check ETLS approval — skip amount calculations to avoid duplicates
+                if code_config.get("require_etls_approval"):
+                    results.append(self._validate_etls_approval(
+                        customs_code, etls_approval_number
+                    ))
+                continue
+
             # Validate based on customs code type
             if customs_code == "40E68":
                 results.extend(self._validate_40E68(
@@ -237,8 +250,8 @@ class CustomsCodeValidator(IValidator):
 
             elif customs_code == "40V02":
                 results.extend(self._validate_40V02(
-                    customs_value, actual_amount_payable, actual_amount_exempted,
-                    code_config, customs_code_field
+                    customs_value, actual_vat_amount, actual_amount_exempted,
+                    actual_duty_amount, code_config, customs_code_field
                 ))
 
             elif customs_code == "40U01":
@@ -341,17 +354,22 @@ class CustomsCodeValidator(IValidator):
     def _validate_40V02(
         self,
         customs_value: Optional[Any],
-        actual_amount_payable: Optional[Any],
+        actual_vat_amount: Optional[Any],
         actual_amount_exempted: Optional[Any],
+        actual_duty_amount: Optional[Any],
         code_config: Dict[str, Any],
         field_name: str
     ) -> List[ValidationResult]:
         """
-        Validate 40V02: VAT exempted
+        Validate 40V02: VAT Deferred
 
-        Rules:
-        - Amount Payable = 0.00
-        - Amount Exempted = VAT Rate × Customs Value
+        Rules (from Ghana GRA checklist):
+        - Import VAT Amount Payable (Tax 02) = 0.00  (VAT is deferred, not paid now)
+        - Amount Exempted = VAT Rate (15%) × (Customs Value + Duty Amount)
+          i.e. the deferred VAT moves to the Exempted/Suspended column
+
+        Note: Import Duty is still payable under 40V02 — this check does NOT
+        validate duty_amount. Only VAT deferment is validated here.
         """
         results = []
 
@@ -366,81 +384,86 @@ class CustomsCodeValidator(IValidator):
             ))
             return results
 
-        # Convert to Decimal
-        customs_value = self._to_decimal(customs_value)
-        vat_rate = code_config["vat_rate"]
+        customs_value_dec = self._to_decimal(customs_value)
+        duty_amount_dec = self._to_decimal(actual_duty_amount) if actual_duty_amount else Decimal("0")
+        vat_rate = code_config["vat_rate"]  # 0.15 for 40V02
 
-        # 1. Validate Amount Payable = 0.00
-        actual_amount_payable = self._to_decimal(actual_amount_payable) if actual_amount_payable else Decimal("0")
-        expected_amount_payable = Decimal("0.00")
-
-        payable_passed = abs(actual_amount_payable - expected_amount_payable) <= self.tolerance
+        # 1. Import VAT Amount Payable must be 0 (VAT is deferred, not paid)
+        actual_vat = self._to_decimal(actual_vat_amount) if actual_vat_amount else Decimal("0")
+        expected_vat_payable = Decimal("0.00")
+        vat_passed = abs(actual_vat - expected_vat_payable) <= self.tolerance
 
         results.append(self._create_result(
-            field_name="amount_payable",
-            passed=payable_passed,
+            field_name="vat_amount",
+            passed=vat_passed,
             message=(
-                f"40V02: Amount Payable correct (0.00)" if payable_passed
-                else f"40V02: Amount Payable must be 0.00 for VAT exemption, got {actual_amount_payable}"
+                "40V02: Import VAT Amount Payable is 0.00 — VAT deferment correctly applied"
+                if vat_passed
+                else f"40V02: Import VAT must be 0.00 for VAT deferment (CPC 40V02), "
+                     f"got {actual_vat}. VAT should be in Amount Exempted/Suspended column."
             ),
-            severity=Severity.INFO if payable_passed else Severity.CRITICAL,
-            source_value=float(actual_amount_payable),
+            severity=Severity.INFO if vat_passed else Severity.CRITICAL,
+            source_value=float(actual_vat),
             target_value=0.00,
             confidence=1.0,
-            metadata={
-                "customs_code": "40V02",
-                "vat_exempted": True
-            }
+            metadata={"customs_code": "40V02", "vat_deferred": True}
         ))
 
-        # 2. Validate Amount Exempted = VAT Rate × Customs Value
-        expected_amount_exempted = (customs_value * vat_rate).quantize(
+        # 2. Amount Exempted = VAT Rate × (Customs Value + Duty Amount)
+        #    This is the deferred VAT that must appear in the Exempted/Suspended column.
+        vat_base = customs_value_dec + duty_amount_dec
+        expected_exempted = (vat_base * vat_rate).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
         if actual_amount_exempted is None:
-            # Field not extracted from BOE — report expected value as info
-            # (cannot fail a validation if the field was never present in the document)
             results.append(self._create_result(
                 field_name="amount_exempted",
                 passed=True,
                 message=(
                     f"40V02: Amount Exempted not extracted from BOE. "
-                    f"Expected value based on customs_value: {expected_amount_exempted}"
+                    f"Expected deferred VAT: {expected_exempted} "
+                    f"({float(vat_rate)*100:.0f}% × (CIF {customs_value_dec} + Duty {duty_amount_dec}))"
                 ),
                 severity=Severity.INFO,
                 source_value=None,
-                target_value=float(expected_amount_exempted),
+                target_value=float(expected_exempted),
                 confidence=0.5,
                 metadata={
                     "customs_code": "40V02",
-                    "customs_value": float(customs_value),
+                    "customs_value": float(customs_value_dec),
+                    "duty_amount": float(duty_amount_dec),
                     "vat_rate": float(vat_rate),
-                    "expected_exempted": float(expected_amount_exempted)
+                    "expected_exempted": float(expected_exempted),
                 }
             ))
         else:
-            actual_amount_exempted_dec = self._to_decimal(actual_amount_exempted)
-            difference = abs(expected_amount_exempted - actual_amount_exempted_dec)
+            actual_exempted_dec = self._to_decimal(actual_amount_exempted)
+            difference = abs(expected_exempted - actual_exempted_dec)
             exempted_passed = difference <= self.tolerance
 
             results.append(self._create_result(
                 field_name="amount_exempted",
                 passed=exempted_passed,
                 message=(
-                    f"40V02: Amount Exempted correct ({actual_amount_exempted_dec} = {vat_rate*100}% × {customs_value})"
+                    f"40V02: Amount Exempted correct ({actual_exempted_dec} = "
+                    f"{float(vat_rate)*100:.0f}% × ({customs_value_dec} + {duty_amount_dec}))"
                     if exempted_passed
-                    else f"40V02: Amount Exempted incorrect. Expected: {expected_amount_exempted}, Actual: {actual_amount_exempted_dec}"
+                    else f"40V02: Amount Exempted incorrect. "
+                         f"Expected: {expected_exempted} "
+                         f"({float(vat_rate)*100:.0f}% × (CIF {customs_value_dec} + Duty {duty_amount_dec})), "
+                         f"Actual: {actual_exempted_dec}"
                 ),
                 severity=Severity.INFO if exempted_passed else Severity.MAJOR,
-                source_value=float(actual_amount_exempted_dec),
-                target_value=float(expected_amount_exempted),
+                source_value=float(actual_exempted_dec),
+                target_value=float(expected_exempted),
                 confidence=1.0 if exempted_passed else 0.7,
                 metadata={
                     "customs_code": "40V02",
-                    "customs_value": float(customs_value),
+                    "customs_value": float(customs_value_dec),
+                    "duty_amount": float(duty_amount_dec),
                     "vat_rate": float(vat_rate),
-                    "expected_exempted": float(expected_amount_exempted)
+                    "expected_exempted": float(expected_exempted),
                 }
             ))
 

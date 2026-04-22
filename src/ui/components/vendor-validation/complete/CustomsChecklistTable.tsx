@@ -89,6 +89,7 @@ export function CustomsChecklistTable({
 
   const _DESC_FIELD_IDS = new Set(["description", "goods_description", "product_description", "article_description", "description_of_goods", "kind_of_packages_description_of_goods"])
   const _CONTAINER_IDS  = new Set(["container_count", "container_numbers", "container_no", "container_nos"])
+  const _QTY_FIELD_IDS  = new Set(["quantity", "total_units", "total_sent_units", "total_packages", "totals", "total_qty"])
   const _DESC_SKIP = new Set(["CONTAINER SAID TO CONTAIN", ""])
 
   const resolveVal = (spec: string | string[], data: Record<string, any>, items?: any[]): string | null => {
@@ -114,7 +115,37 @@ export function CustomsChecklistTable({
       }
     }
 
-    // Fallback 2: container count / numbers from items[] rows.
+    // Fallback 2b: quantity / total packages from items[] rows (prefer the largest value = totals row).
+    if (specs.some((s) => _QTY_FIELD_IDS.has(s))) {
+      // Normalize European thousands format: "7.560" (dot + 3 digits) → "7560"
+      const normalizeQty = (s: string): { num: number; display: string } => {
+        const t = s.trim()
+        // European thousands: digits followed by one or more ".NNN" groups, no decimal part
+        if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+          const stripped = t.replace(/\./g, "")
+          return { num: parseInt(stripped, 10), display: stripped }
+        }
+        const num = parseFloat(t.replace(/[^0-9.]/g, ""))
+        return { num, display: t }
+      }
+
+      let best: string | null = null
+      let bestNum = -Infinity
+      for (const item of items) {
+        if (!item || typeof item !== "object") continue
+        for (const k of ["quantity", "total_packages", "total_units", "total_sent_units", "total_qty"]) {
+          const raw = (item as Record<string, any>)[k]
+          if (raw == null) continue
+          const v = unwrap(raw)
+          if (!v) continue
+          const { num, display } = normalizeQty(String(v))
+          if (!isNaN(num) && num > bestNum) { bestNum = num; best = display }
+        }
+      }
+      if (best) return best
+    }
+
+    // Fallback 3: container count / numbers from items[] rows.
     if (specs.some((s) => _CONTAINER_IDS.has(s))) {
       const seen = new Set<string>()
       for (const item of items) {

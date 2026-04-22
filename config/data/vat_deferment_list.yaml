@@ -1,0 +1,348 @@
+# =============================================================================
+# VAT Deferment List — Nestle Ghana Limited
+# =============================================================================
+# Source: GRA VAT Deferment List (VAT Deferment list.pdf)
+# Applicant: NESTLE GHANA LTD (FOOD, DRINKS & TOBACCO)
+# URV Reference: URV 0014
+# Serial: 5
+#
+# Used by the customs_code_validator when CPC code is 40V02.
+# An HS code on this list is eligible for VAT deferment — amount payable = 0.
+
+name: "VAT Deferment List"
+applicant: "Nestle Ghana Limited (Food, Drinks & Tobacco)"
+urv_reference: "URV 0014"
+serial: 5
+applicable_cpc_code: "40V02"
+description: "Products approved for VAT deferment on import. Cross-check BOE HS codes against this list when CPC is 40V02."
+
+items:
+  # ── Item list (82 entries, as listed in GRA document) ─────────────────────
+
+  - item_no: 1
+    hs_code: "0405909000"
+    description: "Anhydrous Milk Fat Drum 200"
+
+  - item_no: 2
+    hs_code: "2936280000"
+    description: "Antioxidants"
+
+  - item_no: 3
+    hs_code: "2008990000"
+    description: "Apple Crunchies"
+
+  - item_no: 4
+    hs_code: "2106909900"
+    description: "Apple Powder"
+
+  - item_no: 5
+    hs_code: "2008990000"
+    description: "Banana Crunchies"
+
+  - item_no: 6
+    hs_code: "0403901100"
+    description: "Buttermilk Pwdr Sweet 5%Ster"
+
+  - item_no: 7
+    hs_code: "2836500000"
+    description: "Calcium Carbonate Powder"
+
+  - item_no: 8
+    hs_code: "1302390000"
+    description: "Carrageenan Lactarin MV306 INS407"
+
+  - item_no: 9
+    hs_code: "1805009000"
+    description: "Cocoa Powder Alk 10-12% Fat Cargill 2"
+
+  - item_no: 10
+    hs_code: "1805009000"
+    description: "Cocoa Powder Natural"
+
+  - item_no: 11
+    hs_code: "2106909900"
+    description: "COFFEE-MATE Coff Crmr CM113 30kg RO"
+
+  - item_no: 12
+    hs_code: "1904100000"
+    description: "Corn Crunchies 20kg GH"
+
+  - item_no: 13
+    hs_code: "1904900000"
+    description: "Corn Crunchies 20kg GH"
+
+  - item_no: 14
+    hs_code: "2835250000"
+    description: "Dicalcium Phosphate"
+
+  - item_no: 15
+    hs_code: "2835250000"
+    description: "Dicalcium Phosphate Didhydrate"
+
+  - item_no: 16
+    hs_code: "2835290000"
+    description: "Dimagnesium Phosphate"
+
+  - item_no: 17
+    hs_code: "2835240000"
+    description: "Dipotassium Phosphate"
+
+  - item_no: 18
+    hs_code: "2835220000"
+    description: "Disodium Phosphate Anhydrous"
+
+  - item_no: 19
+    hs_code: "3507900000"
+    description: "Enzyme Alpha Amylase BAN 800"
+
+  - item_no: 20
+    hs_code: "3507900000"
+    description: "Enzymes Asparaginase"
+
+  - item_no: 21
+    hs_code: "2835390000"
+    description: "Ferric Pyrophosphate"
+
+  - item_no: 22
+    hs_code: "2917190000"
+    description: "Ferrous Fumarate"
+
+  - item_no: 23
+    hs_code: "1901902000"
+    description: "Filled Milk Powder (FFP 28% MQAV004F-1 25kg)"
+
+  - item_no: 24
+    hs_code: "1901901000"
+    description: "Filled Milk Powder (FFP 28% MQAV004F-1 25kg)"
+
+  - item_no: 25
+    hs_code: "1901902000"
+    description: "Filled Milk Powder (FFP 28% MPAV056 25kg)"
+
+  - item_no: 26
+    hs_code: "1901901000"
+    description: "Filled Milk Powder (FFP 28% MPAV056 25kg)"
+
+  - item_no: 27
+    hs_code: "2106909200"
+    description: "Flav Malt Everfresh100JH-96B-599-0 25kg"
+
+  - item_no: 28
+    hs_code: "2106909200"
+    description: "Flavor Caramel 502774TP0551 (l)"
+
+  - item_no: 29
+    hs_code: "2106909200"
+    description: "Flavor Chicory"
+
+  - item_no: 30
+    hs_code: "2106909200"
+    description: "Flavor Chocolate Powder"
+
+  - item_no: 31
+    hs_code: "2106909200"
+    description: "Flavor Creamy Sensat"
+
+  - item_no: 32
+    hs_code: "2106909200"
+    description: "Flavor Coffee Crml Pwd Glv S189928 25Kg"
+
+  - item_no: 33
+    hs_code: "2106909200"
+    description: "Flavor Mouthfeel"
+
+  - item_no: 34
+    hs_code: "2106909200"
+    description: "Flavour Powder 5980-B25kg"
+
+  - item_no: 35
+    hs_code: "2106909200"
+    description: "Flavor Sucrose"
+
+  - item_no: 36
+    hs_code: "2106909200"
+    description: "Flavour Tea Black"
+
+  - item_no: 37
+    hs_code: "2106909200"
+    description: "Food Flavour"
+
+  - item_no: 38
+    hs_code: "1702300000"
+    description: "Glucose Powder"
+
+  - item_no: 39
+    hs_code: "1005900000"
+    description: "Grain Corn"
+
+  - item_no: 40
+    hs_code: "2106909900"
+    description: "Honey Powder"
+
+  - item_no: 41
+    hs_code: "0902200000"
+    description: "Instant Tea Powder"
+
+  - item_no: 42
+    hs_code: "3504000000"
+    description: "Isolated Soy Protein"
+
+  - item_no: 43
+    hs_code: "2923200000"
+    description: "Lecithin Soy Liquid"
+
+  - item_no: 44
+    hs_code: "2836990000"
+    description: "Magnesium Carbonate"
+
+  - item_no: 45
+    hs_code: "1901903000"
+    description: "Malt Extract Liquid"
+
+  - item_no: 46
+    hs_code: "1108129000"
+    description: "Maltodextrin Corn"
+
+  - item_no: 47
+    hs_code: "2936230000"
+    description: "MicroNutrient Premix VP 10310 25kg Halal"
+
+  - item_no: 48
+    hs_code: "2936290000"
+    description: "Micronutrient Premix VP 6169"
+
+  - item_no: 49
+    hs_code: "0401200000"
+    description: "Milk Cow Skimmed Powder MH InfG 25kg"
+
+  - item_no: 50
+    hs_code: "0402911000"
+    description: "Milk Cow Skimmed Powder MH InfG 25kg"
+
+  - item_no: 51
+    hs_code: "0402212900"
+    description: "Milk Full Cream Powder"
+
+  - item_no: 52
+    hs_code: "0402911000"
+    description: "Milk Skimmed Powder MH Ster"
+
+  - item_no: 53
+    hs_code: "0402101000"
+    description: "Milk Skimmed Pwdr MH"
+
+  - item_no: 54
+    hs_code: "0402911000"
+    description: "Milk Skimmed Pwdr MH Inf DM"
+
+  - item_no: 55
+    hs_code: "1008290000"
+    description: "Millet Grain dehulled"
+
+  - item_no: 56
+    hs_code: "2101110000"
+    description: "NESCAFE CLASSIC KNRF585 (Nescafe Bulk)"
+
+  - item_no: 57
+    hs_code: "2101110000"
+    description: "NESCAFE CLASSIC KNRX585 27.5kg"
+
+  - item_no: 58
+    hs_code: "1511909900"
+    description: "Oil Palm Olein DF"
+
+  - item_no: 59
+    hs_code: "2106909900"
+    description: "Orange Powder"
+
+  - item_no: 60
+    hs_code: "3208902100"
+    description: "Powdered Lacquer"
+
+  - item_no: 61
+    hs_code: "3002909000"
+    description: "Preblend Probiotics"
+
+  - item_no: 62
+    hs_code: "3507900000"
+    description: "Preventase"
+
+  - item_no: 63
+    hs_code: "1901903000"
+    description: "PROTOMALT Extract Liquid"
+
+  - item_no: 64
+    hs_code: "2811220000"
+    description: "Silicon Dioxide INS551 Sipernat 22S 15kg"
+
+  - item_no: 65
+    hs_code: "2836300000"
+    description: "Sodium Carbonate"
+
+  - item_no: 66
+    hs_code: "3501900000"
+    description: "Sodium Caseinate"
+
+  - item_no: 67
+    hs_code: "1903000000"
+    description: "Starch Tapioca Modified Instant"
+
+  - item_no: 68
+    hs_code: "2938900000"
+    description: "Steviol Glycoside"
+
+  - item_no: 69
+    hs_code: "2106909200"
+    description: "Sucrogem Flavor"
+
+  - item_no: 70
+    hs_code: "2106909900"
+    description: "Trace Elements Premix"
+
+  - item_no: 71
+    hs_code: "2936210000"
+    description: "Vitamin A Acetate"
+
+  - item_no: 72
+    hs_code: "2936210000"
+    description: "Vitamin A Palmitate Oily 1.7million I"
+
+  - item_no: 73
+    hs_code: "2936290000"
+    description: "Vitamin D3 Oily"
+
+  - item_no: 74
+    hs_code: "2936900000"
+    description: "Vitamin Premix 8096 25kg Halal"
+
+  - item_no: 75
+    hs_code: "2936230000"
+    description: "Vitamin Premix BEV 6066 BEV MR2 Non-GMO"
+
+  - item_no: 76
+    hs_code: "2936290000"
+    description: "Vitamin Premix BEV 6298"
+
+  - item_no: 77
+    hs_code: "2936900000"
+    description: "Vitamin Premix Nutr 19154 25kg"
+
+  - item_no: 78
+    hs_code: "1702190000"
+    description: "Whey Powder Demineralize"
+
+  - item_no: 79
+    hs_code: "0404100000"
+    description: "Whey Powder Demineralize"
+
+  - item_no: 80
+    hs_code: "0404100000"
+    description: "Whey Sweet Powder"
+
+  - item_no: 81
+    hs_code: "1005900000"
+    description: "Yellow Maize"
+
+  - item_no: 82
+    hs_code: "2833290000"
+    description: "Zinc Sulphate Monohydrate Powder25kg"

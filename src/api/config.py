@@ -89,6 +89,23 @@ class APISettings(BaseSettings):
     WEBHOOK_RETRY_ATTEMPTS: int = Field(default=3, description="Webhook retry attempts")
     WEBHOOK_TIMEOUT: int = Field(default=30, description="Webhook timeout in seconds")
 
+    # Email notifications
+    EMAIL_ENABLED: bool = Field(default=False, description="Enable email notifications")
+    EMAIL_PROVIDER: str = Field(default="smtp", description="Email provider: 'sendgrid' or 'smtp'")
+    SENDGRID_API_KEY: Optional[str] = Field(default=None, description="SendGrid API key")
+    SMTP_HOST: Optional[str] = Field(default=None, description="SMTP server hostname")
+    SMTP_PORT: int = Field(default=587, description="SMTP server port")
+    SMTP_USERNAME: Optional[str] = Field(default=None, description="SMTP auth username")
+    SMTP_PASSWORD: Optional[str] = Field(default=None, description="SMTP auth password")
+    SMTP_USE_TLS: bool = Field(default=False, description="Use SMTP_SSL instead of STARTTLS")
+    EMAIL_SENDER: str = Field(default="noreply@nestle.com", description="From address")
+    EMAIL_SENDER_NAME: str = Field(default="Nestle Validation System", description="From name")
+    EMAIL_RECIPIENTS: List[str] = Field(default=[], description="Alert recipient addresses")
+    EMAIL_NOTIFY_ON_FAILURE: bool = Field(default=True, description="Send alert when validation fails")
+    EMAIL_NOTIFY_ON_SUCCESS: bool = Field(default=False, description="Send alert when validation passes")
+    EMAIL_NOTIFY_ON_REVIEW: bool = Field(default=True, description="Send alert when validation requires attention")
+    APP_BASE_URL: str = Field(default="http://localhost:3000", description="Frontend base URL for email links")
+
     # Documentation
     ENABLE_DOCS: bool = Field(default=True, description="Enable API documentation")
 

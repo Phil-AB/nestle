@@ -247,7 +247,7 @@ use_case:
                 invoice: "shipper_name"
                 bill_of_lading: "shipper_name"
               match_type: "fuzzy"
-              fuzzy_threshold: 0.8
+              fuzzy_threshold: 0.65
 
             - name: "consignee"
               documents:
@@ -391,6 +391,29 @@ use_case:
         on_failure: "continue"
         severity: "critical"
 
+      # Step 5b: CIF customs value verification
+      # Customs value (CIF) = FOB Ncy + Freight Ncy + Insurance Ncy (all in GHS on the BOE)
+      # Uses BOE's own GHS-converted values so the check is incoterm-agnostic.
+      # For FCA/FOB shipments the invoice carries no freight/insurance — using invoice
+      # fields would always produce missing-field errors on those incoterms.
+      - name: "cif_calculation_check"
+        description: "Verify BOE customs value equals FOB Ncy + Freight Ncy + Insurance Ncy"
+        validators:
+          - "calculation_validator"
+        config:
+          calculations:
+            - name: "cif_customs_value"
+              formula: "fob_ncy + freight_value + insurance_value"
+              fields:
+                fob_ncy: "bill_of_entry.fob_ncy"
+                freight_value: "bill_of_entry.freight_value"
+                insurance_value: "bill_of_entry.insurance_value"
+              target: "bill_of_entry.customs_value"
+              tolerance_percent: 1.0
+              description: "Customs Value = FOB Ncy + Freight Ncy + Insurance Ncy (all GHS)"
+        on_failure: "continue"
+        severity: "major"
+
       # Step 6: Duty rate range validation
       - name: "duty_rate_validation"
         description: "Ensure duty rate is within valid range"
@@ -429,11 +452,10 @@ use_case:
           - "customs_code_validator"
         config:
           customs_codes:
-            # Inherit from validator config, can override here if needed
             "40E68":
-              vat_rate: 0.05
+              vat_rate: 0.05    # Import Duty = 5% × customs_value
             "40V02":
-              vat_rate: 0.05
+              vat_rate: 0.15    # VAT deferred: check vat_amount==0; exempted = 15%×(customs_value+duty_amount)
             "40U01":
               vat_rate: 0.05
             "40W01":
@@ -477,29 +499,6 @@ use_case:
         on_failure: "continue"
         severity: "critical"
 
-      # Step 12: CET HS Code Validation
-      - name: "cet_hs_code_validation"
-        description: "Validate HS codes against CET (Common External Tariff) file"
-        validators:
-          - "cet_hs_code_validator"
-        config:
-          validations:
-            - hs_code_field: "bill_of_entry.hs_code"
-              description_field: "bill_of_entry.description"
-              duty_rate_field: "bill_of_entry.duty_rate"
-              document: "bill_of_entry"
-
-          # What to verify
-          verify_hs_code_exists: true
-          verify_description: true
-          verify_duty_rate: true
-
-          # Thresholds
-          description_similarity_threshold: 0.6  # 60% similarity
-          duty_rate_tolerance_percent: 0.1  # ±0.1%
-        on_failure: "continue"
-        severity: "critical"
-
       # Step 13: Declarant must be present and have a registration number
       - name: "declarant_check"
         description: "Verify declarant (clearing agent) is identified with a valid registration number"
@@ -528,6 +527,21 @@ use_case:
               target: "invoice.total_fob_value"
               tolerance_percent: 0.5
               operator: "equals"
+        on_failure: "continue"
+        severity: "critical"
+
+      # Step 14b: Invoice number on BOE must match invoice number on commercial invoice
+      - name: "invoice_number_crosscheck"
+        description: "Invoice number declared on BOE must match the commercial invoice number"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "invoice_number"
+          documents:
+            - "bill_of_entry"
+            - "invoice"
+          match_type: "exact"
+          require_all: true
         on_failure: "continue"
         severity: "critical"
 
@@ -591,12 +605,14 @@ use_case:
 
       # Step 19: ETLS approval number required when import duty rate is zero
       # When duty_rate = 0 and CPC code is 40U01/40W01, an ETLS approval
-      # number must be referenced. This is validated by customs_code_validator.
+      # number must be referenced. etls_only: true skips the amount calculations
+      # already done in step 8 to avoid duplicate discrepancies.
       - name: "etls_approval_check"
         description: "ETLS approval number required when import duty is zero (40U01/40W01)"
         validators:
           - "customs_code_validator"
         config:
+          etls_only: true
           customs_codes:
             "40U01":
               vat_rate: 0.05
@@ -618,11 +634,57 @@ use_case:
         on_failure: "continue"
         severity: "major"
 
-      # Step 20: VAT and NHIL rate verification
+      # Step 20: Master Concession eligibility check
+      # When CPC code is 40U01/40W01 and duty = 0, each BOE line item HS code
+      # must appear in the approved Master Concession list. Also validates the
+      # concession reference number and that the concession has not expired.
+      - name: "master_concession_eligibility_check"
+        description: "Verify BOE items claiming zero duty are approved under the Master Concession (MD202601CUSTCU030000003304)"
+        validators:
+          - "concession_eligibility_validator"
+        config:
+          # Path to the master concession reference data
+          concession_data_path: "config/data/master_concession.yaml"
+
+          # CPC codes that require concession eligibility check
+          applicable_cpc_codes:
+            - "40U01"
+            - "40W01"
+
+          # BOE fields
+          customs_code_field: "bill_of_entry.customs_code"
+          concession_ref_field: "bill_of_entry.etls_approval_number"
+          shipment_date_field: "bill_of_entry.declaration_date"
+          line_items_field: "bill_of_entry.items"
+          item_hs_code_field: "hs_code"
+          item_description_field: "product_description"
+
+          # Matching strategy: hs_code is the primary key; description is fuzzy-matched as secondary confirmation
+          match_strategy: "hs_code_primary"
+          description_similarity_threshold: 0.60
+
+          # Validation rules
+          validations:
+            check_concession_reference: true       # BOE must cite MD202601CUSTCU030000003304
+            check_expiry_date: true                # Concession expires 2026-12-31
+            check_item_eligibility: true           # Each HS code must be on the approved list
+            flag_unmatched_items: true             # Flag items not found in concession
+
+          # Severity per failure type
+          failure_severities:
+            concession_expired: "critical"
+            wrong_reference_number: "critical"
+            item_not_on_concession: "major"
+            reference_number_missing: "major"
+
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 21: VAT, NHIL and GET Fund levy rate verification
       # VAT base = customs_value + duty_amount
       # VAT (Tax 02) = 15% of base; NHIL (Tax 47) = 2.5% of base; GET Fund (Tax 88) = 2.5% of base
       - name: "vat_nhil_rate_check"
-        description: "Verify VAT (15%) and NHIL (2.5%) amounts are correctly calculated"
+        description: "Verify VAT (15%), NHIL (2.5%) and GET Fund levy (2.5%) amounts are correctly calculated"
         validators:
           - "calculation_validator"
         config:
@@ -644,16 +706,53 @@ use_case:
               target: "bill_of_entry.nhil_amount"
               tolerance_percent: 0.5
               description: "NHIL = 2.5% × (Customs Value + Duty Amount)"
+
+            - name: "get_fund_levy_check"
+              formula: "(customs_value + duty_amount) * 0.025"
+              fields:
+                customs_value: "bill_of_entry.customs_value"
+                duty_amount: "bill_of_entry.duty_amount"
+              target: "bill_of_entry.get_fund_levy"
+              tolerance_percent: 0.5
+              description: "GET Fund Levy (Tax 88) = 2.5% × (Customs Value + Duty Amount)"
         on_failure: "continue"
         severity: "major"
 
-      # Step 21: Insurance rate verification for FCA/CFR shipments
-      # Sea/Road: insurance = 0.875% of C&F; Air: insurance = 1% of C&F
+      # Step 22: VAT deferment eligibility check
+      # When CPC code is 40V02, each BOE line item HS code must appear in the
+      # approved VAT deferment list (URV 0014). If not found, VAT deferment
+      # cannot be applied and the shipment is non-compliant.
+      - name: "vat_deferment_eligibility_check"
+        description: "Verify BOE items claiming VAT deferment are on the approved VAT deferment list (URV 0014)"
+        validators:
+          - "vat_deferment_validator"
+        config:
+          vat_data_path: "config/data/vat_deferment_list.yaml"
+          applicable_cpc_codes:
+            - "40V02"
+          customs_code_field: "bill_of_entry.customs_code"
+          line_items_field: "bill_of_entry.items"
+          item_hs_code_field: "hs_code"
+          item_description_field: "product_description"
+          validations:
+            check_item_eligibility: true
+          failure_severities:
+            item_not_on_deferment_list: "major"
+        on_failure: "continue"
+        severity: "major"
+
+      # Step 23: Insurance rate verification for FCA/CFR shipments
       - name: "insurance_rate_check"
-        description: "Verify insurance amount matches 0.875% (sea/road) or 1% (air) of C&F value"
+        description: "Verify insurance amount matches Ghana customs insurance rate of C&F value"
         validators:
           - "incoterm_validator"
         config:
+          # Ghana customs insurance rates (percentage of C&F value)
+          insurance_rate_sea_road: 0.00875  # 0.875% for sea and road shipments
+          insurance_rate_air: 0.01          # 1.000% for air shipments
+          # Entry/exit code prefixes that indicate air transport
+          air_entry_prefixes:
+            - "KIA"
           validations:
             - incoterm_field: "invoice.incoterm"
               freight_field: "bill_of_entry.freight_value"
@@ -681,8 +780,6 @@ use_case:
           - "customs code amount payable incorrect"
           - "customs code 40V02 non-zero payable"
           - "customs code duty exemption violation"
-          - "hs_code not found in CET"
-          - "duty rate mismatch with CET"
 
         major:
           - "weight difference > 1% and <= 5%"
@@ -691,16 +788,22 @@ use_case:
           - "hs_code format invalid"
           - "customs code amount exempted incorrect"
           - "unrecognized customs code"
-          - "description does not match CET"
           - "declarant name or registration number missing"
           - "incoterm mismatch between BOE and invoice"
           - "currency mismatch between BOE and invoice"
           - "country of origin missing on BOE"
           - "container count mismatch"
           - "etls approval number missing for zero duty"
+          - "master concession reference number missing or incorrect"
+          - "imported item not listed on master concession (MD202601CUSTCU030000003304)"
+          - "master concession expired"
           - "vat amount incorrect"
           - "nhil amount incorrect"
+          - "get fund levy amount incorrect"
+          - "cif customs value mismatch"
+          - "invoice number mismatch between boe and invoice"
           - "insurance rate calculation incorrect"
+          - "imported item not on VAT deferment list (URV 0014)"
 
         minor:
           - "weight difference <= 1%"

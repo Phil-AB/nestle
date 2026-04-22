@@ -15,6 +15,13 @@ from shared.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
+# Maps internal document_type names to the keys used in checklist.yaml
+_DOC_TYPE_ALIASES: Dict[str, str] = {
+    "bill_of_entry": "boe",
+    "airway_bill": "bill_of_lading",
+}
+
+
 class ChecklistConfig:
     """Load and query the import checklist configuration."""
 
@@ -52,6 +59,7 @@ class ChecklistConfig:
             Tuple of (header_fields, item_fields) — each a flat list of field names.
         """
         doc_type = document_type.lower().strip().replace("-", "_").replace(" ", "_")
+        doc_type = _DOC_TYPE_ALIASES.get(doc_type, doc_type)
         header_fields: List[str] = []
         item_fields: List[str] = []
 
@@ -75,6 +83,36 @@ class ChecklistConfig:
             f"{len(header_fields)} header, {len(item_fields)} item"
         )
         return header_fields, item_fields
+
+    def get_extraction_hints(self, document_type: str) -> Dict[str, str]:
+        """
+        Return per-field extraction hints for a document type.
+
+        Reads ``extraction_hints`` blocks from checklist items and maps each
+        field name for the given document type to its hint string.
+
+        Args:
+            document_type: e.g. "invoice", "packing_list", "bill_of_lading"
+
+        Returns:
+            Dict mapping field_name → hint string.
+        """
+        doc_type = document_type.lower().strip().replace("-", "_").replace(" ", "_")
+        doc_type = _DOC_TYPE_ALIASES.get(doc_type, doc_type)
+        hints: Dict[str, str] = {}
+
+        for item in self._config.get("checklist", []):
+            item_hints = item.get("extraction_hints", {})
+            hint_text = item_hints.get(doc_type, "")
+            if not hint_text:
+                continue
+            fields_by_doc = item.get("fields", {})
+            doc_fields = fields_by_doc.get(doc_type, [])
+            for field_name in doc_fields:
+                if field_name not in hints:
+                    hints[field_name] = hint_text
+
+        return hints
 
     def get_all_checklist_items(self) -> List[Dict[str, Any]]:
         """Return the raw checklist items list."""

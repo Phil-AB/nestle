@@ -4,16 +4,13 @@ Incoterm Validator
 Validates freight and insurance values based on Incoterm.
 
 Rules:
-- CFR (Cost & Freight): Invoice should have freight value stated
-- CIF (Cost, Insurance, Freight): Invoice should have insurance + freight values stated
-- FCA/FOB (Free Carrier/Free on Board): No freight/insurance on invoice (seller ends at named place)
+- CFR/CIF: Invoice should have freight (and insurance for CIF) values stated
+- FCA/FOB: No freight/insurance on invoice (seller ends at named place)
 - CIF Calculation: CIF = FOB + Insurance + Freight (all in same currency)
 
-Insurance rate rules (applied on BOE when check_insurance_rate = true):
-- Sea / Road shipments: Insurance = 0.875% of C&F (FOB + Freight)
-- Air shipments:        Insurance = 1.000% of C&F (FOB + Freight)
-Transport mode is determined from the BOE entry_exit_code:
-  KIA* → Air;  TMA* / land border → Sea or Road
+Insurance rate check (check_insurance_rate = true):
+- Rates are config-driven: insurance_rate_sea_road / insurance_rate_air
+- Transport mode inferred from BOE entry_exit_code using air_entry_prefixes config
 """
 
 from typing import Dict, Any, List, Optional
@@ -56,13 +53,6 @@ class IncotermValidator(IValidator):
     # (buyer arranges insurance from seller's named place)
     INSURANCE_RATE_APPLICABLE = ["FCA", "FOB", "CFR", "FAS", "EXW"]
 
-    # Ghana customs insurance rates
-    INSURANCE_RATE_SEA_ROAD = Decimal("0.00875")   # 0.875%
-    INSURANCE_RATE_AIR = Decimal("0.01")           # 1.000%
-
-    # Entry/exit code prefixes that indicate air transport
-    AIR_ENTRY_PREFIXES = ("KIA",)
-
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.validator_type = ValidatorType.RULE_BASED
@@ -71,6 +61,15 @@ class IncotermValidator(IValidator):
         self.validations = config.get("validations", [])
         self.tolerance = Decimal(str(config.get("tolerance", "0.01")))
         self.check_insurance_rate = config.get("check_insurance_rate", False)
+
+        # Insurance rates — configurable, Ghana customs defaults
+        self.insurance_rate_sea_road = Decimal(str(config.get("insurance_rate_sea_road", "0.00875")))
+        self.insurance_rate_air = Decimal(str(config.get("insurance_rate_air", "0.01")))
+
+        # Air transport detection — configurable list of entry/exit code prefixes
+        self.air_entry_prefixes = tuple(
+            p.upper() for p in config.get("air_entry_prefixes", ["KIA"])
+        )
 
         logger.info(f"IncotermValidator initialized with {len(self.validations)} validations")
 
@@ -354,9 +353,9 @@ class IncotermValidator(IValidator):
         # Determine rate from transport mode
         is_air = False
         if transport_mode:
-            is_air = str(transport_mode).upper().startswith(self.AIR_ENTRY_PREFIXES)
+            is_air = str(transport_mode).upper().startswith(self.air_entry_prefixes)
 
-        rate = self.INSURANCE_RATE_AIR if is_air else self.INSURANCE_RATE_SEA_ROAD
+        rate = self.insurance_rate_air if is_air else self.insurance_rate_sea_road
         mode_label = "Air (1%)" if is_air else "Sea/Road (0.875%)"
 
         expected_insurance = (candf * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
