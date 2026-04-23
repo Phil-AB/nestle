@@ -8,7 +8,7 @@ from .session_manager import get_session_manager
 from .config_loader import get_config_loader
 from .result_aggregator import ResultAggregator
 from ..validators.validator_registry import get_validator_registry
-from ..utils.constants import WorkflowStep, ValidationStatus
+from ..utils.constants import WorkflowStep, ValidationStatus, Severity
 from ..utils.exceptions import ValidationWorkflowException
 from shared.utils.logger import get_logger
 
@@ -177,7 +177,7 @@ class ValidationEngine:
         """
         step_name = step_config.get("name")
         validators = step_config.get("validators", [])
-        step_severity = step_config.get("severity", "minor")
+        step_severity = Severity.ERROR
         on_failure = step_config.get("on_failure", "continue")
 
         logger.debug(f"Step '{step_name}' using validators: {validators}")

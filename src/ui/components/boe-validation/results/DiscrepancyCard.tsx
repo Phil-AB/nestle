@@ -26,7 +26,7 @@ export function DiscrepancyCard({
 }: DiscrepancyCardProps) {
   const [expanded, setExpanded] = useState(true)
   const severityClass =
-    disc.severity === "critical"
+    disc.severity === "error" || disc.severity === "critical"
       ? "border-destructive/40 bg-destructive/5"
       : disc.severity === "major"
       ? "border-amber-400/40 bg-amber-50/30 dark:bg-amber-900/10"
@@ -40,7 +40,7 @@ export function DiscrepancyCard({
       >
         <AlertTriangle
           className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-            disc.severity === "critical" ? "text-destructive" : "text-amber-500"
+            disc.severity === "error" || disc.severity === "critical" ? "text-destructive" : "text-amber-500"
           }`}
         />
         <div className="flex-1 min-w-0">
@@ -50,9 +50,6 @@ export function DiscrepancyCard({
             </span>
             <SeverityBadge severity={disc.severity} />
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {disc.message ?? disc.description}
-          </p>
         </div>
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -63,6 +60,11 @@ export function DiscrepancyCard({
 
       {expanded && (
         <div className="mt-3 pl-7 space-y-3">
+          {(disc.message ?? disc.description) && (
+            <p className="text-xs text-foreground/80 leading-relaxed border-l-2 border-border pl-3">
+              {disc.message ?? disc.description}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-2 bg-card rounded border border-border">
               <p className="text-muted-foreground mb-0.5 text-[10px]">

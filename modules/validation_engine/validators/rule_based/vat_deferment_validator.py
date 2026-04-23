@@ -74,7 +74,6 @@ class VATDefermentValidator(IValidator):
         self.item_hs_field = config.get("item_hs_code_field", "hs_code")
         self.item_desc_field = config.get("item_description_field", "product_description")
         self.validations = config.get("validations", {})
-        self.failure_severities = config.get("failure_severities", {})
 
     def supports_field_type(self, field_type: str) -> bool:
         return True
@@ -140,7 +139,7 @@ class VATDefermentValidator(IValidator):
                             f"HS code '{raw_hs}' ({desc}) is NOT on the VAT deferment list "
                             f"({urv_ref}). VAT deferment under CPC {cpc_code} cannot be applied."
                         ),
-                        severity=self._sev("item_not_on_deferment_list", Severity.MAJOR),
+                        severity=Severity.ERROR,
                         source_value=raw_hs,
                         target_value=f"approved HS code from VAT deferment list ({urv_ref})",
                     ))
@@ -148,12 +147,6 @@ class VATDefermentValidator(IValidator):
         return results
 
     # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _sev(self, key: str, default: str) -> str:
-        raw = self.failure_severities.get(key)
-        if raw and hasattr(Severity, raw.upper()):
-            return getattr(Severity, raw.upper())
-        return default
 
     def _get_field_from_documents(self, field_path: str, context: ValidationContext) -> Any:
         if not field_path:

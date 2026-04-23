@@ -589,15 +589,12 @@ async def validate_vendor_docs(
 
         workflow_status = final_state.get("workflow_status")
         discrepancies = final_state.get("discrepancies", []) or []
-        critical = final_state.get("critical_discrepancies", []) or []
         validation_results = final_state.get("validation_results", []) or []
 
         final_status = final_state.get("final_status") or ""
         if not final_status:
             if final_state.get("all_validations_passed"):
                 final_status = "passed"
-            elif critical:
-                final_status = "failed"
             elif discrepancies:
                 final_status = "requires_attention"
             else:
@@ -610,9 +607,6 @@ async def validate_vendor_docs(
             "passed_checks": passed,
             "failed_checks": total - passed,
             "total_discrepancies": len(discrepancies),
-            "critical": len(critical),
-            "major": sum(1 for d in discrepancies if d.get("severity") == "major"),
-            "minor": sum(1 for d in discrepancies if d.get("severity") == "minor"),
             "documents_processed": list(extracted_docs.keys()),
             "messages": final_state.get("messages", []),
         }
@@ -634,7 +628,6 @@ async def validate_vendor_docs(
                 "final_status": final_status,
                 "summary": summary,
                 "discrepancies": discrepancies,
-                "critical_discrepancies": critical,
                 "validation_results": validation_results,
                 "extracted_documents": extracted_documents_meta,
                 "token_usage": shipment_token_usage,
@@ -770,7 +763,7 @@ async def validate_boe(
             async with get_db_session() as db:
                 decl_str = str(decl_number)
 
-                # Release claim from any other shipment that already holds this number
+                # Release boe_number from any shipment that already holds it
                 conflict_stmt = sa_select(Shipment).where(
                     Shipment.boe_number == decl_str,
                     Shipment.id != shipment_id,
@@ -783,13 +776,18 @@ async def validate_boe(
                         prev.shipment_number = f"REASSIGNED-{prev.id}"
                     prev.boe_number = None
 
-                # Also release shipment_number if held elsewhere
+                # Release shipment_number if held elsewhere
                 sn_conflict_stmt = sa_select(Shipment).where(
                     Shipment.shipment_number == decl_str,
                     Shipment.id != shipment_id,
                 )
                 for prev in (await db.execute(sn_conflict_stmt)).scalars().all():
                     prev.shipment_number = f"REASSIGNED-{prev.id}"
+
+                # Flush the clears to DB first — PostgreSQL checks unique
+                # constraints per-statement, so the nulls must land before
+                # the new assignment or the constraint fires.
+                await db.flush()
 
                 # Now assign to current shipment
                 stmt = sa_select(Shipment).where(Shipment.id == shipment_id)
@@ -868,15 +866,12 @@ async def validate_boe(
 
         workflow_status = final_state.get("workflow_status")
         discrepancies = final_state.get("discrepancies", []) or []
-        critical = final_state.get("critical_discrepancies", []) or []
         validation_results = final_state.get("validation_results", []) or []
 
         final_status = final_state.get("final_status") or ""
         if not final_status:
             if final_state.get("all_validations_passed"):
                 final_status = "passed"
-            elif critical:
-                final_status = "failed"
             elif discrepancies:
                 final_status = "requires_attention"
             else:
@@ -889,9 +884,6 @@ async def validate_boe(
             "passed_checks": passed,
             "failed_checks": total - passed,
             "total_discrepancies": len(discrepancies),
-            "critical": len(critical),
-            "major": sum(1 for d in discrepancies if d.get("severity") == "major"),
-            "minor": sum(1 for d in discrepancies if d.get("severity") == "minor"),
             "documents_processed": list(documents.keys()),
             "messages": final_state.get("messages", []),
         }
@@ -899,7 +891,7 @@ async def validate_boe(
         needs_review = str(workflow_status) in (
             "awaiting_user", "WorkflowStatus.AWAITING_USER",
             "analyzing", "WorkflowStatus.ANALYZING",
-        ) or (critical or discrepancies)
+        ) or bool(discrepancies)
 
         extracted_boe = {
             "document_id": boe_result.get("document_id", ""),
@@ -917,7 +909,7 @@ async def validate_boe(
             summary=summary,
         ))
 
-        if needs_review and (critical or discrepancies):
+        if needs_review and discrepancies:
             return {
                 "session_id": str(context.session_id),
                 "shipment_id": shipment_id,
@@ -925,7 +917,6 @@ async def validate_boe(
                 "final_status": final_status,
                 "summary": summary,
                 "discrepancies": discrepancies,
-                "critical_discrepancies": critical,
                 "validation_results": validation_results,
                 "extracted_boe": extracted_boe,
                 "token_usage": boe_token_usage,
@@ -985,10 +976,34 @@ async def resume_validation_session(
             user_input=request.user_input,
         )
 
+        final_status = final_state.get("final_status")
+
+        # Update Shipment.status to reflect the resolution:
+        # - All discrepancies accepted → "validated" (shipment may proceed)
+        # - Any discrepancy rejected  → "errors" (shipment is blocked)
+        if request.shipment_id:
+            try:
+                from src.database.connection import get_session as get_db_session
+                from src.database.schema import Shipment
+
+                async with get_db_session() as db:
+                    ship_row = await db.execute(
+                        sa_select(Shipment).where(Shipment.id == request.shipment_id)
+                    )
+                    shipment = ship_row.scalar_one_or_none()
+                    if shipment:
+                        if final_status in ("passed", "requires_attention"):
+                            shipment.status = "validated"
+                        elif final_status == "failed":
+                            shipment.status = "errors"
+                        await db.commit()
+            except Exception as e:
+                logger.warning(f"Could not update shipment status after resume: {e}")
+
         return {
             "session_id": str(session_id),
             "workflow_status": str(final_state.get("workflow_status")),
-            "final_status": final_state.get("final_status"),
+            "final_status": final_status,
             "message": "Session resumed.",
             "messages": final_state.get("messages", []),
         }

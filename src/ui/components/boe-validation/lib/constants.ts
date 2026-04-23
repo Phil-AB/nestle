@@ -99,6 +99,15 @@ export const FIELD_GROUPS: FieldGroups = [
   },
 ]
 
+export const GRA_TRANSPORT_CODES: Record<string, string> = {
+  "10": "Sea",
+  "20": "Rail",
+  "30": "Road",
+  "40": "Air",
+  "50": "Post",
+  "70": "Pipeline",
+}
+
 export const INDICATOR_STEPS: Array<{ key: Step; label: string }> = [
   { key: "select", label: "Select" },
   { key: "field_review", label: "Review Fields" },

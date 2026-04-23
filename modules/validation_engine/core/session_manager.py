@@ -9,7 +9,7 @@ from datetime import datetime
 from .base import ValidationContext, ValidationResult, Discrepancy, ValidationResultSummary
 from .config_loader import get_config_loader
 from ..utils.constants import (
-    ValidationStatus, SessionType, FinalStatus, Severity
+    ValidationStatus, SessionType, FinalStatus, Severity, ResolutionStatus
 )
 from ..utils.exceptions import SessionNotFoundException
 from shared.utils.logger import get_logger
@@ -297,6 +297,9 @@ class SessionManager:
             if str(discrepancy.id) == discrepancy_id:
                 discrepancy.user_confirmed = confirmed
                 discrepancy.user_comment = comment
+                discrepancy.resolution_status = (
+                    ResolutionStatus.ACCEPTED if confirmed else ResolutionStatus.REJECTED
+                )
                 break
 
         context.user_confirmations[discrepancy_id] = {
@@ -331,10 +334,8 @@ class SessionManager:
         failed_validations = total_validations - passed_validations
 
         total_discrepancies = len(context.discrepancies)
-        critical = sum(1 for d in context.discrepancies if d.severity == Severity.CRITICAL)
-        major = sum(1 for d in context.discrepancies if d.severity == Severity.MAJOR)
-        minor = sum(1 for d in context.discrepancies if d.severity == Severity.MINOR)
-        info = sum(1 for d in context.discrepancies if d.severity == Severity.INFO)
+        error_count = sum(1 for d in context.discrepancies if d.severity == Severity.ERROR)
+        info_count = sum(1 for d in context.discrepancies if d.severity == Severity.INFO)
 
         auto_fixed = sum(1 for d in context.discrepancies if d.auto_fixed)
 
@@ -345,27 +346,15 @@ class SessionManager:
                 / len(context.validation_results)
             )
 
-        all_passed = failed_validations == 0
-        has_critical = critical > 0
-        requires_confirmation = any(
-            d.severity in [Severity.CRITICAL, Severity.MAJOR]
-            and d.user_confirmed is None
-            for d in context.discrepancies
-        )
-
         return ValidationResultSummary(
             total_validations=total_validations,
             passed_validations=passed_validations,
             failed_validations=failed_validations,
             total_discrepancies=total_discrepancies,
-            critical_discrepancies=critical,
-            major_discrepancies=major,
-            minor_discrepancies=minor,
-            info_discrepancies=info,
+            error_discrepancies=error_count,
+            info_discrepancies=info_count,
             auto_fixed_count=auto_fixed,
-            all_validations_passed=all_passed,
-            has_critical_discrepancies=has_critical,
-            requires_user_confirmation=requires_confirmation,
+            all_validations_passed=failed_validations == 0,
             average_confidence=avg_confidence,
         )
 

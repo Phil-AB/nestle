@@ -84,3 +84,4 @@ class DiscrepancyConfirmation(BaseModel):
 class ResumeSessionRequest(BaseModel):
     confirmations: List[DiscrepancyConfirmation] = []
     user_input: Optional[Dict[str, Any]] = None
+    shipment_id: Optional[str] = None

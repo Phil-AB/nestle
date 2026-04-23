@@ -316,7 +316,7 @@ export default function BOEValidationForm() {
                 { label: "Total Checks", value: v.summary.total_checks ?? 0, color: "text-foreground" },
                 { label: "Passed", value: v.summary.passed_checks ?? 0, color: "text-green-600" },
                 { label: "Failed", value: v.summary.failed_checks ?? 0, color: (v.summary.failed_checks ?? 0) > 0 ? "text-destructive" : "text-muted-foreground" },
-                { label: "Critical", value: v.summary.critical ?? 0, color: (v.summary.critical ?? 0) > 0 ? "text-destructive" : "text-muted-foreground" },
+                { label: "Discrepancies", value: v.summary.total_discrepancies ?? 0, color: (v.summary.total_discrepancies ?? 0) > 0 ? "text-destructive" : "text-muted-foreground" },
               ].map(({ label, value, color }) => (
                 <Card key={label} className="p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -370,28 +370,28 @@ export default function BOEValidationForm() {
           )}
 
           {/* Discrepancy HITL */}
-          {v.discrepancies.filter((d) => d.severity === "critical" || d.severity === "major").length > 0 && (
-            <Card className="p-5 border-l-4 border-amber-400 bg-amber-50/30 dark:bg-amber-900/10">
+          {v.discrepancies.length > 0 && (
+            <Card className="p-5 border-l-4 border-destructive bg-destructive/5">
               <div className="flex items-start gap-3 mb-4">
-                <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                <AlertTriangle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="font-semibold text-foreground">Discrepancies Require Review</p>
+                  <p className="font-semibold text-foreground">
+                    {v.discrepancies.length} Discrepanc{v.discrepancies.length === 1 ? "y" : "ies"} Require Review
+                  </p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     Accept or reject each discrepancy before finalising the validation.
                   </p>
                 </div>
               </div>
               <div className="space-y-3">
-                {v.discrepancies
-                  .filter((d) => d.severity === "critical" || d.severity === "major")
-                  .map((disc) => (
-                    <DiscrepancyCard
-                      key={disc.id}
-                      disc={disc}
-                      confirmed={v.confirmations[disc.id] ?? null}
-                      onToggle={(id, val) => v.setConfirmations((prev) => ({ ...prev, [id]: val }))}
-                    />
-                  ))}
+                {v.discrepancies.map((disc) => (
+                  <DiscrepancyCard
+                    key={disc.id}
+                    disc={disc}
+                    confirmed={v.confirmations[disc.id] ?? null}
+                    onToggle={(id, val) => v.setConfirmations((prev) => ({ ...prev, [id]: val }))}
+                  />
+                ))}
               </div>
             </Card>
           )}
@@ -419,16 +419,12 @@ export default function BOEValidationForm() {
               onClick={v.handleResume}
               disabled={
                 v.submitting ||
-                v.discrepancies
-                  .filter((d) => d.severity === "critical")
-                  .some((d) => v.confirmations[d.id] === null)
+                v.discrepancies.some((d) => v.confirmations[d.id] === null || v.confirmations[d.id] === undefined)
               }
               className="bg-primary hover:bg-primary/90"
             >
               {v.submitting && <Loader className="w-4 h-4 mr-2 animate-spin" />}
-              {v.discrepancies.filter((d) => d.severity === "critical" || d.severity === "major").length > 0
-                ? "Submit Decisions"
-                : "Confirm & Complete"}
+              {v.discrepancies.length > 0 ? "Submit Decisions" : "Confirm & Complete"}
             </Button>
           </div>
         </div>
@@ -488,14 +484,9 @@ export default function BOEValidationForm() {
                       </span>
                       /{v.summary.total_checks} checks passed
                     </span>
-                    {(v.summary.major ?? 0) > 0 && (
-                      <span className="text-amber-600 font-semibold">
-                        {v.summary.major} major
-                      </span>
-                    )}
-                    {(v.summary.critical ?? 0) > 0 && (
+                    {(v.summary.total_discrepancies ?? 0) > 0 && (
                       <span className="text-destructive font-semibold">
-                        {v.summary.critical} critical
+                        {v.summary.total_discrepancies} discrepanc{v.summary.total_discrepancies === 1 ? "y" : "ies"}
                       </span>
                     )}
                   </div>

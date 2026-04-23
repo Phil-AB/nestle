@@ -15,6 +15,7 @@ Supports:
 """
 
 from typing import Dict, Any, List, Optional
+import re
 import unicodedata
 from ...core.base import IValidator, ValidationResult, ValidationContext
 from ...validators.validator_registry import ValidatorRegistry
@@ -202,10 +203,18 @@ class ShipperConsigneeValidator(IValidator):
                     addr_value = self._get_field_from_documents(
                         f"{doc_type}.{addr_field}", context
                     )
+                    # Skip redacted blocks — same guard as the name collection loop
+                    if isinstance(addr_value, dict) and addr_value.get("redacted") is True:
+                        logger.debug(f"{party_name} address in {doc_type} is redacted — skipping")
+                        continue
+                    # Unwrap field-data dicts; skip if the inner value is absent
+                    if isinstance(addr_value, dict):
+                        addr_value = addr_value.get("value")
                     if addr_value:
+                        addr_str = str(addr_value)
                         address_values[doc_type] = {
-                            "original": addr_value,
-                            "normalized": self._normalize_address(str(addr_value))
+                            "original": addr_str,
+                            "normalized": self._normalize_address(addr_str)
                         }
 
                 if len(address_values) >= 2:
@@ -239,6 +248,13 @@ class ShipperConsigneeValidator(IValidator):
         ref_doc = list(party_values.keys())[0]
         ref_value = party_values[ref_doc]["normalized"]
 
+        # Build alias list for the reference value (parenthesized trading names, etc.)
+        ref_aliases = [
+            self._normalize_name(a)
+            for a in re.findall(r'\(([^)]+)\)', party_values[ref_doc]["original"])
+            if a.strip()
+        ]
+
         # Compare all other values to reference
         mismatches = []
         matches = []
@@ -249,6 +265,12 @@ class ShipperConsigneeValidator(IValidator):
                 continue
 
             compare_value = values["normalized"]
+            # Also build aliases for the comparison side
+            compare_aliases = [
+                self._normalize_name(a)
+                for a in re.findall(r'\(([^)]+)\)', values["original"])
+                if a.strip()
+            ]
 
             # Perform matching based on type
             if match_type == "exact":
@@ -260,11 +282,16 @@ class ShipperConsigneeValidator(IValidator):
                 similarity = 1.0 if match else 0.0
 
             elif match_type == "fuzzy":
-                similarity = self._calculate_similarity(ref_value, compare_value)
+                # Try primary names first, then all alias combinations
+                candidates = [
+                    self._calculate_similarity(r, c)
+                    for r in [ref_value] + ref_aliases
+                    for c in [compare_value] + compare_aliases
+                ]
+                similarity = max(candidates)
                 match = similarity >= fuzzy_threshold
 
             else:
-                # Default to case-insensitive
                 match = ref_value.lower() == compare_value.lower()
                 similarity = 1.0 if match else 0.0
 

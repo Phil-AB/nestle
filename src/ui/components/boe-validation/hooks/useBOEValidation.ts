@@ -103,9 +103,7 @@ export function useBOEValidation() {
     setDiscrepancies(res.discrepancies ?? [])
     setSessionId(res.session_id ?? null)
 
-    const hitlDiscs = [...(res.discrepancies ?? []), ...(res.critical_discrepancies ?? [])].filter(
-      (d) => d.severity === "critical" || d.severity === "major"
-    )
+    const hitlDiscs = res.discrepancies ?? []
 
     if (hitlDiscs.length > 0) {
       const initial: Record<string, boolean | null> = {}
@@ -219,7 +217,11 @@ export function useBOEValidation() {
         .filter(([, v]) => v !== null)
         .map(([id, confirmed]) => ({ discrepancy_id: id, confirmed: confirmed as boolean }))
 
-      const res = await apiClient.resumeValidationSession(sessionId, payload)
+      const res = await apiClient.resumeValidationSession(
+        sessionId,
+        payload,
+        selectedShipment?.shipment_id
+      )
       setFinalStatus((res as any).final_status ?? finalStatus)
       setSummary((res as any).summary ?? summary)
       setValidationResults((res as any).validation_results ?? validationResults)

@@ -76,7 +76,6 @@ class ConcessionEligibilityValidator(IValidator):
         self.item_hs_field = config.get("item_hs_code_field", "hs_code")
         self.item_desc_field = config.get("item_description_field", "product_description")
         self.validations = config.get("validations", {})
-        self.failure_severities = config.get("failure_severities", {})
 
     def supports_field_type(self, field_type: str) -> bool:
         return True
@@ -128,7 +127,7 @@ class ConcessionEligibilityValidator(IValidator):
                     field_name="etls_approval_number",
                     passed=False,
                     message=f"Master Concession reference number missing on BOE. Expected: {approved_ref}",
-                    severity=self._sev("reference_number_missing", Severity.MAJOR),
+                    severity=Severity.ERROR,
                     source_value=None,
                     target_value=approved_ref,
                 ))
@@ -137,7 +136,7 @@ class ConcessionEligibilityValidator(IValidator):
                     field_name="etls_approval_number",
                     passed=False,
                     message=f"Concession reference mismatch. Declared: '{declared_ref}', Expected: '{approved_ref}'",
-                    severity=self._sev("wrong_reference_number", Severity.CRITICAL),
+                    severity=Severity.ERROR,
                     source_value=declared_ref,
                     target_value=approved_ref,
                 ))
@@ -165,7 +164,7 @@ class ConcessionEligibilityValidator(IValidator):
                         f"BOE declaration date {decl_date} is after expiry. "
                         f"CPC code {cpc_code} cannot be used."
                     ),
-                    severity=self._sev("concession_expired", Severity.CRITICAL),
+                    severity=Severity.ERROR,
                     source_value=str(decl_date),
                     target_value=str(expiry_date),
                 ))
@@ -187,7 +186,7 @@ class ConcessionEligibilityValidator(IValidator):
                             f"HS code '{raw_hs}' ({desc}) is not in the Master Concession "
                             f"approved list. Zero duty under CPC {cpc_code} cannot be applied."
                         ),
-                        severity=self._sev("item_not_on_concession", Severity.MAJOR),
+                        severity=Severity.ERROR,
                         source_value=raw_hs,
                         target_value="approved HS code from Master Concession",
                     ))
@@ -195,12 +194,6 @@ class ConcessionEligibilityValidator(IValidator):
         return results
 
     # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _sev(self, key: str, default: str) -> str:
-        raw = self.failure_severities.get(key)
-        if raw and hasattr(Severity, raw.upper()):
-            return getattr(Severity, raw.upper())
-        return default
 
     @staticmethod
     def _parse_date(value: Any) -> Optional[date]:

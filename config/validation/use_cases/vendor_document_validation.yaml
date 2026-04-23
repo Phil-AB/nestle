@@ -378,13 +378,47 @@ use_case:
               - "po_number"
         on_failure: "flag_and_continue"
 
-      # ── 4. Consignee name cross-validation ─────────────────────────────────
+      # ── 4. Shipper identity cross-validation ───────────────────────────────
+      # Shipper name and address must be consistent across invoice, packing list,
+      # and BOL. The validator skips any document whose shipper block is marked
+      # redacted: true, so if only the invoice carries a readable value the check
+      # emits INFO "insufficient data" and continues gracefully.
+      - name: "shipper_identity"
+        description: "Shipper name and address must match across vendor documents (redacted docs skipped)"
+        validators:
+          - "shipper_consignee_validator"
+        config:
+          parties:
+            - name: "shipper"
+              documents:
+                - "invoice"
+                - "packing_list"
+                - "bill_of_lading"
+              field_mappings:
+                invoice: "shipper_name"
+                packing_list: "shipper_name"
+                bill_of_lading: "shipper_name"
+              address_mappings:
+                invoice: "shipper_address"
+                packing_list: "shipper_address"
+                bill_of_lading: "shipper_address"
+              match_type: "fuzzy"
+              fuzzy_threshold: 0.65
+              min_documents: 2
+              check_address: true
+          normalization:
+            remove_whitespace: true
+            remove_punctuation: true
+            lowercase: true
+            remove_company_suffixes: true
+        on_failure: "flag_and_continue"
+
+      # ── 5. Consignee name cross-validation ─────────────────────────────────
       # Consignee name must match across invoice, packing list, and BOL.
       # Fuzzy matching required: "Nestlé Ghana Limited" vs "Nestle Ghana Ltd".
-      # Consignee ADDRESS is intentionally NOT cross-validated — bill-to address
-      # (KIA, Accra) legitimately differs from ship-to address (Sanyo Rd, Tema).
+      # Consignee ADDRESS is also cross-validated per checklist.yaml SSOT.
       - name: "consignee_identity"
-        description: "Consignee name must match across all vendor documents (fuzzy)"
+        description: "Consignee name and address must match across all vendor documents (fuzzy)"
         validators:
           - "shipper_consignee_validator"
         config:
@@ -398,9 +432,14 @@ use_case:
                 invoice: "consignee_name"
                 packing_list: "consignee_name"
                 bill_of_lading: "consignee_name"
+              address_mappings:
+                invoice: "consignee_address"
+                packing_list: "consignee_address"
+                bill_of_lading: "consignee_address"
               match_type: "fuzzy"
               fuzzy_threshold: 0.75
               min_documents: 2
+              check_address: true
           normalization:
             remove_whitespace: true
             remove_punctuation: true

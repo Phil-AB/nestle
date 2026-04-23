@@ -196,7 +196,7 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
         for step_config in steps:
             step_name = step_config.get("name")
             validators = step_config.get("validators", [])
-            step_severity = step_config.get("severity", "minor")
+            step_severity = Severity.ERROR
 
             logger.info(f"Executing step: {step_name}")
 
@@ -277,7 +277,8 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
                                 target_value=result.target_value,
                                 difference=result.discrepancy,
                                 severity=result.severity,
-                                confidence=result.confidence
+                                confidence=result.confidence,
+                                message=result.message,
                             )
                             # Classify type first, then severity (type must be set
                             # before severity rules check discrepancy_type)
@@ -409,7 +410,8 @@ async def generate_report_node(state: ValidationWorkflowState) -> Dict[str, Any]
     }
 
     all_discrepancies = state.get("discrepancies") or []
-    unresolved = [d for d in all_discrepancies if d.get("id") not in confirmed_ids]
+    # str() normalises uuid.UUID objects and plain strings to the same type
+    unresolved = [d for d in all_discrepancies if str(d.get("id", "")) not in confirmed_ids]
 
     if state.get("all_validations_passed") and not all_discrepancies:
         final_status = "passed"

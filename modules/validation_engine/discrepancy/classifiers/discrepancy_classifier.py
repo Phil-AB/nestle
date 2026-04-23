@@ -91,46 +91,8 @@ class DiscrepancyClassifier:
         classification_config: Dict[str, Any],
         context: ValidationContext
     ) -> Discrepancy:
-        """
-        Classify discrepancy severity based on rules
-
-        Args:
-            discrepancy: Discrepancy to classify
-            classification_config: Classification configuration
-            context: Validation context
-
-        Returns:
-            Discrepancy with severity set
-        """
-        severity_rules = classification_config.get("severity_rules", {})
-
-        field_name = discrepancy.field_name.lower()
-
-        # Check critical rules
-        for pattern in severity_rules.get("critical", []):
-            if self._matches_pattern(pattern, field_name, discrepancy):
-                discrepancy.severity = Severity.CRITICAL
-                return discrepancy
-
-        # Check major rules
-        for pattern in severity_rules.get("major", []):
-            if self._matches_pattern(pattern, field_name, discrepancy):
-                discrepancy.severity = Severity.MAJOR
-                return discrepancy
-
-        # Check minor rules
-        for pattern in severity_rules.get("minor", []):
-            if self._matches_pattern(pattern, field_name, discrepancy):
-                discrepancy.severity = Severity.MINOR
-                return discrepancy
-
-        # Check info rules
-        for pattern in severity_rules.get("info", []):
-            if self._matches_pattern(pattern, field_name, discrepancy):
-                discrepancy.severity = Severity.INFO
-                return discrepancy
-
-        # Default severity
+        """All failures carry equal weight — severity is always ERROR."""
+        discrepancy.severity = Severity.ERROR
         return discrepancy
 
     def _matches_pattern(

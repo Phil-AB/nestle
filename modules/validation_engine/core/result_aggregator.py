@@ -68,12 +68,7 @@ class ResultAggregator:
                 by_validator[result.validator_name]["failed"] += 1
 
         # Group by severity
-        by_severity = {
-            Severity.CRITICAL: 0,
-            Severity.MAJOR: 0,
-            Severity.MINOR: 0,
-            Severity.INFO: 0
-        }
+        by_severity = {Severity.ERROR: 0, Severity.INFO: 0}
         for result in results:
             if not result.passed:
                 by_severity[result.severity] = by_severity.get(result.severity, 0) + 1
@@ -120,12 +115,7 @@ class ResultAggregator:
         total = len(discrepancies)
 
         # Group by severity
-        by_severity = {
-            Severity.CRITICAL: 0,
-            Severity.MAJOR: 0,
-            Severity.MINOR: 0,
-            Severity.INFO: 0
-        }
+        by_severity = {Severity.ERROR: 0, Severity.INFO: 0}
         for d in discrepancies:
             by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
 
@@ -255,12 +245,7 @@ class ResultAggregator:
         Returns:
             Dictionary mapping severity to discrepancies
         """
-        grouped = {
-            Severity.CRITICAL: [],
-            Severity.MAJOR: [],
-            Severity.MINOR: [],
-            Severity.INFO: []
-        }
+        grouped = {Severity.ERROR: [], Severity.INFO: []}
 
         for discrepancy in discrepancies:
             severity = discrepancy.severity
@@ -287,16 +272,11 @@ class ResultAggregator:
             List of top discrepancies
         """
         if by_severity:
-            # Sort by severity priority: critical > major > minor > info
-            severity_order = {
-                Severity.CRITICAL: 0,
-                Severity.MAJOR: 1,
-                Severity.MINOR: 2,
-                Severity.INFO: 3
-            }
+            # Sort errors before info, then by confidence (lowest first)
+            severity_order = {Severity.ERROR: 0, Severity.INFO: 1}
             sorted_discrepancies = sorted(
                 discrepancies,
-                key=lambda d: (severity_order.get(d.severity, 4), -d.confidence)
+                key=lambda d: (severity_order.get(d.severity, 0), -d.confidence)
             )
         else:
             # Sort by confidence (lowest first = least certain)

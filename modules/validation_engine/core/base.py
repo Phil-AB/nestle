@@ -71,8 +71,11 @@ class Discrepancy(BaseModel):
 
     # Classification
     discrepancy_type: str = DiscrepancyType.VALUE_MISMATCH
-    severity: str = Severity.MINOR
+    severity: str = Severity.ERROR
     category: str = DiscrepancyCategory.OTHER
+
+    # Human-readable explanation of what was checked and why it failed
+    message: Optional[str] = None
 
     # Analysis
     likely_cause: str = LikelyCause.UNKNOWN
@@ -223,7 +226,7 @@ class IValidator(ABC):
             Severity level (critical, major, minor, info)
         """
         # Default implementation - can be overridden
-        return self.config.get("severity", Severity.MINOR)
+        return self.config.get("severity", Severity.ERROR)
 
 
 class INormalizer(ABC):
@@ -406,17 +409,13 @@ class ValidationResultSummary(BaseModel):
     failed_validations: int = 0
 
     total_discrepancies: int = 0
-    critical_discrepancies: int = 0
-    major_discrepancies: int = 0
-    minor_discrepancies: int = 0
+    error_discrepancies: int = 0
     info_discrepancies: int = 0
 
     auto_fixed_count: int = 0
 
     # Status
     all_validations_passed: bool = False
-    has_critical_discrepancies: bool = False
-    requires_user_confirmation: bool = False
 
     # Confidence
     average_confidence: float = 0.0

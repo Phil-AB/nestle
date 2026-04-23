@@ -480,7 +480,7 @@ export interface InsightsHealthResponse {
 
 export interface ValidationDiscrepancy {
   id: string
-  severity: "critical" | "major" | "minor"
+  severity: "error" | "critical" | "major" | "minor" | "info"
   field?: string
   field_name?: string       // API returns field_name; field is legacy alias
   source_document?: string
@@ -2429,13 +2429,14 @@ class APIClient {
    */
   async resumeValidationSession(
     sessionId: string,
-    confirmations: Array<{ discrepancy_id: string; confirmed: boolean; comment?: string }>
+    confirmations: Array<{ discrepancy_id: string; confirmed: boolean; comment?: string }>,
+    shipmentId?: string
   ): Promise<VendorValidationResponse | BOEValidationResponse> {
     return this.request(
       `/validation/sessions/${sessionId}/resume`,
       {
         method: "POST",
-        body: JSON.stringify({ confirmations }),
+        body: JSON.stringify({ confirmations, shipment_id: shipmentId }),
       },
       true
     )

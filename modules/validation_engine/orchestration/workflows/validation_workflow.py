@@ -148,20 +148,9 @@ class ValidationWorkflow:
             logger.info("No discrepancies found, proceeding to report")
             return EdgeCondition.NO_DISCREPANCIES
 
-        # Has critical or major discrepancies - require user confirmation
-        critical = state.get("critical_discrepancies", [])
-        major = [d for d in discrepancies if d.get("severity") == Severity.MAJOR]
-
-        if critical or major:
-            logger.info(
-                f"Found {len(critical)} critical and {len(major)} major discrepancies, "
-                "requiring user confirmation"
-            )
-            return EdgeCondition.REQUIRES_USER
-
-        # Only minor/info discrepancies - proceed to report
-        logger.info("Only minor discrepancies found, proceeding to report")
-        return EdgeCondition.VALIDATION_PASSED
+        # Any discrepancy requires review — all failures carry equal weight
+        logger.info(f"Found {len(discrepancies)} discrepancies, routing to review")
+        return EdgeCondition.REQUIRES_USER
 
     async def run(
         self,
@@ -207,6 +196,7 @@ class ValidationWorkflow:
             "auto_fixed_count": 0,
             "requires_user_confirmation": False,
             "user_confirmed": False,
+            "user_confirmations": {},
             "user_input": {},
             "awaiting_user": False,
             "is_revalidation": kwargs.get("is_revalidation", False),

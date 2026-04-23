@@ -1,15 +1,12 @@
 """
 Customs Code Validator
 
-Validates Amount Payable and duty/VAT calculations based on Ghana customs codes:
-- 40E68: Full VAT payment (5% × Customs Value)
-- 40V02: VAT exempted (Amount Payable = 0.00, Amount Exempted calculated)
-- 40U01: Import Duty exempted
-- 40W01: Import Duty exempted, but taxes payable
-
-Based on Ghana Customs ICUMS system validation rules.
+Validates Amount Payable and duty calculations based on Ghana customs codes.
+All supported codes are loaded exclusively from config/data/cpc_codes.yaml (SSOT).
 """
 
+import os
+import yaml
 from typing import Dict, Any, List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from ...core.base import IValidator, ValidationResult, ValidationContext
@@ -84,66 +81,27 @@ class CustomsCodeValidator(IValidator):
             customs_code_field: "bill_of_entry.customs_code"
     """
 
-    # Default customs code configurations
-    DEFAULT_CUSTOMS_CODES = {
-        "40E68": {
-            "type": "full_vat_payment",
-            "description": "Full VAT payment required",
-            "vat_rate": Decimal("0.05"),  # 5%
-            "duty_exempted": False,
-            "vat_exempted": False,
-            "taxes_payable": True,
-            "formula": "amount_payable = vat_rate * customs_value"
-        },
-        "40V02": {
-            "type": "vat_exempted",
-            "description": "VAT exempted for later payment",
-            "vat_rate": Decimal("0.05"),  # 5%
-            "duty_exempted": False,
-            "vat_exempted": True,
-            "taxes_payable": False,
-            "formula": "amount_payable = 0.00; amount_exempted = vat_rate * customs_value"
-        },
-        "40U01": {
-            "type": "duty_exempted",
-            "description": "Import duty fully exempted",
-            "vat_rate": Decimal("0.05"),
-            "duty_exempted": True,
-            "vat_exempted": False,
-            "taxes_payable": True,
-            "formula": "duty_amount = 0.00"
-        },
-        "40W01": {
-            "type": "duty_exempted_tax_payable",
-            "description": "Import duty exempted but taxes payable",
-            "vat_rate": Decimal("0.05"),
-            "duty_exempted": True,
-            "vat_exempted": False,
-            "taxes_payable": True,
-            "formula": "duty_amount = 0.00; vat payable"
-        }
-    }
-
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.validator_type = ValidatorType.RULE_BASED
         self.validator_name = "customs_code_validator"
 
-        # Load customs code configurations (merge with defaults)
-        config_codes = config.get("customs_codes", {})
-        self.customs_codes = {**self.DEFAULT_CUSTOMS_CODES}
+        # Load all CPC codes from the SSOT (config/data/cpc_codes.yaml)
+        self.customs_codes = self._load_cpc_codes_yaml()
 
-        # Merge user-provided codes
-        for code, code_config in config_codes.items():
+        # Merge step-level overrides from the YAML workflow config
+        for code, code_config in config.get("customs_codes", {}).items():
             if code in self.customs_codes:
                 self.customs_codes[code].update(code_config)
             else:
                 self.customs_codes[code] = code_config
 
-        # Convert string decimals to Decimal
+        # Ensure all numeric rate fields are Decimal
         for code_config in self.customs_codes.values():
-            if "vat_rate" in code_config and not isinstance(code_config["vat_rate"], Decimal):
-                code_config["vat_rate"] = Decimal(str(code_config["vat_rate"]))
+            for rate_key in ("vat_rate", "duty_rate"):
+                val = code_config.get(rate_key)
+                if val is not None and not isinstance(val, Decimal):
+                    code_config[rate_key] = Decimal(str(val))
 
         # Get validations
         self.validations = config.get("validations", [])
@@ -272,7 +230,146 @@ class CustomsCodeValidator(IValidator):
                         customs_code, etls_approval_number
                     ))
 
+            elif customs_code == "40C01":
+                results.extend(self._validate_40C01(
+                    customs_value, actual_duty_amount, code_config
+                ))
+
+            elif customs_code == "40D01":
+                results.extend(self._validate_40D01())
+
+            # If no ETLS result was emitted for this code, the field is N/A —
+            # emit an explicit passed/INFO result so the UI shows "N/A" not "Missing"
+            etls_emitted = any(r.field_name == "etls_approval_number" for r in results)
+            if not self.etls_only and not etls_emitted:
+                results.append(self._create_result(
+                    field_name="etls_approval_number",
+                    passed=True,
+                    message=f"N/A — ETLS/concession reference not required for CPC {customs_code}",
+                    severity=Severity.INFO,
+                    source_value=None,
+                    target_value=None,
+                    metadata={
+                        "not_applicable": True,
+                        "reason": f"CPC {customs_code} does not require an ETLS approval number or concession reference",
+                    }
+                ))
+
         return results
+
+    @staticmethod
+    def _load_cpc_codes_yaml() -> Dict[str, Dict[str, Any]]:
+        """
+        Load CPC code definitions from config/data/cpc_codes.yaml (SSOT).
+        Raises RuntimeError if the file cannot be read or parsed — no hardcoded
+        fallback so misconfigurations surface immediately.
+        """
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        yaml_path = os.path.normpath(
+            os.path.join(base_dir, "..", "..", "..", "..", "config", "data", "cpc_codes.yaml")
+        )
+        with open(yaml_path, "r") as fh:
+            data = yaml.safe_load(fh)
+
+        if not data or "codes" not in data:
+            raise RuntimeError(f"cpc_codes.yaml at {yaml_path} is missing the 'codes' key")
+
+        codes: Dict[str, Dict[str, Any]] = {}
+        for entry in data["codes"]:
+            code = entry.get("code")
+            if not code:
+                continue
+            duty_rate = entry.get("duty_rate")
+            vat_deferred = entry.get("vat_deferred", False)
+            requires_etls = entry.get("requires_etls_approval", False)
+            codes[code] = {
+                "description": entry.get("label", code),
+                "duty_rate": Decimal(str(duty_rate)) if duty_rate is not None else None,
+                "vat_rate": Decimal("0.15") if vat_deferred else Decimal("0.05"),
+                "duty_exempted": duty_rate == 0,
+                "vat_exempted": vat_deferred,
+                "taxes_payable": not vat_deferred,
+                "require_etls_approval": requires_etls,
+                "check_against": entry.get("check_against"),
+            }
+
+        logger.info(f"Loaded {len(codes)} CPC codes from {yaml_path}")
+        return codes
+
+    def _validate_40C01(
+        self,
+        customs_value: Optional[Any],
+        actual_duty_amount: Optional[Any],
+        code_config: Dict[str, Any],
+    ) -> List[ValidationResult]:
+        """
+        Validate 40C01: 2% import duty.
+
+        Formula: Duty Amount = 2% × Customs Value
+        """
+        results = []
+
+        if customs_value is None:
+            results.append(self._create_result(
+                field_name="customs_value",
+                passed=False,
+                message="Customs value required for 40C01 duty validation",
+                severity=Severity.CRITICAL,
+                source_value=None,
+                target_value=None,
+            ))
+            return results
+
+        customs_value_dec = self._to_decimal(customs_value)
+        duty_rate = code_config.get("duty_rate") or Decimal("0.02")
+        expected_duty = (customs_value_dec * duty_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        actual_duty = self._to_decimal(actual_duty_amount) if actual_duty_amount else Decimal("0")
+        difference = abs(expected_duty - actual_duty)
+        passed = difference <= self.tolerance
+
+        results.append(self._create_result(
+            field_name="duty_amount",
+            passed=passed,
+            message=(
+                f"40C01: Duty Amount correct ({actual_duty} = {float(duty_rate)*100:.0f}% × {customs_value_dec})"
+                if passed else
+                f"40C01: Duty Amount incorrect. "
+                f"Expected: {expected_duty} ({float(duty_rate)*100:.0f}% × {customs_value_dec}), "
+                f"Actual: {actual_duty}, Difference: {difference}"
+            ),
+            severity=Severity.INFO if passed else Severity.CRITICAL,
+            source_value=float(actual_duty),
+            target_value=float(expected_duty),
+            confidence=1.0,
+            metadata={
+                "customs_code": "40C01",
+                "customs_value": float(customs_value_dec),
+                "duty_rate": float(duty_rate),
+                "expected": float(expected_duty),
+                "actual": float(actual_duty),
+                "difference": float(difference),
+            },
+        ))
+        return results
+
+    def _validate_40D01(self) -> List[ValidationResult]:
+        """
+        Validate 40D01: N/A — no duty-specific validation required.
+
+        Emits a single passed INFO result so the UI shows N/A rather than Missing.
+        """
+        return [self._create_result(
+            field_name="duty_amount",
+            passed=True,
+            message="40D01: N/A — no specific duty validation required for this CPC code",
+            severity=Severity.INFO,
+            source_value=None,
+            target_value=None,
+            confidence=1.0,
+            metadata={"customs_code": "40D01", "not_applicable": True},
+        )]
 
     def _validate_40E68(
         self,
@@ -389,25 +486,41 @@ class CustomsCodeValidator(IValidator):
         vat_rate = code_config["vat_rate"]  # 0.15 for 40V02
 
         # 1. Import VAT Amount Payable must be 0 (VAT is deferred, not paid)
-        actual_vat = self._to_decimal(actual_vat_amount) if actual_vat_amount else Decimal("0")
-        expected_vat_payable = Decimal("0.00")
-        vat_passed = abs(actual_vat - expected_vat_payable) <= self.tolerance
+        # None means the field was not extracted — treat as unverifiable (not as 0)
+        if actual_vat_amount is None:
+            results.append(self._create_result(
+                field_name="vat_amount",
+                passed=False,
+                message=(
+                    "40V02: vat_amount not extracted from BOE — cannot verify VAT deferment. "
+                    "Expected 0.00 (VAT deferred, not paid at entry)."
+                ),
+                severity=Severity.ERROR,
+                source_value=None,
+                target_value=0.00,
+                confidence=0.5,
+                metadata={"customs_code": "40V02", "vat_deferred": True}
+            ))
+        else:
+            actual_vat = self._to_decimal(actual_vat_amount)
+            expected_vat_payable = Decimal("0.00")
+            vat_passed = abs(actual_vat - expected_vat_payable) <= self.tolerance
 
-        results.append(self._create_result(
-            field_name="vat_amount",
-            passed=vat_passed,
-            message=(
-                "40V02: Import VAT Amount Payable is 0.00 — VAT deferment correctly applied"
-                if vat_passed
-                else f"40V02: Import VAT must be 0.00 for VAT deferment (CPC 40V02), "
-                     f"got {actual_vat}. VAT should be in Amount Exempted/Suspended column."
-            ),
-            severity=Severity.INFO if vat_passed else Severity.CRITICAL,
-            source_value=float(actual_vat),
-            target_value=0.00,
-            confidence=1.0,
-            metadata={"customs_code": "40V02", "vat_deferred": True}
-        ))
+            results.append(self._create_result(
+                field_name="vat_amount",
+                passed=vat_passed,
+                message=(
+                    "40V02: Import VAT Amount Payable is 0.00 — VAT deferment correctly applied"
+                    if vat_passed
+                    else f"40V02: Import VAT must be 0.00 for VAT deferment (CPC 40V02), "
+                         f"got {actual_vat}. VAT should be in Amount Exempted/Suspended column."
+                ),
+                severity=Severity.INFO if vat_passed else Severity.ERROR,
+                source_value=float(actual_vat),
+                target_value=0.00,
+                confidence=1.0,
+                metadata={"customs_code": "40V02", "vat_deferred": True}
+            ))
 
         # 2. Amount Exempted = VAT Rate × (Customs Value + Duty Amount)
         #    This is the deferred VAT that must appear in the Exempted/Suspended column.

@@ -34,11 +34,12 @@ class ValidatorType:
     CROSS_DOCUMENT = "cross_document"
 
 
-# Severity levels
+# Severity levels — all failures are equal weight, use ERROR
 class Severity:
-    CRITICAL = "critical"
-    MAJOR = "major"
-    MINOR = "minor"
+    ERROR = "error"
+    CRITICAL = "error"   # alias for backwards compatibility
+    MAJOR = "error"      # alias for backwards compatibility
+    MINOR = "error"      # alias for backwards compatibility
     INFO = "info"
 
 

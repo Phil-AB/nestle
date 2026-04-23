@@ -48,6 +48,7 @@ class ValidationWorkflowState(TypedDict):
     # User interaction
     requires_user_confirmation: bool
     user_confirmed: bool
+    user_confirmations: Dict[str, Any]  # disc_id → {confirmed: bool, comment: str|None}
     user_input: Dict[str, Any]
     awaiting_user: bool
 
