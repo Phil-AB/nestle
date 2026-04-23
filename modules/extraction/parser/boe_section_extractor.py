@@ -271,6 +271,17 @@ class BOESectionExtractor:
                 except ValueError:
                     pass
 
+        # ── FOB value in national currency (Field 19 / Field 34 FOB Ncy) ─────
+        # Key: "fob_ncy_import_export" or "fob_import_ncy", Value: "5,991,028.31"
+        # Used for insurance rate calculation (all GHS: FOB Ncy + Freight Ncy = C&F)
+        if key in ("fob_ncy_import_export", "fob_import_ncy", "fob_ncy") and "fob_ncy" not in out:
+            m = re.search(r'([\d,]+\.?\d*)', val_str)
+            if m:
+                try:
+                    out["fob_ncy"] = float(m.group(1).replace(",", ""))
+                except ValueError:
+                    pass
+
         # ── Total Invoice / CIF value ────────────────────────────────────────
         # Key: "total_invoice_fcy_cc", Value: "482,410.48 EUR" → 482410.48
         if key == "total_invoice_fcy_cc" and "total_invoice_value" not in out:
@@ -540,6 +551,18 @@ class BOESectionExtractor:
                 if m:
                     try:
                         out["total_fob_value"] = float(m.group(1).replace(",", ""))
+                    except ValueError:
+                        pass
+
+            # ── FOB Ncy from item FOB Ncy field (Field 34) ───────────────────
+            # FOB in national currency (GHS) — used for insurance rate calculation
+            # together with Freight Ncy so all values are in the same currency.
+            if "fob_ncy" not in out:
+                raw = _raw("fob_ncy")
+                m = re.search(r'([\d,]+\.?\d*)', raw)
+                if m:
+                    try:
+                        out["fob_ncy"] = float(m.group(1).replace(",", ""))
                     except ValueError:
                         pass
 

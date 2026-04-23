@@ -134,6 +134,7 @@ class ShipperConsigneeValidator(IValidator):
             address_mappings = party_config.get("address_mappings", {})
             match_type = party_config.get("match_type", "case_insensitive")
             fuzzy_threshold = party_config.get("fuzzy_threshold", 0.8)
+            address_threshold_override = party_config.get("address_threshold")
             check_address = party_config.get("check_address", False)
 
             # Collect party name values from all documents
@@ -219,7 +220,8 @@ class ShipperConsigneeValidator(IValidator):
 
                 if len(address_values) >= 2:
                     addr_result = self._validate_address_match(
-                        party_name, address_values, fuzzy_threshold
+                        party_name, address_values, fuzzy_threshold,
+                        address_threshold_override=address_threshold_override
                     )
                     results.append(addr_result)
 
@@ -458,16 +460,22 @@ class ShipperConsigneeValidator(IValidator):
         self,
         party_name: str,
         address_values: Dict[str, Dict[str, str]],
-        fuzzy_threshold: float
+        fuzzy_threshold: float,
+        address_threshold_override: float = None
     ) -> ValidationResult:
         """
         Validate that address values are consistent across documents.
 
-        Uses a relaxed fuzzy threshold (default 0.5) because addresses often
-        differ legitimately between documents (registered vs. delivery address).
+        Uses a relaxed fuzzy threshold because addresses often differ legitimately
+        between documents (registered vs. delivery address). Can be overridden
+        via address_threshold in the party config when documents carry structurally
+        different address roles (e.g. invoice bill-to vs packing list ship-to).
         """
-        # Addresses are inherently less consistent than names — use a softer threshold
-        address_threshold = max(fuzzy_threshold * 0.6, 0.4)
+        if address_threshold_override is not None:
+            address_threshold = float(address_threshold_override)
+        else:
+            # Addresses are inherently less consistent than names — use a softer threshold
+            address_threshold = max(fuzzy_threshold * 0.6, 0.4)
 
         ref_doc = list(address_values.keys())[0]
         ref_value = address_values[ref_doc]["normalized"]

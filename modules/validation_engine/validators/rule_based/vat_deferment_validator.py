@@ -53,6 +53,24 @@ def _normalize_hs(code: str) -> str:
     return re.sub(r"[.\s]", "", str(code)).strip()
 
 
+def _hs_lookup(normalized: str, index: Dict[str, str]) -> Optional[str]:
+    """
+    Look up an HS code in the index with hierarchical prefix matching.
+
+    HS codes are hierarchical: a 6-digit code (190190) covers all 10-digit
+    children (1901902000, 1901901000). If the exact code is not found, check
+    whether any index entry starts with the lookup code (or vice-versa).
+    Returns the matched description, or None if not found.
+    """
+    if normalized in index:
+        return index[normalized]
+    # Prefix match: index entry starts with lookup code (e.g. lookup=190190, index=1901902000)
+    for idx_code, desc in index.items():
+        if idx_code.startswith(normalized) or normalized.startswith(idx_code):
+            return desc
+    return None
+
+
 @ValidatorRegistry.register("vat_deferment_validator")
 class VATDefermentValidator(IValidator):
     """
@@ -118,7 +136,8 @@ class VATDefermentValidator(IValidator):
                     continue
                 normalized = _normalize_hs(str(raw_hs))
                 desc = item.get(self.item_desc_field, "") if isinstance(item, dict) else ""
-                if normalized in hs_index:
+                matched_desc = _hs_lookup(normalized, hs_index)
+                if matched_desc is not None:
                     eligible_count += 1
                     results.append(self._create_result(
                         field_name=f"items[{idx}].hs_code",
@@ -129,7 +148,7 @@ class VATDefermentValidator(IValidator):
                         ),
                         severity=Severity.INFO,
                         source_value=raw_hs,
-                        target_value=hs_index[normalized],
+                        target_value=matched_desc,
                     ))
                 else:
                     results.append(self._create_result(

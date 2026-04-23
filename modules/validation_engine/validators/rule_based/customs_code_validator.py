@@ -198,6 +198,18 @@ class CustomsCodeValidator(IValidator):
                     results.append(self._validate_etls_approval(
                         customs_code, etls_approval_number
                     ))
+                else:
+                    # CPC code does not require ETLS — emit explicit N/A so UI shows
+                    # "N/A" not "Missing" and the test confirms the step ran.
+                    results.append(self._create_result(
+                        field_name="etls_approval_number",
+                        passed=True,
+                        message=f"N/A — CPC {customs_code} does not require an ETLS approval number",
+                        severity=Severity.INFO,
+                        source_value=None,
+                        target_value=None,
+                        metadata={"not_applicable": True, "customs_code": customs_code}
+                    ))
                 continue
 
             # Validate based on customs code type

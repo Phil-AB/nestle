@@ -1,0 +1,109 @@
+﻿* Document Extraction: System efficiently handles invoices and shipping docs with key field extraction, including manual edit options for accuracy.
+* Validation Checklist: Ongoing efforts needed to map terminology for shipment documents, ensuring term consistency and accuracy.
+* BOE Integration: Bill of Entry validation involves checking against multiple documents; errors routed back to agents for corrections.
+* Data Requirements: Nestle to provide detailed field mappings and terminology to enhance tool's validation capabilities and prevent compliance issues.
+* Success Criteria: Tool aims for quick, accurate validation of documents to increase throughput and reduce shipment delays caused by errors.
+* Risk Management: Clear definitions on validation scope ensure compliance while addressing complexities in customs terminologies and regulations.
+
+
+Notes
+Product Development and Validation System
+The team demonstrated significant progress on the document validation system, focusing on extracting and validating shipment-related documents to ensure accuracy and reduce manual errors.
+* Document extraction and validation demo showed robust multi-document handling, including invoice, packing list, and bill of lading with editable fields for human correction (07:45)
+   * The system extracts key fields such as container numbers, weights, item descriptions, and allows manual edits for inaccuracies.
+   * Brendon Gonouya emphasized the inclusion of a human-in-the-loop feature to ensure high accuracy by allowing users to refer back to original documents at any validation step.
+   * Validation currently takes about two to three minutes based on network speed, with plans to optimize latency once foundational knowledge is incorporated.
+   * The system flags discrepancies and confidence levels, highlighting areas needing human review, especially where document redactions or inconsistent terminology occur.
+* Validation applies a checklist approach tailored to shipment documents, with ongoing efforts to map terminology and synonyms for field consistency (11:00)
+   * Philip highlighted challenges matching terms like “PO number” versus “order number” and “Belgium” versus its shorthand “BE,” requiring a dictionary of synonyms to improve validation accuracy.
+   * The tool tracks shipment IDs for categorization, ensuring no mix-up between different shipments during processing.
+   * The system will flag mismatched values such as shipper names differing across documents for manual decision-making.
+* Bill of Entry (BOE) validation is integrated as a critical workflow step, focusing on matching BOE fields against supporting documents to catch discrepancies (17:30)
+   * The system compares BOE data with the invoice, packing list, and bill of lading, flagging inconsistencies for human review.
+   * Clarification is needed on whether BOE validation should consider only the BOE or include other supporting documents, with the Nestle team confirming the broader validation scope.
+   * Nestle’s Philip explained that errors caught by the tool are sent back to agents responsible for corrections, as Nestle does not directly edit BOE data.
+* Terminology nuances and validation logic gaps require detailed input from Nestle to train the system effectively (48:43)
+   * Adelaide clarified that critical fields like customs processing codes (CPC), HS codes, incoterms, and freight values vary by shipment and supplier invoice formats.
+   * The system must account for variable invoice formats and supplier terms, requiring Nestle to provide a comprehensive checklist with field-to-document mappings and synonym definitions.
+   * Freight and insurance validation will require access to additional customs documents and contract rates with shipping lines, implying further technical complexity to be addressed later.
+* The team agreed on the importance of continuous iterative training through multiple shipment scenarios to improve the tool’s accuracy and reliability (10:30)
+Operational Workflow and Validation Process
+The meeting clarified the operational processes around customs declarations and how the validation tool fits into Nestle’s shipment handling workflow.
+* Nestle explained the agent submission process where customs declarations are drafted and then validated by Nestle against original shipment documents (31:00)
+   * Agents enter shipment details into the customs platform, generating a draft Bill of Entry document.
+   * Nestle then uses the validation tool to compare the BOE with original supporting documents like invoices and packing lists to confirm accurate data capture.
+   * Errors found during validation are communicated back to agents for correction before final customs clearance approval.
+* The tool’s role is primarily to validate data accuracy and highlight discrepancies; it does not replace or edit agent entries (40:19)
+   * Philip emphasized that Nestle cannot edit BOE data directly; corrections must flow back to agents who submit the updated declarations.
+   * This maintains compliance and reduces risks related to customs errors or fraudulent declarations.
+* The validation checklist is central to the process, with Nestle providing detailed mappings of fields to supporting documents (37:27)
+   * Adelaide stressed the need to specify exactly which documents and fields to check for each validation item, ensuring clarity for the tool.
+   * Some fields, like declarant address, are optional and agent-specific, therefore excluded from strict validation.
+* Multiple product lines in a single shipment require detailed line-item validation rather than summaries (58:47)
+   * Nestle expects all product lines and respective weights to be individually listed on invoices and packing lists.
+   * This prevents customs compliance issues and supports precise shipment validation.
+* The unique Bill of Entry number is the preferred shipment identifier for tracking and retrieval in the system (01:01:01)
+   * This number, starting with "4" and specific to each BOE, is more reliable than PO numbers for shipment identification.
+Technical and Data Requirements
+The project requires detailed data inputs and document mappings from Nestle to refine the system’s validation logic and ensure compliance with customs rules.
+* A comprehensive checklist defining field names, synonyms, and source documents is essential to guide the tool’s validation (44:03)
+   * Nestle will supply a detailed checklist that includes terminology variations such as “PO number,” “customer reference,” and “LDP number” to be treated equivalently.
+   * The checklist will specify which supporting document each field should be validated against.
+* Validation of customs-specific codes like CPC and HS codes requires additional data linking product descriptions to codes (46:40)
+   * Nestle will provide mappings of HS codes to product materials to prevent compliance issues.
+   * The system will validate that the selected HS code matches the product description on the invoice.
+* Insurance and freight components require integration of additional customs documents and contract rate data (54:20)
+   * Insurance value validation depends on the incoterm type; for CIF shipments, insurance must be checked against invoice values.
+   * Freight amounts may need access to contract rates with shipping lines to validate declared freight charges.
+   * This complexity suggests additional technical integration is needed before full automation.
+* Training the system on Nestle’s specific terminology and document formats is critical for reducing false flags and improving confidence scores (52:16)
+   * Brendon highlighted that the current exact-match logic must evolve to handle synonyms and format variations common in customs documentation.
+   * Nestle’s input will enable the system to better interpret alternate terms and abbreviations.
+Timeline, Next Steps, and Success Criteria
+The teams agreed on immediate next steps focusing on refining the tool with Nestle’s input and establishing timelines for iterative validation and deployment.
+* Nestle will share the updated checklist with detailed field mappings and terminologies by the end of the current day (01:07:09)
+   * This checklist is critical for the development team to update the validation rules and synonym dictionaries.
+* IADATA committed to delivering a fine-tuned demo incorporating Nestle’s specifications within one week of receiving the checklist (01:08:58)
+   * This demo will include the newly defined validation logic and terminology handling.
+   * A follow-up meeting will be scheduled to validate the demo’s accuracy and discuss further refinements.
+* The plan is to run multiple test scenarios (~five) to identify edge cases and improve the system iteratively (01:10:30)
+   * Philip emphasized the importance of ongoing trials alongside Nestle’s feedback to continuously improve accuracy.
+* Success is defined by the tool’s ability to quickly validate large volumes of documents with high accuracy, saving man-hours and expediting shipment clearance (01:11:01)
+   * Nestle aims to increase the number of validated documents per day beyond current manual capacity.
+   * The tool’s value lies in reducing resource strain and minimizing shipment delays caused by documentation errors.
+* Communication channels between the teams are confirmed, with Nestle’s Philip and Adelaide as primary contacts for follow-up questions (01:06:11)
+Strategic Context and Risk Management
+The session highlighted the strategic importance of accurate customs validation for Nestle, emphasizing compliance, reputational risk, and operational efficiency.
+* Accurate customs declarations are crucial to avoid compliance risks, financial penalties, and reputational damage (40:54)
+   * Philip explained that errors in exporter address or product descriptions can trigger smuggling accusations or financial overpayments.
+   * The validation tool aims to catch these errors early to mitigate such risks.
+* The tool supports Nestle’s operational goal of reducing shipment delays caused by documentation errors (33:28)
+   * Early detection of discrepancies helps avoid prolonged customs clearance times and associated storage costs.
+* The collaborative approach leverages IADATA’s technical expertise and Nestle’s domain knowledge to build a tailored solution (03:49)
+   * Nestle’s input on customs terminology, document formats, and validation rules is critical to bridge the knowledge gap.
+   * This partnership approach underpins the project’s success by combining software capabilities with business domain insights.
+* Risks include incomplete terminology coverage and the complexity of customs regulations, which require ongoing refinement and training data (52:16)
+   * The system’s current exact matching needs expansion to handle abbreviations, synonyms, and variable document formats.
+   * Nestle’s commitment to providing detailed documentation and test cases mitigates these risks.
+* Process clarity on agent corrections and validation boundaries ensures compliance and avoids scope creep (41:42)
+   * Nestle clarified that the tool highlights errors but does not edit BOE data, preserving the integrity of customs processes.
+
+
+Action items
+Adelaide Odametey
+* Provide updated checklist to IADATA by end of day to guide demo adjustments and validation criteria (01:06:04)
+* Organize and conduct live demonstration of iCOMS customs bill of entry submission during the meeting, ensuring recording and transcription for reference (29:41)
+* Follow up on potential need and share details for freight contract rates integration with the validation system (55:55)
+* Share business statistics and performance expectations related to document volumes and resource usage to support system scaling and success metrics (01:11:20)
+Philip Asare
+* Provide clarifications on PO number variability and synonyms to aid in validation accuracy and synonym dictionary development (01:04:20)
+* Continue support and engagement on technical validation questions and platform fine-tuning (01:06:11)
+Brendon Gonouya
+* Incorporate shipment ID based on Nestle’s BOE number into the system for accurate tracking and categorization (01:01:01)
+* Follow up with demo enhancements incorporating Nestle’s clarified requirements and terminology within about one week after receiving updated checklist (01:08:33)
+* Coordinate with Nestle to schedule next validation meeting for demo feedback and trials (01:10:15)
+* Ensure demo system accounts for synonyms, terminology nuances, and human-in-the-loop edits to improve validation accuracy (52:16)
+Sharon Iphy
+* Align internally and communicate timeline and next steps after receipt and review of updated checklist from Nestle (01:06:46)
+Cynthia Aduah
+* Conduct live customs platform demonstration of bill of entry submission for training and clarity (31:04)

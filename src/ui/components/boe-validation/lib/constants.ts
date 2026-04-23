@@ -20,7 +20,7 @@ export const BOE_CHECKLIST: BOEChecklistEntry[] = [
     fieldNames: ["declarant_reg_number", "declarant_no"],
     backendFields: ["declarant_reg_number"] },
   { id: "hs_code",           label: "H.S. Code",
-    fieldNames: ["hs_code", "hs_code_full", "commodity_code"],
+    fieldNames: ["hs_code_full", "hs_code", "commodity_code"],
     backendFields: ["hs_code"] },
   { id: "cpc",               label: "CPC Code",
     fieldNames: ["customs_code", "cpc"],

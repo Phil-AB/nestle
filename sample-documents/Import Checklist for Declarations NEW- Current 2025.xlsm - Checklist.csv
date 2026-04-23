@@ -1,0 +1,19 @@
+,"Declaration Form (Use Invoice, Packing List, Bill of Lading/Air way Bill/Delivery Note)",Status,Which document to check
+,Shipper's Address,Correct,"Invoice, Packing List, BL/AWB"
+,Consignee Address,Correct,"Invoice, Packing List, BL/AWB"
+,Declarant  Address,Correct,TBC
+,PO Number,Correct,Invoice
+,Product Description ,Correct,Invoice
+,H.S. Code (Confirm with Concessionary duty list),Correct,"Invoice, Packing List, BL/AWB"
+,Import Duty(for zero duty confirm ETLS Approval Number),Not Applicable,"Taxes section on BOE: Import duty rate should be 0 for BOEs with the following CPC codes 40W01, 40U01. Import duty rate for CPC code 40C01 should be 2%"
+,VAT/NHIL (Confirm with VAT/NHIL Relief list),Not Applicable,TBC
+,Commodity Code(CPC) (Check with CPC list),Correct,TBC
+,FOB value & Currency,Correct,Invoice
+,Incoterm,Correct,Invoice
+,"Insurance CIF, use insurance value on invoice. 
+CFR/FCA, apply 0.875% for Sea & Road, 1% for Air on C&F)",Correct,"Check freight and insurance on the invoice for CIF incoterm. For CFR, check invoice for freight."
+,Freight,Correct,Invoice/ Contract
+,Cargo gross & net weight ,Correct,Packing list & Bill of lading weights should align
+,Origin of goods(Country),Correct,Bill of lading. Ensure section 17 on BOE matches port of loading on BL.
+,Quantity of goods,Correct,"Invoice, Packing List, BL/AWB"
+,Number of containers ,Not Applicable,Bill of lading

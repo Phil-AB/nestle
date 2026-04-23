@@ -438,6 +438,11 @@ use_case:
                 bill_of_lading: "consignee_address"
               match_type: "fuzzy"
               fuzzy_threshold: 0.75
+              # Invoice carries bill-to address; PL/BOL carry ship-to/delivery address.
+              # These are structurally different roles for the same consignee — a very
+              # low threshold captures genuine mismatches (wrong company) while tolerating
+              # the expected bill-to vs ship-to difference.
+              address_threshold: 0.1
               min_documents: 2
               check_address: true
           normalization:
@@ -575,6 +580,12 @@ use_case:
               tolerance_percent: 1.0
               operator: "equals"
               optional_target: true
+            - name: "net_weight_packing_to_bol"
+              source: "packing_list.net_weight"
+              target: "bill_of_lading.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+              optional_target: true
         on_failure: "flag_and_continue"
 
       # ── 10. Gross weight consistency ────────────────────────────────────────
@@ -593,6 +604,12 @@ use_case:
               operator: "equals"
             - name: "gross_weight_invoice_to_bol"
               source: "invoice.gross_weight"
+              target: "bill_of_lading.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+              optional_target: true
+            - name: "gross_weight_packing_to_bol"
+              source: "packing_list.gross_weight"
               target: "bill_of_lading.gross_weight"
               tolerance_percent: 1.0
               operator: "equals"

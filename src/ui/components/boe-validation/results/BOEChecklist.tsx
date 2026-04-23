@@ -63,11 +63,16 @@ export function BOEChecklist({
   }
 
   // Translate known GRA ICUMS transport codes to human-readable labels
+  // and format rate fields stored as decimal fractions (0.05 → 5%)
   const translateVal = (entry: BOEChecklistEntry, raw: string | null): string | null => {
     if (!raw) return raw
     if (entry.id === "mode_of_shipment") {
       const label = GRA_TRANSPORT_CODES[raw.trim()]
       return label ? `${label} (${raw})` : raw
+    }
+    if (entry.id === "import_duty_rate") {
+      const n = parseFloat(raw)
+      if (!isNaN(n) && n >= 0 && n <= 1) return `${(n * 100).toFixed(2).replace(/\.00$/, "")}%`
     }
     return raw
   }

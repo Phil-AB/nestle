@@ -269,11 +269,14 @@ use_case:
                 # BOE carries the registered physical office address which legitimately
                 # differs from the postal/mailing address on commercial documents —
                 # exclude BOE from address cross-check, name cross-check still runs.
+                # Invoice carries bill-to; PL/BOL carry ship-to — same low threshold
+                # applied to tolerate structural address role differences.
                 invoice: "consignee_address"
                 packing_list: "consignee_address"
                 bill_of_lading: "consignee_address"
               match_type: "fuzzy"
               fuzzy_threshold: 0.8
+              address_threshold: 0.1
               check_address: true
 
           normalization:
@@ -362,6 +365,19 @@ use_case:
             - name: "net_weight_bol_to_invoice"
               source: "bill_of_lading.net_weight"
               target: "invoice.net_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            # Checklist: "Packing list & Bill of lading weights should align"
+            - name: "gross_weight_bol_to_packing"
+              source: "bill_of_lading.gross_weight"
+              target: "packing_list.gross_weight"
+              tolerance_percent: 1.0
+              operator: "equals"
+
+            - name: "net_weight_bol_to_packing"
+              source: "bill_of_lading.net_weight"
+              target: "packing_list.net_weight"
               tolerance_percent: 1.0
               operator: "equals"
         on_failure: "flag_and_continue"
@@ -495,6 +511,10 @@ use_case:
         on_failure: "flag_and_continue"
 
       # Step 11: Incoterm Validation
+      # FCA/FOB: no freight/insurance on invoice.
+      # CFR: freight must be present on invoice.
+      # CIF: freight and insurance must both be present on invoice.
+      # CIF customs value check uses BOE fields (all GHS) — invoice fields are FCY.
       - name: "incoterm_validation"
         description: "Validate freight/insurance charges are consistent with Incoterm"
         validators:
@@ -505,7 +525,6 @@ use_case:
               freight_field: "invoice.freight_value"
               insurance_field: "invoice.insurance_value"
               fob_field: "invoice.total_fob_value"
-              cif_field: "bill_of_entry.customs_value"
           tolerance: 0.01
         on_failure: "flag_and_continue"
 
@@ -593,20 +612,24 @@ use_case:
               - "origin"
         on_failure: "flag_and_continue"
 
-      # Step 17b: BOL port_of_loading / country_of_origin must match BOE origin
+      # Step 19: BOE section 17 (port of loading) must match BOL port of loading
       # Checklist: "Ensure section 17 on BOE matches port of loading on BL"
+      # BOE field: port_of_loading (extracted from Field 17 "Port of Loading/Unloading")
+      # BOL field: port_of_loading (extracted from the port of loading field on the BL)
       # require_all: false — BOL is optional; skipped gracefully when not uploaded.
       - name: "origin_cross_check"
-        description: "BOL country of origin must match BOE declared origin (when BOL present)"
+        description: "BOE section 17 port of loading must match BOL port of loading (when BOL present)"
         validators:
           - "n_way_matcher"
         config:
-          field_name: "country_of_origin"
+          field_name: "port_of_loading"
           documents:
             - "bill_of_entry"
             - "bill_of_lading"
           match_type: "fuzzy"
-          fuzzy_threshold: 0.8
+          # Threshold lowered to 0.6: BOE uses LOCODE/port code ("BEANR Antwerpen")
+          # while BOL uses plain name ("ANTWERP") — same port, different notation.
+          fuzzy_threshold: 0.6
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -728,7 +751,10 @@ use_case:
             - incoterm_field: "invoice.incoterm"
               freight_field: "bill_of_entry.freight_value"
               insurance_field: "bill_of_entry.insurance_value"
-              fob_field: "bill_of_entry.fob_value"
+              # fob_ncy = FOB in GHS (Field 19/34) — same currency as freight_value
+              # and insurance_value so C&F arithmetic is consistent.
+              # total_fob_value is in EUR (FCY) and must NOT be used here.
+              fob_field: "bill_of_entry.fob_ncy"
               cif_field: "bill_of_entry.customs_value"
               transport_mode_field: "bill_of_entry.entry_exit_code"
               check_insurance_rate: true

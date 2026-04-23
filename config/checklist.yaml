@@ -247,10 +247,10 @@ checklist:
     source_documents: [bill_of_lading, boe]
     extraction_hints:
       bill_of_lading: "Extract the port of loading (the port where the goods were loaded onto the vessel) and the country of origin if explicitly stated."
-      boe: "Extract the declared country of origin of the goods and the mode of transport or entry/exit code."
+      boe: "Extract the declared country of origin of the goods, the port of loading from Field 17 (Port of Loading/Unloading), and the mode of transport or entry/exit code."
     fields:
       bill_of_lading: [port_of_loading, country_of_origin]
-      boe: [country_of_origin, origin, entry_exit_code]
+      boe: [country_of_origin, origin, port_of_loading, entry_exit_code]
 
   # 16. Quantity of Goods — Invoice, Packing List, BL/AWB, BOE
   # item_level: true extracts per-line quantities into the items array.

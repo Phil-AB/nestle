@@ -53,6 +53,23 @@ def _normalize_hs(code: str) -> str:
     return re.sub(r"[.\s]", "", str(code)).strip()
 
 
+def _hs_lookup(normalized: str, index: Dict[str, List[str]]) -> Optional[List[str]]:
+    """
+    Look up an HS code in the index with hierarchical prefix matching.
+
+    HS codes are hierarchical: a 6-digit code (190190) covers all 10-digit
+    children (1901902000, 1901901000). If the exact code is not found, check
+    whether any index entry starts with the lookup code (or vice-versa).
+    Returns the matched descriptions list, or None if not found.
+    """
+    if normalized in index:
+        return index[normalized]
+    for idx_code, descs in index.items():
+        if idx_code.startswith(normalized) or normalized.startswith(idx_code):
+            return descs
+    return None
+
+
 @ValidatorRegistry.register("concession_eligibility_validator")
 class ConcessionEligibilityValidator(IValidator):
     """
@@ -114,9 +131,18 @@ class ConcessionEligibilityValidator(IValidator):
 
         hs_index = _build_hs_index(concession.get("items", []))
 
-        # Check CPC code — skip entire validator if not applicable
+        # Check CPC code — emit N/A and return if not applicable
         cpc_code = self._get_field_from_documents(self.customs_code_field, context)
         if cpc_code not in self.applicable_cpc_codes:
+            results.append(self._create_result(
+                field_name="master_concession_eligibility",
+                passed=True,
+                message=f"N/A — Master Concession check does not apply to CPC {cpc_code}",
+                severity=Severity.INFO,
+                source_value=cpc_code,
+                target_value=None,
+                metadata={"not_applicable": True, "customs_code": cpc_code}
+            ))
             return results
 
         # ── 1. Concession reference number ────────────────────────────────
@@ -177,7 +203,8 @@ class ConcessionEligibilityValidator(IValidator):
                 if not raw_hs:
                     continue
                 normalized = _normalize_hs(str(raw_hs))
-                if normalized not in hs_index:
+                matched = _hs_lookup(normalized, hs_index)
+                if matched is None:
                     desc = item.get(self.item_desc_field, "") if isinstance(item, dict) else ""
                     results.append(self._create_result(
                         field_name=f"items[{idx}].hs_code",

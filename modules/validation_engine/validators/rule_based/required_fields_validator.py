@@ -75,8 +75,19 @@ class RequiredFieldsValidator(IValidator):
                 doc_data = source_data
             if not doc_data:
                 if doc_type in self.optional_documents:
-                    # Optional document not provided — skip silently
                     logger.debug(f"Optional document '{doc_type}' not present — skipping required field checks")
+                    results.append(ValidationResult(
+                        validator_name=self.validator_name,
+                        validator_type=self.validator_type,
+                        field_name=f"{doc_type}_not_uploaded",
+                        source_document=doc_type,
+                        source_value=None,
+                        target_value=None,
+                        passed=True,
+                        confidence=1.0,
+                        severity=Severity.INFO,
+                        message=f"Document '{doc_type}' not uploaded — field checks skipped (optional)"
+                    ))
                     continue
                 # Required document not present — mark every field as missing
                 for field_name in fields:
