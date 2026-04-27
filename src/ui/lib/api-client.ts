@@ -478,6 +478,52 @@ export interface InsightsHealthResponse {
 // Shipment & Validation Pipeline Types (V2 API)
 // ============================================================================
 
+export interface ShipmentDocumentSummary {
+  document_id: string
+  document_type: string
+  document_name: string | null
+  extraction_status: string
+  extraction_confidence: number | null
+  fields_count: number
+  items_count: number
+  created_at: string | null
+}
+
+export interface ShipmentTokenUsageSummary {
+  validation_type: string
+  documents_processed: number
+  total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  estimated_cost_usd: number
+  call_count: number
+  by_model: Array<{
+    provider: string
+    model: string
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    cost_usd: number
+    calls: number
+  }>
+  created_at: string | null
+}
+
+export interface ShipmentDetail {
+  shipment_id: string
+  shipment_number: string
+  boe_number: string | null
+  supplier_name: string | null
+  consignee_name: string | null
+  incoterm: string | null
+  transport_mode: string | null
+  status: string
+  created_at: string | null
+  updated_at: string | null
+  documents: ShipmentDocumentSummary[]
+  token_usage: ShipmentTokenUsageSummary[]
+}
+
 export interface ValidationDiscrepancy {
   id: string
   severity: "error" | "critical" | "major" | "minor" | "info"
@@ -2307,6 +2353,13 @@ class APIClient {
   // ========================================================================
   // Shipment & Validation Pipeline Endpoints (V2)
   // ========================================================================
+
+  /**
+   * Get full detail for a single shipment.
+   */
+  async getShipment(shipmentId: string): Promise<ShipmentDetail> {
+    return this.request<ShipmentDetail>(`/validation/shipments/${shipmentId}`, {}, true)
+  }
 
   /**
    * List shipments from the database, newest first.

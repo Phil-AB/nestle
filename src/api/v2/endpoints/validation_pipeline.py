@@ -1,9 +1,9 @@
 """Pipeline endpoints — shipment-linked Step 2 and Step 6 workflows."""
 
 import asyncio
-import tempfile
+import mimetypes
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -377,6 +377,90 @@ async def list_shipments(limit: int = 50, offset: int = 0):
 
 
 # ---------------------------------------------------------------------------
+# Shipment detail
+# ---------------------------------------------------------------------------
+
+@router.get("/shipments/{shipment_id}", tags=["pipeline"])
+async def get_shipment(shipment_id: str):
+    """Return full detail for a single shipment: metadata, documents, and token usage."""
+    try:
+        from src.database.connection import get_session as get_db_session
+        from src.database.schema import Shipment, ShipmentTokenUsage as ShipmentTokenUsageModel
+        from src.database.models.api_document import APIDocument
+        from sqlalchemy import select
+
+        async with get_db_session() as db:
+            ship_q = await db.execute(select(Shipment).where(Shipment.id == shipment_id))
+            shipment = ship_q.scalar_one_or_none()
+            if not shipment:
+                raise HTTPException(status_code=404, detail=f"Shipment {shipment_id} not found")
+
+            docs_q = await db.execute(
+                select(APIDocument)
+                .where(APIDocument.shipment_id == shipment_id)
+                .order_by(APIDocument.created_at)
+            )
+            docs = docs_q.scalars().all()
+
+            token_q = await db.execute(
+                select(ShipmentTokenUsageModel)
+                .where(ShipmentTokenUsageModel.shipment_id == shipment_id)
+                .order_by(ShipmentTokenUsageModel.created_at)
+            )
+            token_rows = token_q.scalars().all()
+
+        documents = [
+            {
+                "document_id": d.document_id,
+                "document_type": d.document_type,
+                "document_name": d.document_name,
+                "extraction_status": d.extraction_status,
+                "extraction_confidence": d.extraction_confidence,
+                "fields_count": d.fields_count or len(d.fields or {}),
+                "items_count": d.items_count or len(d.items or []),
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in docs
+        ]
+
+        token_usage = [
+            {
+                "validation_type": t.validation_type,
+                "documents_processed": t.documents_processed,
+                "total_tokens": t.total_tokens,
+                "input_tokens": t.total_input_tokens,
+                "output_tokens": t.total_output_tokens,
+                "estimated_cost_usd": float(t.estimated_cost_usd or 0),
+                "call_count": t.call_count,
+                "by_model": t.by_model or [],
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in token_rows
+        ]
+
+        return {
+            "shipment_id": shipment.id,
+            "shipment_number": shipment.shipment_number,
+            "boe_number": shipment.boe_number,
+            "supplier_name": shipment.supplier_name,
+            "consignee_name": shipment.consignee_name,
+            "incoterm": shipment.incoterm,
+            "transport_mode": shipment.transport_mode,
+            "status": shipment.status,
+            "created_at": shipment.created_at.isoformat() if shipment.created_at else None,
+            "updated_at": shipment.updated_at.isoformat() if shipment.updated_at else None,
+            "documents": documents,
+            "token_usage": token_usage,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get shipment {shipment_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
 # Step 2: Vendor document validation
 # ---------------------------------------------------------------------------
 
@@ -419,27 +503,33 @@ async def validate_vendor_docs(
         if certificate_of_origin_file:
             file_map["certificate_of_origin"] = certificate_of_origin_file
 
-        async def _extract_one(doc_type: str, upload: UploadFile):
+        from src.api.config import get_api_settings
+        settings = get_api_settings()
+
+        async def _extract_one(
+            doc_id: str, doc_type: str, upload: UploadFile
+        ) -> Tuple[str, Any, Path, str, str]:
             content = await upload.read()
-            with tempfile.NamedTemporaryFile(
-                suffix=Path(upload.filename).suffix, delete=False
-            ) as tmp:
-                tmp.write(content)
-                tmp_path = Path(tmp.name)
-            try:
-                result = await processing_service.process_document(
-                    file_path=tmp_path, document_type=doc_type
-                )
-            finally:
-                tmp_path.unlink(missing_ok=True)
-            return doc_type, result
+            original_filename = upload.filename or f"{doc_type}.bin"
+            suffix = Path(original_filename).suffix or ".bin"
+            mime_type = upload.content_type or mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
+
+            upload_dir = Path(settings.UPLOAD_DIRECTORY) / doc_id
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            permanent_path = upload_dir / f"{doc_id}{suffix}"
+            permanent_path.write_bytes(content)
+
+            result = await processing_service.process_document(
+                file_path=permanent_path, document_type=doc_type
+            )
+            return doc_type, result, permanent_path, original_filename, mime_type
 
         extraction_results = await asyncio.gather(
-            *[_extract_one(dt, f) for dt, f in file_map.items()]
+            *[_extract_one(str(uuid4()), dt, f) for dt, f in file_map.items()]
         )
 
         from shared.utils.token_tracker import create_tracker, set_step, aggregate_token_usages
-        extraction_token_usages = [r.get("token_usage") for _, r in extraction_results]
+        extraction_token_usages = [r.get("token_usage") for _, r, *_ in extraction_results]
 
         synonym_mapper = SynonymMapper()
 
@@ -448,14 +538,14 @@ async def validate_vendor_docs(
         invoice_doc_id: Optional[str] = None
 
         async with get_db_session() as db:
-            for doc_type, result in extraction_results:
+            for doc_type, result, file_path, orig_filename, mime_type in extraction_results:
                 if result.get("status") != "complete":
                     raise HTTPException(
                         status_code=422,
                         detail=f"Extraction failed for {doc_type}: "
                                f"{result.get('metadata', {}).get('error', 'unknown error')}",
                     )
-                doc_id = str(uuid4())
+                doc_id = file_path.parent.name  # reuse the uuid we generated
                 raw_fields = result.get("fields", {})
                 items = result.get("items", [])
                 tables = result.get("raw_provider_response", {}).get("tables", [])
@@ -482,6 +572,9 @@ async def validate_vendor_docs(
                     document_id=doc_id,
                     document_type=doc_type,
                     shipment_id=shipment_id,
+                    file_path=str(file_path),
+                    filename=orig_filename,
+                    mime_type=mime_type,
                     fields=normalized_fields,
                     items=items,
                     blocks=result.get("blocks", []),
@@ -705,20 +798,22 @@ async def validate_boe(
             )
 
         from shared.utils.token_tracker import create_tracker, set_step, aggregate_token_usages
+        from src.api.config import get_api_settings
+        settings = get_api_settings()
 
         boe_content = await boe_file.read()
-        with tempfile.NamedTemporaryFile(
-            suffix=Path(boe_file.filename).suffix, delete=False
-        ) as tmp:
-            tmp.write(boe_content)
-            tmp_path = Path(tmp.name)
+        boe_doc_id = str(uuid4())
+        boe_orig_filename = boe_file.filename or "bill_of_entry.pdf"
+        boe_suffix = Path(boe_orig_filename).suffix or ".pdf"
+        boe_mime = boe_file.content_type or mimetypes.guess_type(boe_orig_filename)[0] or "application/octet-stream"
+        boe_upload_dir = Path(settings.UPLOAD_DIRECTORY) / boe_doc_id
+        boe_upload_dir.mkdir(parents=True, exist_ok=True)
+        boe_file_path = boe_upload_dir / f"{boe_doc_id}{boe_suffix}"
+        boe_file_path.write_bytes(boe_content)
 
-        try:
-            boe_result = await processing_service.process_document(
-                file_path=tmp_path, document_type="bill_of_entry"
-            )
-        finally:
-            tmp_path.unlink(missing_ok=True)
+        boe_result = await processing_service.process_document(
+            file_path=boe_file_path, document_type="bill_of_entry"
+        )
 
         if boe_result.get("status") != "complete":
             raise HTTPException(
@@ -736,7 +831,6 @@ async def validate_boe(
         )
 
         # Persist BOE document to DB
-        boe_doc_id = str(uuid4())
         boe_doc_meta = boe_result.get("metadata", {}) or {}
         if boe_extraction_token_usage:
             boe_doc_meta["extraction_token_usage"] = boe_extraction_token_usage
@@ -745,6 +839,9 @@ async def validate_boe(
                 document_id=boe_doc_id,
                 document_type="bill_of_entry",
                 shipment_id=shipment_id,
+                file_path=str(boe_file_path),
+                filename=boe_orig_filename,
+                mime_type=boe_mime,
                 fields=boe_normalized_fields,
                 items=boe_result.get("items", []),
                 blocks=boe_result.get("blocks", []),

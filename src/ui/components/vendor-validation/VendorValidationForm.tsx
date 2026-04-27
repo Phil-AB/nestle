@@ -90,6 +90,10 @@ export default function VendorValidationForm() {
           tableEdits={v.tableEdits}
           saving={v.saving}
           saveError={v.saveError}
+          files={v.files}
+          activeDocKey={v.activeDocKey}
+          setActiveDocKey={v.setActiveDocKey}
+          getDocBlobUrl={v.getDocBlobUrl}
           onFieldChange={v.handleFieldChange}
           onItemChange={v.handleLineItemChange}
           onTableCellChange={v.handleTableCellChange}

@@ -1,0 +1,60 @@
+flowchart TD
+
+    %% ── INTAKE ───────────────────────────────────────────────────────
+    A([Shipment Arrives]) --> B[Register Shipment — BL/AWB as shipment ID]
+    B --> C[Upload Clearing Documents]
+    C --> D[AI Reads & Normalises Documents]
+    D --> E[(Save to Database)]
+
+    %% ── STAGE 1 ───────────────────────────────────────────────────────
+    E --> ST1([Vendor Validation])
+    ST1 --> S1["AI validates documents against checklist"]
+    S1 --> S1D{Discrepancies?}
+    S1D -- None --> S1ok[Documents consistent]
+    S1D -- Found --> S1flag[Discrepancies flagged]
+    S1ok & S1flag --> S1R[IMPEX Human Review]
+
+    S1R --> AGT([Clearing Agent — BOE])
+
+    %% ── AGENT ────────────────────────────────────────────────────────
+    AGT --> A1[Documents handed to clearing agent]
+    A1 --> A2[Agent enters BOE in ICUMS]
+    A2 --> A3[Agent sends draft BOE to Nestle IMPEX]
+    A3 --> UP[IMPEX uploads BOE]
+    UP --> ST2([BOE Validation])
+
+    %% ── STAGE 2 ───────────────────────────────────────────────────────
+    ST2 --> S2["AI cross-checks BOE against clearing documents per validation checklist"]
+    S2 --> S2D{BOE matches clearing docs?}
+    S2D -- Direct match --> S2ok[BOE verified]
+    S2D -- Not a match --> S2flag[Discrepancies flagged]
+    S2ok & S2flag --> S2R[IMPEX Final Review]
+
+    S2R --> OUT{Approved?}
+    OUT -- Corrections needed --> CORR[Return to agent for correction]
+    CORR --> A2
+    OUT -- Yes --> PH3([Phase 3 — Payment, Release & Delivery])
+
+    %% ── PHASE 3 ───────────────────────────────────────────────────────
+    PH3 --> F1[Finance Pays Duty]
+    F1 --> R1[Ship / Airline Release & Other Payments]
+    R1 --> D1[Delivery, Offloading & Return of Container]
+
+    %% ── STYLING ──────────────────────────────────────────────────────
+    classDef stageLabel   fill:#1e40af,color:#fff,stroke:#1e3a8a,font-weight:bold
+    classDef checksNode   fill:#1e293b,color:#e2e8f0,stroke:#475569
+    classDef decisionNode fill:#78350f,color:#fff,stroke:#713f12
+    classDef okNode       fill:#14532d,color:#fff,stroke:#166534
+    classDef flagNode     fill:#7f1d1d,color:#fff,stroke:#991b1b
+    classDef humanNode    fill:#4a044e,color:#fff,stroke:#6b21a8
+    classDef processNode  fill:#065f46,color:#fff,stroke:#064e3b
+    classDef agentNode    fill:#0c4a6e,color:#fff,stroke:#0369a1
+
+    class ST1,ST2,AGT,PH3 stageLabel
+    class S1,S2 checksNode
+    class S1D,S2D,OUT decisionNode
+    class S1ok,S2ok,DONE okNode
+    class S1flag,S2flag,CORR flagNode
+    class S1R,S2R humanNode
+    class B,C,D,E,UP,F1,R1,D1 processNode
+    class A1,A2,A3 agentNode

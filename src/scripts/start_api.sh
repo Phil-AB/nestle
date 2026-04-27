@@ -8,7 +8,7 @@ set -eo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 PID_FILE="$PROJECT_ROOT/.api.pid"
 LOG_FILE="$PROJECT_ROOT/logs/api.log"
 API_HOST="0.0.0.0"
@@ -149,18 +149,15 @@ start_api() {
         done < .env
     fi
 
-    # Set PYTHONPATH
-    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    # Set PYTHONPATH — repo root for `from src.api...`, src/ for `from shared...`
+    export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/src"
 
     # Create logs directory
     mkdir -p "$(dirname "$LOG_FILE")"
 
-    # Navigate to API directory
-    cd src/api
-
     # Start uvicorn in background
     print_msg "$BLUE" "Starting uvicorn server..."
-    nohup uvicorn main:app --reload --host $API_HOST --port $API_PORT > "$LOG_FILE" 2>&1 &
+    nohup uvicorn src.api.main:app --reload --host $API_HOST --port $API_PORT > "$LOG_FILE" 2>&1 &
     local pid=$!
 
     # Save PID

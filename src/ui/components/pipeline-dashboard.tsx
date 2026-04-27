@@ -333,9 +333,10 @@ export default function PipelineDashboard() {
             </div>
           ) : (
             (data?.recent_shipments ?? []).map((s) => (
-              <div
+              <Link
                 key={s.id}
-                className="px-6 py-3.5 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                href={`/shipments/${s.id}`}
+                className="px-6 py-3.5 flex items-center justify-between hover:bg-muted/30 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-4">
                   <div
@@ -373,7 +374,7 @@ export default function PipelineDashboard() {
                 >
                   {s.status}
                 </Badge>
-              </div>
+              </Link>
             ))
           )}
         </div>
