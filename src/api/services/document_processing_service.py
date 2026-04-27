@@ -103,7 +103,8 @@ class DocumentProcessingService:
             active = pc.get_active_provider()
             options = pc.get_provider_options(active)
             configured_mode = options.get("extraction_mode", "open")
-        except Exception:
+        except Exception as e:
+            logger.debug("Could not load provider config, defaulting to 'open' mode: %s", e)
             configured_mode = "open"
 
         if requested_mode != "open":
@@ -186,7 +187,7 @@ class DocumentProcessingService:
                     if content:
                         all_content.append({"content": content})
 
-        logger.debug(f"BOL post-process: fields={len(fields)}, blocks={len(blocks)}, total_content={len(all_content)}, items={len(items) if items else 0}")
+        logger.debug("BOL post-process: fields=%d, blocks=%d, total_content=%d, items=%d", len(fields), len(blocks), len(all_content), len(items) if items else 0)
 
         # ── bl_number fallback ────────────────────────────────────────────────
         # Also accept bl_no / booking_no as authoritative sources so we can
@@ -778,7 +779,8 @@ class DocumentProcessingService:
             # Still return any tokens consumed before the failure
             try:
                 partial_usage = token_tracker.get_summary()
-            except Exception:
+            except Exception as tracker_err:
+                logger.debug("Could not retrieve token usage after failure: %s", tracker_err)
                 partial_usage = {}
             return {
                 "fields": {},

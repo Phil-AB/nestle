@@ -47,7 +47,7 @@ class BaseRepository(Generic[ModelType]):
         self.session.add(instance)
         await self.session.flush()
         await self.session.refresh(instance)
-        logger.debug(f"Created {self.model.__name__}: {instance.id}")
+        logger.debug("Created %s: %s", self.model.__name__, instance.id)
         return instance
 
     async def get_by_id(self, id: str) -> Optional[ModelType]:
@@ -105,7 +105,7 @@ class BaseRepository(Generic[ModelType]):
 
         updated = result.scalar_one_or_none()
         if updated:
-            logger.debug(f"Updated {self.model.__name__}: {id}")
+            logger.debug("Updated %s: %s", self.model.__name__, id)
 
         return updated
 
@@ -125,7 +125,7 @@ class BaseRepository(Generic[ModelType]):
 
         deleted = result.rowcount > 0
         if deleted:
-            logger.debug(f"Deleted {self.model.__name__}: {id}")
+            logger.debug("Deleted %s: %s", self.model.__name__, id)
 
         return deleted
 

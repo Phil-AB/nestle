@@ -7,6 +7,7 @@ replacing in-memory storage for production scalability.
 
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, update, delete, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
@@ -35,20 +36,28 @@ class APIDocumentRepository:
 
     async def create(self, document_data: Dict[str, Any]) -> APIDocument:
         """
-        Create a new API document record.
+        Create a new API document record (idempotent: no-op on duplicate document_id).
+
+        Uses INSERT … ON CONFLICT DO NOTHING so retried uploads never produce
+        duplicate rows.  Returns the existing row if the document_id already exists.
 
         Args:
             document_data: Dictionary with document fields
 
         Returns:
-            Created APIDocument instance
+            Created (or existing) APIDocument instance
         """
-        document = APIDocument(**document_data)
-        self.session.add(document)
+        stmt = (
+            pg_insert(APIDocument)
+            .values(**document_data)
+            .on_conflict_do_nothing(index_elements=["document_id"])
+        )
+        await self.session.execute(stmt)
         await self.session.commit()
-        await self.session.refresh(document)
-        logger.info(f"Created document: {document.document_id}")
-        return document
+
+        doc = await self.get_by_document_id(document_data["document_id"])
+        logger.info("Created document: %s", document_data["document_id"])
+        return doc
 
     async def get_by_document_id(self, document_id: str) -> Optional[APIDocument]:
         """
@@ -176,7 +185,7 @@ class APIDocumentRepository:
         result = await self.session.execute(query)
         documents = result.scalars().all()
 
-        logger.debug(f"Listed {len(documents)} documents (total: {total})")
+        logger.debug("Listed %d documents (total: %d)", len(documents), total or 0)
         return list(documents), total or 0
 
     async def exists(self, document_id: str) -> bool:

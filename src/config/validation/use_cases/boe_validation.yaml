@@ -325,6 +325,24 @@ use_case:
           require_all: false
         on_failure: "flag_and_continue"
 
+      # Step 2b: Line-item completeness — every invoice item must appear on the BOE.
+      # Matches invoice items to BOE items by HS code. If an invoice item has no
+      # corresponding HS code on the BOE the agent has omitted a declared good,
+      # which is a customs compliance risk (GRA may treat omissions as undeclared imports).
+      - name: "line_item_completeness"
+        description: "Every invoice line item must be declared on the BOE — missing items are a compliance risk"
+        validators:
+          - "n_way_matcher"
+        config:
+          field_name: "hs_code"
+          documents:
+            - "invoice"
+            - "bill_of_entry"
+          match_type: "exact"
+          require_all: false
+          line_items: true
+        on_failure: "flag_and_continue"
+
       # Step 3: Weight matching with tolerance
       - name: "weight_matching"
         description: "Validate net and gross weights match within tolerance"
@@ -528,18 +546,10 @@ use_case:
           tolerance: 0.01
         on_failure: "flag_and_continue"
 
-      # Step 13: Declarant must be present and have a registration number
-      - name: "declarant_check"
-        description: "Verify declarant (clearing agent) is identified with name, address, and registration number"
-        validators:
-          - "required_fields_validator"
-        config:
-          required_fields:
-            bill_of_entry:
-              - "declarant_name"
-              - "declarant_address"
-              - "declarant_reg_number"
-        on_failure: "flag_and_continue"
+      # Step 13: Declarant (BOE field 9) — informational extraction only.
+      # The declarant is filled in by the clearing agent; there is no source document
+      # to cross-check it against. Philip (Nestle): "Whatever you see at field 9 is it —
+      # it's negligible." No validation failure is raised for missing or unexpected values.
 
       # Step 14: FOB value on BOE must match invoice total (within 0.5%)
       - name: "fob_value_crosscheck"

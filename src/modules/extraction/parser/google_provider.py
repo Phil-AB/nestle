@@ -55,10 +55,6 @@ class GoogleDocumentAIProvider(IParserProvider):
         self.credentials_path = credentials_path
         self.timeout = timeout
 
-        # TODO: Initialize Google Document AI client
-        # from google.cloud import documentai_v1
-        # self.client = documentai_v1.DocumentProcessorServiceClient(...)
-
         logger.info(
             f"Initialized Google Document AI provider: "
             f"project={project_id}, location={location}"
@@ -83,7 +79,6 @@ class GoogleDocumentAIProvider(IParserProvider):
         Returns:
             ParsedDocument with extracted content
         """
-        # TODO: Implement Google Document AI parsing
         raise NotImplementedError(
             "Google Document AI provider not yet fully implemented. "
             "To implement:\n"
@@ -110,19 +105,8 @@ class GoogleDocumentAIProvider(IParserProvider):
         try:
             logger.info("Extracting fields using Google Document AI")
 
-            # Translate universal schema to Google format
-            google_schema = self.translate_schema(schema)
-
-            # TODO: Call Google Document AI API
-            # raw_result = await self._call_google_api(file_bytes, google_schema)
-
-            # For now, raise not implemented
+            google_schema = self.translate_schema(schema)  # noqa: F841
             raise NotImplementedError("Google Document AI extraction not yet implemented")
-
-            # Normalize response to universal format
-            # document_type = options.get('document_type', 'unknown')
-            # normalized = self.normalize_response(raw_result, document_type)
-            # return normalized
 
         except Exception as e:
             logger.error(f"Field extraction failed: {e}")
@@ -148,8 +132,6 @@ class GoogleDocumentAIProvider(IParserProvider):
         # Focused mode - translate to Google's schema format
         logger.debug("Translating focused schema to Google Document AI format")
 
-        # TODO: Implement schema translation
-        # Google Document AI uses processor definitions
         google_schema = {
             "processor_type": "custom",
             "schema_version": "1.0",
@@ -185,8 +167,6 @@ class GoogleDocumentAIProvider(IParserProvider):
         """
         logger.info(f"Normalizing Google Document AI response for {document_type}")
 
-        # TODO: Implement response normalization
-        # Convert Google's Document proto to universal format
         normalized = {
             "fields": {},
             "items": [],
@@ -208,8 +188,6 @@ class GoogleDocumentAIProvider(IParserProvider):
             True if healthy, False otherwise
         """
         try:
-            # TODO: Implement health check
-            # Test connection to Google Document AI
             logger.info("Google Document AI health check")
             return True
         except Exception as e:

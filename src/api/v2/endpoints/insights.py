@@ -387,27 +387,20 @@ async def _save_insights_to_metadata(
         # Remove None values
         metadata_update = {k: v for k, v in metadata_update.items() if v is not None}
 
-        # Update doc_metadata using jsonb_set for each field
-        # Build the UPDATE query dynamically
-        set_clauses = []
-        params = {"document_id": document_id}
-
-        for key, value in metadata_update.items():
-            param_key = f"val_{key}"
-            # Use jsonb_set to add/update each field
-            set_clauses.append(f"doc_metadata = jsonb_set(COALESCE(doc_metadata, '{{}}'), '{{ {key} }}', to_jsonb(:{param_key}))")
-            params[param_key] = value
-
-        if set_clauses:
-            update_query = f"""
-                UPDATE api_documents
-                SET {', '.join(set_clauses)}
-                WHERE document_id = :document_id
-            """
-            await session.execute(text(update_query), params)
+        if metadata_update:
+            import json as _json
+            # Single parameterised merge — no user-controlled strings in SQL.
+            # PostgreSQL || merges the patch object into the existing jsonb column.
+            await session.execute(
+                text(
+                    "UPDATE api_documents "
+                    "SET doc_metadata = COALESCE(doc_metadata, '{}') || :patch::jsonb "
+                    "WHERE document_id = :document_id"
+                ),
+                {"patch": _json.dumps(metadata_update), "document_id": document_id},
+            )
             await session.commit()
-
-            logger.debug(f"Updated doc_metadata for document {document_id}")
+            logger.debug("Updated doc_metadata for document %s", document_id)
 
     except Exception as e:
         logger.error(f"Error saving insights to metadata: {e}", exc_info=True)
@@ -453,8 +446,6 @@ async def _generate_pdf(
             }
         }
 
-        # Generate PDF - template determined by use case
-        # TODO: Make template_id configurable per use case
         gen_request = {
             "template_id": "banking_customer_insights_report_v2",
             "mapping_id": "banking_customer_insights_report_v2",
@@ -631,7 +622,7 @@ def _build_document_summary(fields: Dict[str, Any], use_case_id: str = "forms-ca
                         try:
                             num_val = float(numbers[0].replace(',', ''))
                             summary[label] = f"{num_val:,.0f}"
-                        except:
+                        except ValueError:
                             summary[label] = str(numbers[0])
                     else:
                         summary[label] = str(value)
@@ -703,7 +694,6 @@ async def download_insights_pdf(filename: str):
 )
 async def list_use_cases():
     """List available use case configurations."""
-    # TODO: Implement dynamic use case discovery from config
     return {
         "use_cases": [
             {

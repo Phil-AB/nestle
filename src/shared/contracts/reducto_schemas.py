@@ -172,7 +172,6 @@ FREIGHT_SCHEMA: Dict[str, Any] = {
 
 
 # ==============================================================================
-# TODO(human): Replace hardcoded schema registry with dynamic loading
 # DYNAMIC SCHEMA REGISTRY FOR UNIVERSAL DOCUMENT SUPPORT
 # ==============================================================================
 

@@ -23,6 +23,18 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/validation", tags=["validation"])
 
 
+def _tracked_task(coro, *, label: str) -> asyncio.Task:
+    """Fire-and-forget task that logs an error if it fails instead of silently swallowing it."""
+    task = asyncio.create_task(coro)
+
+    def _on_done(t: asyncio.Task) -> None:
+        if not t.cancelled() and t.exception() is not None:
+            logger.error("Background task '%s' failed: %s", label, t.exception(), exc_info=t.exception())
+
+    task.add_done_callback(_on_done)
+    return task
+
+
 async def _send_validation_alert(
     shipment_id: str,
     step: str,
@@ -704,14 +716,16 @@ async def validate_vendor_docs(
             "messages": final_state.get("messages", []),
         }
 
-        # Fire-and-forget email alert (never blocks the response)
-        asyncio.create_task(_send_validation_alert(
-            shipment_id=shipment_id,
-            step="vendor_validation",
-            final_status=final_status,
-            discrepancies=discrepancies,
-            summary=summary,
-        ))
+        _tracked_task(
+            _send_validation_alert(
+                shipment_id=shipment_id,
+                step="vendor_validation",
+                final_status=final_status,
+                discrepancies=discrepancies,
+                summary=summary,
+            ),
+            label="send_validation_alert:vendor_validation",
+        )
 
         if str(workflow_status) in ("awaiting_user", "WorkflowStatus.AWAITING_USER"):
             return {
@@ -997,14 +1011,16 @@ async def validate_boe(
             "blocks": boe_result.get("blocks", []),
         }
 
-        # Fire-and-forget email alert (never blocks the response)
-        asyncio.create_task(_send_validation_alert(
-            shipment_id=shipment_id,
-            step="boe_validation",
-            final_status=final_status,
-            discrepancies=discrepancies,
-            summary=summary,
-        ))
+        _tracked_task(
+            _send_validation_alert(
+                shipment_id=shipment_id,
+                step="boe_validation",
+                final_status=final_status,
+                discrepancies=discrepancies,
+                summary=summary,
+            ),
+            label="send_validation_alert:boe_validation",
+        )
 
         if needs_review and discrepancies:
             return {

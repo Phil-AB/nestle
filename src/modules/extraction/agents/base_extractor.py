@@ -34,26 +34,30 @@ class BaseExtractor(ABC):
         """Get LLM based on provider configuration."""
         provider = settings.LLM_PROVIDER
 
+        llm_timeout = getattr(settings, "LLM_TIMEOUT_SECONDS", 180)
+
         if provider == "openai":
             return ChatOpenAI(
                 model=model_name or settings.CUSTOM_LLM_MODEL or "gpt-4",
                 temperature=temperature,
                 api_key=settings.OPENAI_API_KEY,
+                request_timeout=llm_timeout,
             )
         elif provider == "anthropic":
             return ChatAnthropic(
                 model=model_name or "claude-3-sonnet-20240229",
                 temperature=temperature,
                 api_key=settings.ANTHROPIC_API_KEY,
+                timeout=llm_timeout,
             )
         elif provider == "custom":
-            # For custom LLM endpoints (e.g., Ollama)
             from langchain_openai import ChatOpenAI
             return ChatOpenAI(
                 base_url=settings.CUSTOM_LLM_ENDPOINT,
                 model=model_name or settings.CUSTOM_LLM_MODEL,
                 temperature=temperature,
-                api_key="not-needed",  # Local models don't need API key
+                api_key="not-needed",
+                request_timeout=llm_timeout,
             )
         else:
             raise ValueError(f"Unknown LLM provider: {provider}")

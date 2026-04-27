@@ -83,7 +83,7 @@ class RedisRateLimiter:
                 )
                 return False
 
-            logger.debug(f"Rate limit OK for {identifier}: {request_count + 1}/{self.requests_per_window}")
+            logger.debug("Rate limit OK for %s: %d/%d", identifier, request_count + 1, self.requests_per_window)
             return True
 
         except Exception as e:

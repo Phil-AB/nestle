@@ -1,6 +1,7 @@
 """Workflow nodes for validation execution"""
 
-from typing import Dict, Any, List
+import asyncio
+from typing import Dict, Any, List, Tuple
 from datetime import datetime
 from ...core.engine import get_validation_engine
 from ...core.session_manager import get_session_manager
@@ -192,109 +193,98 @@ async def validate_node(state: ValidationWorkflowState) -> Dict[str, Any]:
         all_results = []
         all_discrepancies = []
 
-        # Execute each workflow step
+        from ...core.base import ValidationContext, Discrepancy
+        from ...discrepancy import get_discrepancy_classifier
+
+        def _has_dot_paths(cfg: dict) -> bool:
+            for val in cfg.get("validations", []):
+                if isinstance(val, dict) and (
+                    "." in str(val.get("source", ""))
+                    or "." in str(val.get("target", ""))
+                ):
+                    return True
+            return False
+
+        async def _run_validator(
+            validator_name: str,
+            validator_config: dict,
+            context: ValidationContext,
+            source_data: Any,
+            target_data: Any,
+        ) -> Tuple[List[dict], List[dict]]:
+            """Run a single validator and return (result_dicts, discrepancy_dicts)."""
+            try:
+                validator = validator_registry.get_validator(validator_name, validator_config)
+                results = await validator.validate(
+                    source_data=source_data,
+                    target_data=target_data,
+                    context=context,
+                )
+                result_dicts = [r.dict() for r in results]
+                disc_dicts = []
+                classifier = get_discrepancy_classifier()
+                for result in results:
+                    if not result.passed and not result.auto_fixed:
+                        disc = Discrepancy(
+                            field_name=result.field_name or "unknown",
+                            source_document=result.source_document,
+                            target_document=result.target_document,
+                            source_value=result.source_value,
+                            target_value=result.target_value,
+                            difference=result.discrepancy,
+                            severity=result.severity,
+                            confidence=result.confidence,
+                            message=result.message,
+                        )
+                        disc = await classifier.classify(disc, context)
+                        disc_dicts.append(disc.dict())
+                logger.info("Validator '%s' completed: %d results", validator_name, len(results))
+                return result_dicts, disc_dicts
+            except Exception as e:
+                logger.error("Validator '%s' failed: %s", validator_name, e)
+                return [], []
+
+        # Execute each workflow step sequentially (steps may depend on prior results).
+        # Validators *within* a step are independent and run in parallel.
         for step_config in steps:
             step_name = step_config.get("name")
             validators = step_config.get("validators", [])
             step_severity = Severity.ERROR
 
-            logger.info(f"Executing step: {step_name}")
+            logger.info("Executing step: %s", step_name)
 
-            # Execute validators in this step
-            for validator_name in validators:
-                try:
-                    # Merge step-level severity into validator config so validators
-                    # inherit the correct default instead of always falling back to MINOR.
-                    validator_config = {
-                        **step_config.get("config", {}),
-                        "severity": step_severity,
-                    }
+            base_validator_config = {
+                **step_config.get("config", {}),
+                "severity": step_severity,
+            }
+            is_cross_doc = (
+                any(key in base_validator_config for key in ("calculations", "documents", "parties"))
+                or _has_dot_paths(base_validator_config)
+            )
+            source_data = documents_to_validate if is_cross_doc else documents_to_validate.get(state["primary_document"], {})
+            target_data = documents_to_validate if is_cross_doc else None
 
-                    # Get validator instance
-                    validator = validator_registry.get_validator(
-                        validator_name,
-                        validator_config
-                    )
+            context = ValidationContext(
+                session_id=state["session_id"],
+                use_case=state["use_case"],
+                version=state["version"],
+                documents=documents_to_validate,
+                primary_document=state["primary_document"],
+                supporting_documents=state["supporting_documents"],
+                config=state["config"],
+                tolerance_overrides=state["tolerance_overrides"],
+            )
 
-                    # Create minimal context for validation
-                    from ...core.base import ValidationContext
-                    context = ValidationContext(
-                        session_id=state["session_id"],
-                        use_case=state["use_case"],
-                        version=state["version"],
-                        documents=documents_to_validate,
-                        primary_document=state["primary_document"],
-                        supporting_documents=state["supporting_documents"],
-                        config=state["config"],
-                        tolerance_overrides=state["tolerance_overrides"]
-                    )
-
-                    # Cross-document validators resolve field paths using dot-notation
-                    # (e.g. "invoice.net_weight") and need the full documents dict.
-                    # Single-document validators (range_validator, regex_validator) use
-                    # plain field names and expect the primary document's flat fields.
-                    def _has_dot_paths(cfg: dict) -> bool:
-                        for val in cfg.get("validations", []):
-                            if (isinstance(val, dict) and
-                                    ("." in str(val.get("source", ""))
-                                     or "." in str(val.get("target", "")))):
-                                return True
-                        return False
-
-                    is_cross_doc = (
-                        any(key in validator_config for key in ("calculations", "documents", "parties"))
-                        or _has_dot_paths(validator_config)
-                    )
-
-                    if is_cross_doc:
-                        source_data = documents_to_validate
-                        target_data = documents_to_validate
-                    else:
-                        source_data = documents_to_validate.get(state["primary_document"], {})
-                        target_data = None
-
-                    # Execute validation
-                    results = await validator.validate(
-                        source_data=source_data,
-                        target_data=target_data,
-                        context=context
-                    )
-
-                    # Convert results to dicts
-                    result_dicts = [r.dict() for r in results]
-                    all_results.extend(result_dicts)
-
-                    # Extract discrepancies and run them through the classifier
-                    for result in results:
-                        if not result.passed and not result.auto_fixed:
-                            from ...core.base import Discrepancy
-                            from ...discrepancy import get_discrepancy_classifier
-                            discrepancy = Discrepancy(
-                                field_name=result.field_name or "unknown",
-                                source_document=result.source_document,
-                                target_document=result.target_document,
-                                source_value=result.source_value,
-                                target_value=result.target_value,
-                                difference=result.discrepancy,
-                                severity=result.severity,
-                                confidence=result.confidence,
-                                message=result.message,
-                            )
-                            # Classify type first, then severity (type must be set
-                            # before severity rules check discrepancy_type)
-                            discrepancy = await get_discrepancy_classifier().classify(
-                                discrepancy, context
-                            )
-                            all_discrepancies.append(discrepancy.dict())
-
-                    logger.info(
-                        f"Validator '{validator_name}' completed: "
-                        f"{len(results)} results"
-                    )
-
-                except Exception as e:
-                    logger.error(f"Validator '{validator_name}' failed: {str(e)}")
-                    # Continue with other validators
+            # All validators in this step run concurrently.
+            gather_results = await asyncio.gather(
+                *[
+                    _run_validator(name, base_validator_config, context, source_data, target_data)
+                    for name in validators
+                ]
+            )
+            for result_dicts, disc_dicts in gather_results:
+                all_results.extend(result_dicts)
+                all_discrepancies.extend(disc_dicts)
 
         # Calculate summary stats
         passed = sum(1 for r in all_results if r["passed"])

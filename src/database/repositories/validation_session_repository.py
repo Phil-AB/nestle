@@ -109,7 +109,7 @@ class ValidationSessionRepository:
         record.updated_at = datetime.utcnow()
         await self.session.commit()
         await self.session.refresh(record)
-        logger.debug(f"Updated session {session_id} → status={workflow_status}")
+        logger.debug("Updated session %s → status=%s", session_id, workflow_status)
         return record
 
     async def get_pending_user_confirmation(

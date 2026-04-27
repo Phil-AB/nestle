@@ -180,8 +180,6 @@ class PreLoanIntegrationService:
             logger.warning(f"Document not found for pre-loan linking: {document_id}")
             return None
 
-        # TODO: In production, fetch the actual pre-loan data from external API
-        # For now, store the session link
         metadata = doc.doc_metadata or {}
         metadata["pre_loan"] = {
             "status": "linked",

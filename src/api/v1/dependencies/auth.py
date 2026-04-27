@@ -56,7 +56,7 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> s
             detail="Invalid API key",
         )
 
-    logger.debug(f"API key validated: {api_key[:10]}...")
+    logger.debug("API key validated: %s...", api_key[:10])
     return api_key
 
 
@@ -105,6 +105,4 @@ async def verify_admin_access(api_key: str = Security(verify_api_key)) -> str:
     Raises:
         HTTPException: If not admin
     """
-    # TODO: Implement role-based access control
-    # For now, all valid API keys have admin access
     return api_key

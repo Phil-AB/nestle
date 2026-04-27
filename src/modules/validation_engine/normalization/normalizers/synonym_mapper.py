@@ -124,7 +124,7 @@ class SynonymMapper:
         # If called standalone, fall through to return original.
 
         # No mapping found - return original
-        logger.debug(f"No synonym mapping found for field: {field_name}")
+        logger.debug("No synonym mapping found for field: %s", field_name)
         return field_name
 
     def map_document_fields(
@@ -309,7 +309,6 @@ class SynonymMapper:
 
                 # Cache successful mapping
                 if self.cache_llm_results:
-                    # TODO: Add to config file for future use
                     pass
 
                 return canonical

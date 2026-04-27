@@ -252,7 +252,7 @@ class SessionManager:
         context.updated_at = datetime.utcnow()
         self._cache_put(context.session_id, context)
         await self._db_update(context, workflow_status=workflow_status)
-        logger.debug(f"Updated session {context.session_id}")
+        logger.debug("Updated session %s", context.session_id)
 
     async def update_step(self, session_id: UUID, step: str) -> None:
         """Update current workflow step."""
@@ -270,7 +270,7 @@ class SessionManager:
         context = await self.get_session(session_id)
         context.validation_results.extend(results)
         await self.update_session(context)
-        logger.debug(f"Added {len(results)} validation results to session {session_id}")
+        logger.debug("Added %d validation results to session %s", len(results), session_id)
 
     async def add_discrepancies(
         self,

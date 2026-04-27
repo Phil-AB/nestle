@@ -5,7 +5,7 @@ Loads configuration from environment variables and YAML config file.
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from typing import List, Optional, Union
 from functools import lru_cache
 import yaml
@@ -32,32 +32,37 @@ class APISettings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Debug mode")
     LOG_LEVEL: str = Field(default="INFO", description="Log level")
 
-    # CORS Configuration
+    # CORS Configuration — production origins must be set via API_CORS_ORIGINS env var
     ENABLE_CORS: bool = Field(default=True, description="Enable CORS")
     CORS_ORIGINS: List[str] = Field(
         default=[
-            "http://54.87.52.48:3000",
-            "http://54.87.52.48:3001",
             "http://localhost:3000",
-            "http://localhost:8080",
             "http://localhost:3001",
+            "http://localhost:8080",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:3001",
-            # Also allow connections from the same public IP to port 8000
-            "http://54.87.52.48:8000",
         ],
-        description="Allowed CORS origins"
+        description="Allowed CORS origins. Override via API_CORS_ORIGINS=origin1,origin2"
     )
-    CORS_METHODS: List[str] = Field(default=["*"], description="Allowed HTTP methods")
-    CORS_HEADERS: List[str] = Field(default=["*"], description="Allowed headers")
+    CORS_METHODS: List[str] = Field(
+        default=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        description="Allowed HTTP methods"
+    )
+    CORS_HEADERS: List[str] = Field(
+        default=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
+        description="Allowed request headers"
+    )
 
     # Authentication
     ENABLE_AUTH: bool = Field(default=True, description="Enable API authentication")
     API_KEY_HEADER: str = Field(default="X-API-Key", description="API key header name")
-    API_KEYS: List[str] = Field(default=["dev-key-12345"], description="Valid API keys")
+    API_KEYS: List[str] = Field(default=[], description="Valid API keys — must be set via API_API_KEYS env var; no built-in default")
     JWT_SECRET_KEY: Optional[str] = Field(default=None, description="JWT secret key")
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="Access token expiration")
+
+    # LLM
+    LLM_TIMEOUT_SECONDS: int = Field(default=180, description="Timeout in seconds for LLM API calls")
 
     # Rate Limiting
     ENABLE_RATE_LIMIT: bool = Field(default=True, description="Enable rate limiting")
@@ -114,6 +119,15 @@ class APISettings(BaseSettings):
     INCLUDE_LAYOUT_DATA: bool = Field(default=False, description="Include layout data in responses")
     DEFAULT_PAGE_SIZE: int = Field(default=50, description="Default pagination size")
     MAX_PAGE_SIZE: int = Field(default=100, description="Maximum pagination size")
+
+    @model_validator(mode='after')
+    def require_api_keys_when_auth_enabled(self) -> 'APISettings':
+        if self.ENABLE_AUTH and not self.API_KEYS:
+            raise ValueError(
+                "ENABLE_AUTH is True but API_KEYS is empty. "
+                "Set API_API_KEYS=key1,key2 in the environment, or set API_ENABLE_AUTH=False."
+            )
+        return self
 
     @field_validator('CORS_ORIGINS', 'CORS_METHODS', 'CORS_HEADERS', 'API_KEYS', 'ALLOWED_EXTENSIONS', mode='before')
     @classmethod

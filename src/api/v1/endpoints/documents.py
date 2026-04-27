@@ -14,8 +14,9 @@ import logging
 from pathlib import Path
 import shutil
 import asyncio
+import aiofiles
 
-from src.api.v1.models.requests import ExtractionMode
+from src.api.v1.models.requests import ExtractionMode, DocumentFieldUpdateRequest
 from src.api.v1.models.responses import (
     DocumentResponse,
     UploadResponse,
@@ -71,16 +72,23 @@ async def get_db_session():
         yield session
 
 
+_PARSE_TIMEOUT_SECONDS = 3600  # 1 hour ceiling; LLM extraction can be slow on large docs
+_MAX_FIELD_KEY_LEN = 256  # guard against abnormally long keys before regex compilation
+
+
 async def _parse_document_background(document_id: str, file_path: Path, document_type: str, extraction_mode: str):
     """Background task to parse and extract document data."""
     try:
-        logger.info(f"Starting background parsing for document: {document_id}")
+        logger.info("Starting background parsing for document: %s", document_id)
 
-        # Process the document using the integrated service
-        result = await processing_service.process_document(
-            file_path=file_path,
-            document_type=document_type,
-            extraction_mode=extraction_mode
+        # Hard ceiling on parse time — prevents hung LLM calls from leaking forever.
+        result = await asyncio.wait_for(
+            processing_service.process_document(
+                file_path=file_path,
+                document_type=document_type,
+                extraction_mode=extraction_mode,
+            ),
+            timeout=_PARSE_TIMEOUT_SECONDS,
         )
 
         # Update document in database
@@ -119,38 +127,65 @@ async def _parse_document_background(document_id: str, file_path: Path, document
             else:
                 logger.warning(f"Document {document_id} not found in database")
 
-    except Exception as e:
-        logger.error(f"Background parsing failed for {document_id}: {e}", exc_info=True)
+    except asyncio.TimeoutError:
+        logger.error(
+            "Background parsing timed out after %ds for document: %s",
+            _PARSE_TIMEOUT_SECONDS,
+            document_id,
+        )
         try:
             async with get_session() as session:
                 repo = APIDocumentRepository(session)
                 await repo.update(document_id, {
                     "extraction_status": ExtractionStatus.FAILED,
-                    "doc_metadata": {"error": str(e)}
+                    "doc_metadata": {"error": f"Extraction timed out after {_PARSE_TIMEOUT_SECONDS}s"},
                 })
         except Exception as db_error:
-            logger.error(f"Failed to update error status in database: {db_error}")
+            logger.error("Failed to update timeout status in database: %s", db_error)
+    except Exception as e:
+        logger.error("Background parsing failed for %s: %s", document_id, e, exc_info=True)
+        try:
+            async with get_session() as session:
+                repo = APIDocumentRepository(session)
+                await repo.update(document_id, {
+                    "extraction_status": ExtractionStatus.FAILED,
+                    "doc_metadata": {"error": str(e)},
+                })
+        except Exception as db_error:
+            logger.error("Failed to update error status in database: %s", db_error)
 
 
-def _save_uploaded_file(file: UploadFile, document_id: str, page_number: Optional[int] = None) -> Path:
-    """Save uploaded file to disk."""
+def _safe_extension(filename: Optional[str]) -> str:
+    """Extract file extension from filename, stripping any path components."""
+    if not filename:
+        return "bin"
+    # Path(name).name strips directory separators; .suffix gives ".ext"
+    stem_name = Path(filename).name
+    suffix = Path(stem_name).suffix
+    # suffix is ".ext" or "" — strip the leading dot and lowercase
+    ext = suffix.lstrip(".").lower()
+    return ext if ext else "bin"
+
+
+async def _save_uploaded_file(file: UploadFile, document_id: str, page_number: Optional[int] = None) -> Path:
+    """Save uploaded file to disk using only document_id as the filename (ignores original name)."""
     upload_dir = Path(settings.UPLOAD_DIRECTORY)
-    
-    # For multi-page documents, create subdirectory
+
     if page_number is not None:
         upload_dir = upload_dir / document_id
-    
+
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    file_extension = file.filename.split(".")[-1] if file.filename else "bin"
-    
+    file_extension = _safe_extension(file.filename)
+
     if page_number is not None:
         file_path = upload_dir / f"page_{page_number}.{file_extension}"
     else:
         file_path = upload_dir / f"{document_id}.{file_extension}"
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    async with aiofiles.open(file_path, "wb") as buf:
+        content = await file.read()
+        await buf.write(content)
 
     return file_path
 
@@ -182,7 +217,7 @@ async def upload_document(
     try:
         # Validate file extension
         if file.filename:
-            extension = file.filename.split(".")[-1].lower()
+            extension = _safe_extension(file.filename)
             if extension not in settings.ALLOWED_EXTENSIONS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,7 +239,7 @@ async def upload_document(
         document_id = str(uuid.uuid4())
 
         # Save file
-        file_path = _save_uploaded_file(file, document_id)
+        file_path = await _save_uploaded_file(file, document_id)
         logger.info(f"Saved uploaded file: {file_path}")
 
         # Determine MIME type
@@ -516,7 +551,7 @@ async def list_documents(
 )
 async def update_document_fields(
     document_id: str,
-    update_request: Dict[str, Any],
+    update_request: DocumentFieldUpdateRequest,
     api_key: str = Depends(verify_api_key),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -590,7 +625,8 @@ async def update_document_fields(
                 # Update field values in block content
                 content = block.get("content", "")
                 for field_key, new_value in field_updates.items():
-                    # Match "Field Name: old_value" and replace with new value
+                    if len(field_key) > _MAX_FIELD_KEY_LEN:
+                        continue
                     pattern = rf"({re.escape(field_key)}:\s*)([^\n]*)"
                     safe_val = str(new_value)
                     content = re.sub(pattern, lambda m, v=safe_val: m.group(1) + v, content, flags=re.IGNORECASE)
@@ -817,8 +853,6 @@ async def approve_document(
             # Detect document type from extracted fields
             detected_type = doc.document_type.lower()
 
-            # TODO(human): Replace hardcoded document type detection with configurable rules from document_types.yaml
-            # Map generic "document" to specific type based on configurable detection rules
             if detected_type == "document" or detected_type not in get_configured_document_types():
                 # Use re-extracted fields for type detection
                 detected_type = detect_document_type_from_fields(extracted_fields)
@@ -1099,7 +1133,7 @@ async def upload_multi_page_document(
         
         for page_number, file in enumerate(files, start=1):
             # Save file
-            file_path = _save_uploaded_file(file, document_id, page_number)
+            file_path = await _save_uploaded_file(file, document_id, page_number)
             page_paths.append(file_path)
             
             # Get file size
@@ -1502,5 +1536,6 @@ def get_detection_rules_for_type(document_type: str) -> Dict[str, Any]:
         config = _load_document_types_config()
         detection_rules = config.get('detection_rules', {})
         return detection_rules.get(document_type, {})
-    except:
+    except Exception as e:
+        logger.debug("Could not load detection rules for %s: %s", document_type, e)
         return {}

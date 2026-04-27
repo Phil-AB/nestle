@@ -188,7 +188,16 @@ class EmailService:
 
     @staticmethod
     def _step_label(step: str) -> str:
-        return "Step 2 — Vendor Document Validation" if step == "vendor_validation" else "Step 6 — BOE Validation"
+        """Returns the display name for a use-case step, read from config."""
+        try:
+            from modules.validation_engine.core.config_loader import get_config_loader
+            info = get_config_loader().get_use_case_info(step)
+            label = info.get("display_name")
+            if label:
+                return label
+        except Exception:
+            pass
+        return step.replace("_", " ").title()
 
     @staticmethod
     def _status_label(status: str) -> tuple[str, str]:
@@ -201,8 +210,8 @@ class EmailService:
 
     def _build_subject(self, step: str, final_status: str, ref: str) -> str:
         label, _ = self._status_label(final_status)
-        step_short = "Vendor Docs" if step == "vendor_validation" else "BOE"
-        return f"[{label}] Nestle Ghana — {step_short} Validation — {ref}"
+        step_label = self._step_label(step)
+        return f"[{label}] {step_label} — {ref}"
 
     def _build_html(
         self,

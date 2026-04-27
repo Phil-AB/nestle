@@ -164,14 +164,14 @@ class ValidationConfigLoader:
         config_file = self.validators_path / f"{validator_name}.yaml"
 
         if not config_file.exists():
-            logger.debug(f"No config file for validator '{validator_name}', using defaults")
+            logger.debug("No config file for validator '%s', using defaults", validator_name)
             return {}
 
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
 
-            logger.debug(f"Loaded validator config: {validator_name}")
+            logger.debug("Loaded validator config: %s", validator_name)
             return config.get("validator", {})
 
         except yaml.YAMLError as e:
@@ -251,6 +251,41 @@ class ValidationConfigLoader:
             validators.append(validator_name)
 
         return sorted(validators)
+
+    def validate_all_at_startup(self) -> None:
+        """
+        Eagerly load and validate every use-case config file.
+
+        Called once at application startup so malformed or missing configs
+        raise immediately — before any request is served — rather than failing
+        on the first user request.
+
+        Raises:
+            RuntimeError: Wraps any ValidationConfigException, causing the
+                          application to abort startup cleanly.
+        """
+        use_cases = self.list_use_cases()
+        if not use_cases:
+            logger.warning(
+                "No use-case config files found in %s — "
+                "validation endpoints will reject all requests.",
+                self.use_cases_path,
+            )
+            return
+
+        errors: List[str] = []
+        for use_case_name in use_cases:
+            try:
+                self.load_use_case(use_case_name)
+                logger.info("Startup config check OK: %s", use_case_name)
+            except Exception as e:
+                errors.append(f"  • {use_case_name}: {e}")
+
+        if errors:
+            raise RuntimeError(
+                "One or more use-case configs are invalid — aborting startup:\n"
+                + "\n".join(errors)
+            )
 
     def get_use_case_info(self, use_case_name: str) -> Dict[str, Any]:
         """

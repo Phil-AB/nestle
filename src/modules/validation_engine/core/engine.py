@@ -180,7 +180,7 @@ class ValidationEngine:
         step_severity = Severity.ERROR
         on_failure = step_config.get("on_failure", "continue")
 
-        logger.debug(f"Step '{step_name}' using validators: {validators}")
+        logger.debug("Step '%s' using validators: %s", step_name, validators)
 
         step_results: List[ValidationResult] = []
         step_discrepancies: List[Discrepancy] = []

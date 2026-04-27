@@ -487,8 +487,7 @@ class BOESectionExtractor:
             if "hs_code" not in out:
                 raw_hs = _raw("commodity_code").replace(",", "")
                 if raw_hs and re.fullmatch(r'\d{6,10}', raw_hs):
-                    out["hs_code"] = f"{raw_hs[:4]}.{raw_hs[4:6]}"
-                    out["hs_code_full"] = raw_hs
+                    out["hs_code"] = raw_hs
 
             # ── Gross weight ─────────────────────────────────────────────────
             if "gross_weight" not in out:
@@ -817,9 +816,7 @@ class BOESectionExtractor:
                 or "item_no" in key):
             m = re.search(r'\b(\d{8,10})\b', val_str)
             if m and "hs_code" not in out:
-                raw_hs = m.group(1)
-                out["hs_code"] = f"{raw_hs[:4]}.{raw_hs[4:6]}"
-                out["hs_code_full"] = raw_hs
+                out["hs_code"] = m.group(1)
 
         # ── Customs Code from container / CPC field ──────────────────────────
         if "container_nos" in key or "cpc" in key or "chassis" in key:

@@ -142,10 +142,41 @@ def create_application() -> FastAPI:
     # Startup event
     @app.on_event("startup")
     async def startup_event():
-        """Initialize services on startup."""
-        logger.info(f"Starting {settings.API_TITLE} v{settings.API_VERSION}")
-        logger.info(f"Environment: {settings.ENVIRONMENT}")
-        logger.info(f"Debug mode: {settings.DEBUG}")
+        """Validate all dependencies and configs before serving traffic."""
+        logger.info("Starting %s v%s", settings.API_TITLE, settings.API_VERSION)
+        logger.info("Environment: %s | Debug: %s", settings.ENVIRONMENT, settings.DEBUG)
+
+        if settings.ENVIRONMENT == "production" and settings.DEBUG:
+            logger.critical(
+                "DEBUG=True is set in a production environment — full stack traces will "
+                "be included in error responses. Set API_DEBUG=False immediately."
+            )
+
+        # 1. Eagerly validate all use-case YAML configs — fail fast if malformed.
+        try:
+            from modules.validation_engine.core.config_loader import get_config_loader
+            get_config_loader().validate_all_at_startup()
+            logger.info("Startup check: all use-case configs valid")
+        except RuntimeError as exc:
+            logger.critical("Startup aborted — invalid use-case config: %s", exc)
+            raise
+        except Exception as exc:
+            logger.critical("Startup aborted — config loader unavailable: %s", exc)
+            raise RuntimeError(f"Config loader failed at startup: {exc}") from exc
+
+        # 2. Database connectivity check.
+        try:
+            from src.database.connection import get_engine
+            from sqlalchemy import text
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("Startup check: database reachable")
+        except Exception as exc:
+            logger.critical("Startup aborted — database unreachable: %s", exc)
+            raise RuntimeError(f"Database connectivity check failed: {exc}") from exc
+
+        logger.info("%s is ready to serve traffic", settings.API_TITLE)
 
     # Shutdown event
     @app.on_event("shutdown")
