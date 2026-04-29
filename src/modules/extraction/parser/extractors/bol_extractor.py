@@ -138,9 +138,11 @@ This BOL carries TWO types of reference numbers that must NOT be confused:
 - po_number      = Buyer's PO / Customer Reference (labels: "Customer Ref", "PO No", "Your Order No").
 
 TRANSPORT:
-- vessel_name        = name of the vessel/ship
-- port_of_loading    = port where goods are loaded
-- port_of_discharge  = destination port
+- vessel_name        = name of the vessel/ship (labels: "Vessel", "Ocean Vessel", "M/V", "S.S.")
+- voyage_number      = voyage or rotation number (labels: "Voyage No", "Voyage Number", "Voy.")
+- port_of_loading    = port where goods are loaded (labels: "Port of Loading", "Port of Departure")
+- port_of_discharge  = destination port (labels: "Port of Discharge", "Port of Destination")
+- place_of_receipt   = place of receipt (labels: "Place of Receipt", "Pre-Carriage")
 - container_numbers  = comma-separated list of all container IDs (pattern: 4 uppercase letters + 7 digits)
 - container_count    = total number of containers (integer)
 - seal_numbers       = comma-separated seal numbers

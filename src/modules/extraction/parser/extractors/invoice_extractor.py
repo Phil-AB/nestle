@@ -190,10 +190,15 @@ PARTIES:
 
 REFERENCE NUMBERS — CRITICAL disambiguation:
 On a supplier invoice there are two perspectives:
-  "Our Order Number" / "Our Ref" = the SUPPLIER's internal order number → order_number
-  "Your Order Number" / "Customer Reference" / "Customer Ref" = the BUYER's PO → po_number
+  "Our Order Number" / "Our Ref" / "No. PEDIDO" = the SUPPLIER's internal order → order_number
+  "Your Order Number" / "Customer Reference" / "P.O. #" / "PO No" = the BUYER's PO → po_number
   "Contract No" / "Contract Number" = supply contract reference → contract_number
-  "Invoice No" / "Invoice Number" = this document's identifier → invoice_number
+  "Invoice No" / "Invoice Number" / "FACTURA No." = this document's identifier → invoice_number
+
+⚠️  DO NOT map these to order_number — they are NOT order numbers:
+  - "No. CLIENTE" / "Customer No" / "Client No" → these are customer account codes, ignore them
+  - "No. EXPORTACION" / "Export No" → export permit numbers, not order numbers
+  - Any delivery note number or shipment reference that is NOT labelled as an order
 
 COMMERCIAL TERMS:
 - incoterm = delivery/trade term including place (e.g. "FCA ROTTERDAM PORT", "FOB TEMA").
@@ -225,8 +230,12 @@ The invoice line items table typically has:
                  Include the unit (e.g. "189000.00 KG" or "189,000 KG").
 - gross_weight = TOTAL shipment gross weight. Same approach as net_weight.
                  Include the unit.
-- quantity     = TOTAL shipment quantity/units. From the totals row or header.
-- unit_of_measure = unit (BAG, KG, PCS, MT, etc.)
+- quantity     = TOTAL shipment quantity/units — PRODUCT LINES ONLY.
+                 Do NOT include service or expense lines such as "GASTOS EXPORTACION",
+                 "Export Expense", "Freight", "Insurance", or any non-product charge rows.
+                 Look for the "EMPAQUE (PACKING)" header field first; if absent, sum only
+                 the product line quantities from the line items table.
+- unit_of_measure = unit (BAG, KG, PCS, CS/CAJA, MT, etc.)
 - hs_code      = HS/HSN tariff code if present (usually in line items table).
                  If not shown anywhere on the document, return null.
 - country_of_origin = country where goods were manufactured, if stated.

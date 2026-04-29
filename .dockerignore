@@ -1,0 +1,48 @@
+# Secrets — never bake into images
+.env
+.env.*
+
+# Runtime data
+uploads/
+logs/
+*.pid
+
+# Python artefacts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Next.js
+src/ui/node_modules/
+src/ui/.next/
+src/ui/.turbo/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs / misc
+*.md
+*.txt
+*.docx
+nestle.svg
+nestle-meeting.txt

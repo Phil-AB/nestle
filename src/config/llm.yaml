@@ -211,6 +211,12 @@ modules:
     model_variant: fast  # Claude 3.5 Haiku
     description: "Automated approval for low-risk loan applications"
 
+  # Bundle Segmentation - Detect document boundaries in multi-document PDFs
+  bundle_segmentation:
+    provider: anthropic
+    model_variant: default
+    description: "Identify document type and page boundaries within a bundled PDF"
+
 # ==============================================================================
 # PERFORMANCE AND RETRY SETTINGS
 # ==============================================================================

@@ -61,6 +61,12 @@ _BUILT_IN_REGISTRY: Dict[str, str] = {
         "modules.extraction.parser.extractors.certificate_of_origin_extractor.CertificateOfOriginExtractor",
     "coo":
         "modules.extraction.parser.extractors.certificate_of_origin_extractor.CertificateOfOriginExtractor",
+    "sanitary_certificate":
+        "modules.extraction.parser.extractors.sanitary_cert_extractor.SanitaryCertExtractor",
+    "certificate_of_analysis":
+        "modules.extraction.parser.extractors.coa_extractor.COAExtractor",
+    "coa":
+        "modules.extraction.parser.extractors.coa_extractor.COAExtractor",
 }
 
 

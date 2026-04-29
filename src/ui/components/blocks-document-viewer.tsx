@@ -37,18 +37,6 @@ export function BlocksDocumentViewer({ blocks, showEmpty = true, documentId, onS
     const [isApproving, setIsApproving] = useState(false)
     const { toast } = useToast()
 
-    // Debug logging
-    React.useEffect(() => {
-        if (blocks && blocks.length > 0) {
-            console.log('📄 All blocks:', blocks.map((b, i) => ({
-                index: i,
-                type: b.type,
-                content: b.content ? b.content.substring(0, 200) : '[No content]',
-                hasHtmlTags: b.content ? /<[^>]+>/.test(b.content) : false,
-                fullContent: b.content || null
-            })))
-        }
-    }, [blocks])
 
     if (!blocks || blocks.length === 0) {
         return (
@@ -271,29 +259,6 @@ export function BlocksDocumentViewer({ blocks, showEmpty = true, documentId, onS
                 </div>
             </Card>
 
-            {/* Approve Button - Always visible */}
-            <Card className="p-4 mt-4 bg-green-50 border-green-200">
-                <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1">
-                        <span className="font-semibold text-green-900">
-                            Ready to save to database?
-                        </span>
-                        <span className="text-sm text-green-700">
-                            This will save all extracted data {hasEdits ? '(including your changes) ' : ''}to the database
-                        </span>
-                    </div>
-                    <Button
-                        variant="default"
-                        size="lg"
-                        onClick={handleApprove}
-                        disabled={isApproving || isSaving}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                        <CheckCircle className="w-5 h-5 mr-2" />
-                        {isApproving ? 'Approving...' : 'Approve & Save'}
-                    </Button>
-                </div>
-            </Card>
         </>
     )
 }
@@ -445,7 +410,8 @@ function BlockRenderer({
     onAddField: (blockIdx: number, label: string, value: string) => void
     onRemoveNewField: (blockIdx: number, fieldIdx: number) => void
 }) {
-    const { type, content } = block
+    const { type } = block
+    const content = typeof block.content === "string" ? block.content : ""
 
     // Skip empty Figure blocks (logos/images)
     if (type === "Figure" && !content) {
@@ -509,32 +475,13 @@ function BlockRenderer({
     if (type === "Table") {
         const confidenceBadge = getConfidenceBadge(block.confidence, block.granular_confidence)
 
-        console.log('🎯 Rendering Table block:', {
-            blockIdx,
-            contentPreview: content ? content.substring(0, 200) : '[No content]',
-            hasHtmlTags: content ? /<[^>]+>/.test(content) : false,
-            hasOnTableCellEdit: !!onTableCellEdit,
-            editsCount: Object.keys(edits || {}).length
-        })
 
+        const contentStr = typeof content === "string" ? content : ""
         return (
-            <div className="py-4 border-2 border-red-500">
-                <div className="flex items-center gap-2 mb-3">
-                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
-                        Table Block
-                    </Badge>
-                    {/<[^>]+>/.test(content) && (
-                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
-                            HTML
-                        </Badge>
-                    )}
-                    {confidenceBadge}
-                </div>
-                <div className="bg-yellow-100 p-2 text-xs">
-                    DEBUG: Table block content starts with {content ? content.substring(0, 50) : '[No content]'}...
-                </div>
+            <div className="py-4">
+                {confidenceBadge && <div className="mb-3">{confidenceBadge}</div>}
                 <TableRenderer
-                    content={content || ''}
+                    content={contentStr}
                     confidence={block.confidence}
                     granularConfidence={block.granular_confidence}
                     onEdit={onTableCellEdit}
@@ -561,17 +508,6 @@ function BlockRenderer({
         if (isTableContent(content || '') || hasHtmlTableTags) {
             const isComplex = detectComplexTable(content || '')
             const confidenceBadge = getConfidenceBadge(block.confidence, block.granular_confidence)
-
-            // Debug logging
-            console.log('🔍 Table detected in block:', {
-                blockIndex: blockIdx,
-                contentType: block.type,
-                isComplex,
-                contentPreview: content ? content.substring(0, 200) : '[No content]',
-                hasHtmlTags: content ? /<[^>]+>/.test(content) : false,
-                hasHtmlTableTags,
-                forced: hasHtmlTableTags && !isTableContent(content)
-            })
 
             return (
                 <div className="py-4">
@@ -600,13 +536,6 @@ function BlockRenderer({
 
         // Additional check for HTML content
         const hasHtmlContent = content ? /&lt;(?:table|tr|td|th)&gt;|<(?:table|tr|td|th)/i.test(content) : false
-
-        if (hasHtmlContent && !isTableContent(content || '')) {
-            console.log('🚨 HTML content found but not detected as table:', {
-                blockIndex: blockIdx,
-                content: content ? content.substring(0, 300) : '[No content]'
-            })
-        }
 
         if (hasFieldPattern) {
             // Parse as fields (same as Key Value block)

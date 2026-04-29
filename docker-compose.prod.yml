@@ -1,0 +1,31 @@
+# Production overrides — use with:
+#   VERSION=2.1.0 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Pulls pre-built images from GHCR instead of building locally.
+# Set VERSION to the release tag pushed by GitHub Actions.
+
+services:
+  api:
+    build: !reset null
+    image: ghcr.io/${GHCR_REPO}/api:${VERSION:-latest}
+    environment:
+      - DEBUG=False
+      - LOG_LEVEL=info
+      - API_WORKERS=4
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  ui:
+    build: !reset null
+    image: ghcr.io/${GHCR_REPO}/ui:${VERSION:-latest}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M

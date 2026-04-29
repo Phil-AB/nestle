@@ -133,13 +133,22 @@ class NormalizationEngine:
         """
         normalized = {}
 
+        # Pre-read the document-level weight_unit so bare numeric weight fields
+        # (e.g. gross_weight=28.02 with weight_unit="TNE" as a separate field)
+        # can be converted even when the unit is not embedded in the value string.
+        raw_wu = document.get("weight_unit")
+        if isinstance(raw_wu, dict):
+            raw_wu = raw_wu.get("value")
+        doc_weight_unit = raw_wu.strip().upper() if isinstance(raw_wu, str) and raw_wu else None
+
         for field_name, value in document.items():
             try:
                 # Detect field type and normalize accordingly
                 normalized_value = await self._normalize_field_value(
                     field_name=field_name,
                     value=value,
-                    document_type=document_type
+                    document_type=document_type,
+                    doc_weight_unit=doc_weight_unit,
                 )
                 normalized[field_name] = normalized_value
 
@@ -156,7 +165,8 @@ class NormalizationEngine:
         self,
         field_name: str,
         value: Any,
-        document_type: Optional[str] = None
+        document_type: Optional[str] = None,
+        doc_weight_unit: Optional[str] = None,
     ) -> Any:
         """
         Normalize a single field value based on field type
@@ -165,6 +175,7 @@ class NormalizationEngine:
             field_name: Field name
             value: Field value
             document_type: Optional document type
+            doc_weight_unit: Document-level weight unit (e.g. "TNE") for bare numeric weights
 
         Returns:
             Normalized value
@@ -191,7 +202,7 @@ class NormalizationEngine:
 
         # Weight fields
         if any(w in field_lower for w in ["weight", "poids"]):
-            return await self._normalize_weight_field(value)
+            return await self._normalize_weight_field(value, doc_weight_unit)
 
         # Currency/price fields
         if any(c in field_lower for c in ["price", "prix", "amount", "montant", "value", "valeur", "cost", "coût"]):
@@ -227,7 +238,7 @@ class NormalizationEngine:
         # Default - return as is
         return value
 
-    async def _normalize_weight_field(self, value: Any) -> Any:
+    async def _normalize_weight_field(self, value: Any, doc_weight_unit: Optional[str] = None) -> Any:
         """Normalize weight field"""
         # Extract unit and value
         # Format: "1000 KG", "189.000,00 kg", "189,000.000", or 1000
@@ -246,6 +257,14 @@ class NormalizationEngine:
                     return float(parsed)
                 except Exception:
                     pass
+
+        # No embedded unit — try document-level unit if available
+        if doc_weight_unit and doc_weight_unit != "KG":
+            try:
+                parsed = self.format_normalizer.normalize_decimal(value)
+                return float(await self.unit_converter.convert_weight(str(parsed), doc_weight_unit))
+            except Exception:
+                pass
 
         # No unit or already numeric — normalize as decimal
         try:

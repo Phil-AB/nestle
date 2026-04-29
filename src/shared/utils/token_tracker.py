@@ -25,46 +25,46 @@ from __future__ import annotations
 import time
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import yaml
+
 # ---------------------------------------------------------------------------
-# Cost table — price per ONE MILLION tokens (USD)
-# Keep sorted alphabetically for readability; prefix-match is used as fallback.
+# Cost table — loaded from config/llm_pricing.yaml at import time.
+# Maps every known model ID (and alias) to (input_usd, output_usd) per 1M tokens.
 # ---------------------------------------------------------------------------
-_COST_PER_MILLION: Dict[str, Tuple[float, float]] = {
-    # Anthropic ─ (input, output)
-    "claude-3-5-haiku-20241022": (0.80, 4.00),
-    "claude-3-5-sonnet-20241022": (3.00, 15.00),
-    "claude-haiku-4-5": (0.25, 1.25),
-    "claude-haiku-4-5-20251001": (0.25, 1.25),
-    "claude-opus-4-6": (15.00, 75.00),
-    "claude-sonnet-4-6": (3.00, 15.00),
-    # OpenAI
-    "gpt-4o": (2.50, 10.00),
-    "gpt-4o-mini": (0.15, 0.60),
-    # Google Gemini
-    "gemini-2.0-flash": (0.10, 0.40),
-    "gemini-2.0-flash-exp": (0.10, 0.40),
-    "gemini-2.5-flash": (0.15, 0.60),
-    "gemini-2.5-pro": (1.25, 10.00),
-}
+
+def _load_pricing() -> Dict[str, Tuple[float, float]]:
+    pricing_path = Path(__file__).parents[2] / "config" / "llm_pricing.yaml"
+    with pricing_path.open() as fh:
+        data = yaml.safe_load(fh)
+    table: Dict[str, Tuple[float, float]] = {}
+    for entry in data.get("models", []):
+        rates = (float(entry["input_usd"]), float(entry["output_usd"]))
+        table[entry["model_id"].lower()] = rates
+        for alias in entry.get("aliases", []):
+            table[alias.lower()] = rates
+    return table
+
+
+_COST_PER_MILLION: Dict[str, Tuple[float, float]] = _load_pricing()
 
 
 def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Return estimated USD cost for a single LLM call."""
-    # Exact match first
     model_lower = model.lower()
     rates = _COST_PER_MILLION.get(model_lower)
 
-    # Prefix match fallback (handles versioned model IDs)
+    # Prefix-match fallback for versioned IDs not listed as aliases
     if rates is None:
         for key, value in _COST_PER_MILLION.items():
-            if model_lower.startswith(key) or key.startswith(model_lower.split("-20")[0]):
+            if model_lower.startswith(key) or key.startswith(model_lower):
                 rates = value
                 break
 
     if rates is None:
-        return 0.0  # Unknown model — cost unknown
+        return 0.0
 
     input_cost = (input_tokens / 1_000_000) * rates[0]
     output_cost = (output_tokens / 1_000_000) * rates[1]

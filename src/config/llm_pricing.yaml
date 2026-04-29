@@ -1,0 +1,132 @@
+# =============================================================================
+# LLM Pricing Configuration
+# =============================================================================
+# Source: Anthropic https://www.anthropic.com/pricing
+#         OpenAI    https://openai.com/api/pricing
+#         Google    https://cloud.google.com/vertex-ai/generative-ai/pricing
+#
+# All prices are in USD per ONE MILLION tokens.
+# Update this file whenever provider pricing changes — no code changes required.
+#
+# Fields per entry:
+#   model_id     : exact model ID string used in API calls (also the lookup key)
+#   aliases      : additional IDs / prefixes that map to this entry
+#   provider     : anthropic | google | openai | bedrock
+#   input_usd    : cost per 1M input (prompt) tokens
+#   output_usd   : cost per 1M output (completion) tokens
+#   cache_write  : cost per 1M tokens written to the prompt cache (optional)
+#   cache_read   : cost per 1M tokens read from the prompt cache (optional)
+#   batch_input  : cost per 1M tokens via Batch API — 50% off standard (optional)
+#   batch_output : cost per 1M tokens via Batch API — 50% off standard (optional)
+#   notes        : free-text remarks (context window, tier, etc.)
+
+version: "2026-04"
+
+models:
+
+  # ---------------------------------------------------------------------------
+  # Anthropic — Claude 4.x family
+  # ---------------------------------------------------------------------------
+
+  - model_id: "claude-opus-4-7"
+    provider: anthropic
+    input_usd: 5.00
+    output_usd: 25.00
+    cache_write: 6.25
+    cache_read: 0.50
+    batch_input: 2.50
+    batch_output: 12.50
+    notes: "1M context window. Adaptive thinking only (budget_tokens removed)."
+
+  - model_id: "claude-opus-4-6"
+    provider: anthropic
+    input_usd: 5.00
+    output_usd: 25.00
+    cache_write: 6.25
+    cache_read: 0.50
+    batch_input: 2.50
+    batch_output: 12.50
+    notes: "1M context window."
+
+  - model_id: "claude-sonnet-4-6"
+    provider: anthropic
+    input_usd: 3.00
+    output_usd: 15.00
+    cache_write: 3.75
+    cache_read: 0.30
+    batch_input: 1.50
+    batch_output: 7.50
+    notes: "1M context window."
+
+  - model_id: "claude-haiku-4-5"
+    aliases:
+      - "claude-haiku-4-5-20251001"
+    provider: anthropic
+    input_usd: 1.00
+    output_usd: 5.00
+    cache_write: 1.25
+    cache_read: 0.10
+    batch_input: 0.50
+    batch_output: 2.50
+    notes: "200K context window."
+
+  # ---------------------------------------------------------------------------
+  # Anthropic — Claude 3.x family (legacy, kept for backward-compat)
+  # ---------------------------------------------------------------------------
+
+  - model_id: "claude-3-5-sonnet-20241022"
+    provider: anthropic
+    input_usd: 3.00
+    output_usd: 15.00
+    batch_input: 1.50
+    batch_output: 7.50
+    notes: "Legacy Claude 3.5 Sonnet."
+
+  - model_id: "claude-3-5-haiku-20241022"
+    provider: anthropic
+    input_usd: 0.80
+    output_usd: 4.00
+    batch_input: 0.40
+    batch_output: 2.00
+    notes: "Legacy Claude 3.5 Haiku."
+
+  # ---------------------------------------------------------------------------
+  # Google — Gemini family
+  # ---------------------------------------------------------------------------
+
+  - model_id: "gemini-2.5-pro"
+    provider: google
+    input_usd: 1.25
+    output_usd: 10.00
+    notes: "Tiered above 200K tokens: $2.50/$15.00."
+
+  - model_id: "gemini-2.5-flash"
+    provider: google
+    input_usd: 0.15
+    output_usd: 0.60
+    notes: "Non-thinking mode. Thinking mode: $3.50 output."
+
+  - model_id: "gemini-2.0-flash"
+    aliases:
+      - "gemini-2.0-flash-exp"
+    provider: google
+    input_usd: 0.10
+    output_usd: 0.40
+
+  # ---------------------------------------------------------------------------
+  # OpenAI — GPT family
+  # ---------------------------------------------------------------------------
+
+  - model_id: "gpt-4o"
+    provider: openai
+    input_usd: 2.50
+    output_usd: 10.00
+    batch_input: 1.25
+    batch_output: 5.00
+
+  - model_id: "gpt-4o-mini"
+    provider: openai
+    input_usd: 0.15
+    output_usd: 0.60
+    batch_input: 0.075
+    batch_output: 0.30

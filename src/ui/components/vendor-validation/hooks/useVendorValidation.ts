@@ -6,6 +6,7 @@ import {
   type VendorValidationResponse,
   type ExtractedDocumentMeta,
   type ValidationDiscrepancy,
+  type BundleValidationResponse,
 } from "@/lib/api-client"
 import { autoShipmentNumber } from "../lib/utils"
 import type { Step, DocFiles, FieldEdits, LineItemEdits, TableEdits } from "../lib/types"
@@ -21,7 +22,11 @@ export function useVendorValidation() {
   const [incoterm, setIncoterm] = useState("")
   const [transportMode, setTransportMode] = useState("")
 
-  // Files
+  // Upload mode
+  const [uploadMode, setUploadMode] = useState<"separate" | "bundle">("separate")
+  const [bundleFile, setBundleFile] = useState<File | null>(null)
+
+  // Files (separate mode)
   const [files, setFiles] = useState<DocFiles>({
     invoice: null,
     packing_list: null,
@@ -91,6 +96,7 @@ export function useVendorValidation() {
     setFiles((prev) => ({ ...prev, [key]: file }))
 
   const requiredFilled = files.invoice !== null && files.packing_list !== null
+  const bundleRequiredFilled = bundleFile !== null
 
   const handleFieldChange = useCallback((docType: string, key: string, val: string) => {
     setFieldEdits((prev) => ({
@@ -191,6 +197,51 @@ export function useVendorValidation() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Validation failed. Please try again.")
+      setStep("upload")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Bundle Submit ─────────────────────────────────────────────────────────
+
+  const handleBundleValidate = async () => {
+    if (!bundleFile) return
+    setError(null)
+    setSubmitting(true)
+    setStep("processing")
+
+    try {
+      const number = shipmentNumber.trim() || autoShipmentNumber()
+      setGeneratedShipmentNumber(number)
+
+      const shipment = await apiClient.createShipment({
+        shipment_number: number,
+        supplier_name: supplierName.trim() || undefined as any,
+        consignee_name: consigneeName.trim() || undefined as any,
+        incoterm: incoterm.trim() || undefined,
+        transport_mode: transportMode.trim() || undefined,
+      })
+      setShipmentId(shipment.shipment_id)
+
+      const result: BundleValidationResponse = await apiClient.validateBundle(
+        shipment.shipment_id,
+        bundleFile
+      )
+
+      setPendingResult(result as any)
+
+      if (result.extracted_documents && Object.keys(result.extracted_documents).length > 0) {
+        setExtractedDocuments(result.extracted_documents)
+        setFieldEdits({})
+        setLineItemEdits({})
+        setTableEdits({})
+        setStep("field_review")
+      } else {
+        applyResult(result as any)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Bundle validation failed. Please try again.")
       setStep("upload")
     } finally {
       setSubmitting(false)
@@ -311,6 +362,8 @@ export function useVendorValidation() {
     setTransportMode("")
     setShowShipmentDetails(false)
     setFiles({ invoice: null, packing_list: null, bill_of_lading: null, freight_manifest: null, certificate_of_origin: null })
+    setUploadMode("separate")
+    setBundleFile(null)
     setShipmentId(null)
     setGeneratedShipmentNumber(null)
     setSessionId(null)
@@ -333,6 +386,8 @@ export function useVendorValidation() {
   return {
     // State
     step,
+    uploadMode, setUploadMode,
+    bundleFile, setBundleFile,
     showShipmentDetails, setShowShipmentDetails,
     shipmentNumber, setShipmentNumber,
     supplierName, setSupplierName,
@@ -364,6 +419,7 @@ export function useVendorValidation() {
 
     // Derived
     requiredFilled,
+    bundleRequiredFilled,
 
     // Functions
     getDocBlobUrl,
@@ -371,6 +427,7 @@ export function useVendorValidation() {
     handleLineItemChange,
     handleTableCellChange,
     handleValidate,
+    handleBundleValidate,
     handleSaveFields,
     handleSkipFieldReview,
     handleResume,

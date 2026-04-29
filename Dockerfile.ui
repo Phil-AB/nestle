@@ -1,0 +1,29 @@
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY src/ui/package*.json ./
+RUN npm ci
+
+# ---- Build stage ----
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY src/ui/ .
+# API_BACKEND_URL is a server-side runtime var (used in next.config.mjs rewrites).
+# It does NOT need to be set at build time — Next.js evaluates async rewrites() at
+# server start, not during build. No NEXT_PUBLIC_ vars needed in the bundle.
+RUN npm run build
+
+# ---- Production runner ----
+FROM node:18-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# next.config.mjs output: 'standalone' copies only the files needed to run
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+# API_BACKEND_URL is injected at runtime via docker-compose env — no default needed here
+CMD ["node", "server.js"]

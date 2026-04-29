@@ -370,6 +370,8 @@ async def list_shipments(limit: int = 50, offset: int = 0):
                 {
                     "shipment_id": s.id,
                     "shipment_number": s.shipment_number,
+                    "boe_number": s.boe_number,
+                    "boe_version": s.boe_version,
                     "supplier_name": s.supplier_name,
                     "consignee_name": s.consignee_name,
                     "incoterm": s.incoterm,
@@ -454,6 +456,7 @@ async def get_shipment(shipment_id: str):
             "shipment_id": shipment.id,
             "shipment_number": shipment.shipment_number,
             "boe_number": shipment.boe_number,
+            "boe_version": shipment.boe_version,
             "supplier_name": shipment.supplier_name,
             "consignee_name": shipment.consignee_name,
             "incoterm": shipment.incoterm,
@@ -613,26 +616,13 @@ async def validate_vendor_docs(
                         shipment.shipment_number = str(bl_number)
                         try:
                             await db.commit()
-                            logger.info(f"Updated shipment {shipment_id} number to BL: {bl_number}")
+                            logger.info("Updated shipment %s number to BL: %s", shipment_id, bl_number)
                         except IntegrityError:
                             await db.rollback()
                             logger.warning(
-                                f"BL number {bl_number} already on another shipment — "
-                                f"reassigning to shipment {shipment_id}"
+                                "BL number %s already exists on another shipment — skipping rename for shipment %s",
+                                bl_number, shipment_id,
                             )
-                            old = await db.execute(
-                                sa_select(Shipment).where(
-                                    Shipment.shipment_number == str(bl_number),
-                                    Shipment.id != shipment_id,
-                                )
-                            )
-                            for prev in old.scalars().all():
-                                prev.shipment_number = f"REASSIGNED-{prev.id}"
-                            await db.commit()
-                            stmt2 = sa_select(Shipment).where(Shipment.id == shipment_id)
-                            shipment = (await db.execute(stmt2)).scalar_one()
-                            shipment.shipment_number = str(bl_number)
-                            await db.commit()
 
         # Run validation workflow
         from modules.validation_engine.core.session_manager import get_session_manager
@@ -865,50 +855,57 @@ async def validate_boe(
             db.add(boe_api_doc)
             await db.commit()
 
-        # Store BOE declaration number — overwrite mode: reassign from any prior shipment
+        # Store BOE declaration number and record a versioned history entry.
+        # If the same BOE number is already on a DIFFERENT shipment, raise a
+        # clear conflict error — no silent orphaning.
         decl_number = boe_normalized_fields.get("declaration_number")
         if isinstance(decl_number, dict):
             decl_number = decl_number.get("value")
         if decl_number:
-            from src.database.schema import Shipment
+            from src.database.schema import Shipment, ShipmentBOEHistory
+            from fastapi import HTTPException
             async with get_db_session() as db:
                 decl_str = str(decl_number)
 
-                # Release boe_number from any shipment that already holds it
-                conflict_stmt = sa_select(Shipment).where(
-                    Shipment.boe_number == decl_str,
-                    Shipment.id != shipment_id,
-                )
-                for prev in (await db.execute(conflict_stmt)).scalars().all():
-                    logger.warning(
-                        f"Reassigning BOE {decl_str} from shipment {prev.id} to {shipment_id}"
+                # Conflict check: same BOE number already owned by another shipment
+                conflict = (await db.execute(
+                    sa_select(Shipment).where(
+                        Shipment.boe_number == decl_str,
+                        Shipment.id != shipment_id,
                     )
-                    if prev.shipment_number == decl_str:
-                        prev.shipment_number = f"REASSIGNED-{prev.id}"
-                    prev.boe_number = None
+                )).scalar_one_or_none()
+                if conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"BOE number {decl_str} is already linked to shipment "
+                            f"{conflict.shipment_number} ({conflict.id}). "
+                            "Resolve the duplicate before re-processing."
+                        ),
+                    )
 
-                # Release shipment_number if held elsewhere
-                sn_conflict_stmt = sa_select(Shipment).where(
-                    Shipment.shipment_number == decl_str,
-                    Shipment.id != shipment_id,
-                )
-                for prev in (await db.execute(sn_conflict_stmt)).scalars().all():
-                    prev.shipment_number = f"REASSIGNED-{prev.id}"
-
-                # Flush the clears to DB first — PostgreSQL checks unique
-                # constraints per-statement, so the nulls must land before
-                # the new assignment or the constraint fires.
-                await db.flush()
-
-                # Now assign to current shipment
+                # Load current shipment and increment version
                 stmt = sa_select(Shipment).where(Shipment.id == shipment_id)
                 shipment = (await db.execute(stmt)).scalar_one_or_none()
                 if shipment:
+                    next_version = shipment.boe_version + 1
                     shipment.boe_number = decl_str
-                    if not shipment.shipment_number or shipment.shipment_number.startswith("PENDING-"):
-                        shipment.shipment_number = decl_str
+                    shipment.shipment_number = decl_str
+                    shipment.boe_version = next_version
+
+                    # Append immutable history entry
+                    history_entry = ShipmentBOEHistory(
+                        shipment_id=shipment_id,
+                        boe_number=decl_str,
+                        version=next_version,
+                        extracted_fields=boe_normalized_fields,
+                    )
+                    db.add(history_entry)
                     await db.commit()
-                    logger.info(f"Stored BOE declaration number {decl_str} for shipment {shipment_id}")
+                    logger.info(
+                        "BOE %s recorded for shipment %s (version %d)",
+                        decl_str, shipment_id, next_version,
+                    )
 
         documents = {
             **vendor_docs,

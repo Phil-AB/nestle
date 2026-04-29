@@ -14,6 +14,7 @@ from src.api.v2.endpoints import (
     validation_reporting,
     validation_versions,
     notifications,
+    bundle_pipeline,
 )
 
 api_v2_router = APIRouter()
@@ -30,3 +31,6 @@ api_v2_router.include_router(validation_versions.router, prefix="/api/v2")
 
 # Notifications
 api_v2_router.include_router(notifications.router, prefix="/api/v2")
+
+# Bundle PDF validation (additive — separate-file upload unchanged)
+api_v2_router.include_router(bundle_pipeline.router, prefix="/api/v2")

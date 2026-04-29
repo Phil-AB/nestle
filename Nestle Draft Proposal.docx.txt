@@ -1,0 +1,328 @@
+﻿PROPOSAL
+
+
+AI-Powered Import Document Extraction & Validation System
+
+
+
+
+
+
+Prepared For: 
+Nestle Ghana Limited
+
+Prepared By: 
+Aya Data
+
+
+Proposal Date: 
+20th April, 2026
+
+
+
+________________
+
+1. Executive Summary
+Nestlé Ghana currently processes 5–10 Bills of Entry (BOEs) per day, each requiring manual cross-verification against a set of supporting import documents. This process is performed by 2 IMPEX staff members and achieves approximately 98% accuracy. However, given that a single customs error can result in financial penalties of up to 300% of shipment value — imposed by the Ghana Revenue Authority (GRA) — the residual 2% error rate represents a material and unacceptable financial risk.
+
+
+AYADATA proposes an AI-powered Agentic Document Extraction & Validation System that automates the two most critical manual steps in Nestlé's import clearance workflow: (1) pre-validation of clearing documents before transmission to the clearing agent, and (2) cross-verification of the draft BOE against all supporting documents before Finance processes duty payment.
+
+
+The system is designed to meet or exceed the existing 98% human accuracy benchmark, reduce review time significantly, and provide a structured, auditable validation trail. It will be deployed on-premise at Nestlé's facility and integrated into the existing workflow via API, without requiring Nestlé to store or manage data on AYADATA infrastructure.
+
+
+________________
+2. Problem Statement
+Nestlé Ghana's import clearance process involves a high volume of multi-format, bilingual (English and French) documents from over 100 vendors. The current manual validation workflow creates the following operational challenges:
+
+
+* High financial exposure: BOE errors result in GRA penalties of up to 300% of shipment value.
+* Labour-intensive process: 2 dedicated IMPEX staff members performing fully manual checks across multiple document types per shipment.
+* Error propagation risk: Errors not caught at the pre-transmission stage (Step 2) carry forward into the BOE, making them significantly more costly to correct post-submission.
+* Inconsistent document formats: 100+ vendors produce documents in varying layouts, increasing the cognitive load and error potential for manual reviewers.
+* Bilingual complexity: Documents frequently mix English and French field names, requiring staff to map equivalences manually.
+* No structured audit trail: Manual checks lack a systematic, field-level record of what was validated and by whom, creating audit and compliance risk.
+
+
+The core problem is this: the accuracy requirement for this process is effectively 100%, yet the current manual approach cannot guarantee it at scale. An AI-assisted system that augments human reviewers with automated extraction, field-level cross-checking, and discrepancy flagging is the appropriate solution.
+
+
+
+
+
+
+
+
+
+
+________________
+3. Proposed Solution
+3.1 Solution Overview
+AYADATA will build and deploy an AI Agentic Document Extraction & Validation System that automates Steps 2 and 6 of Nestlé's 9-step import clearance workflow. The system will:
+* Extract structured field data from all clearing documents (invoices, packing lists, freight manifests, certificates of origin) using OCR and document intelligence.
+* Cross-verify extracted fields against the draft Bill of Entry (BOE) at the field level, applying configurable tolerance and matching rules.
+* Flag discrepancies with confidence scores and suggested corrections, surfaced to IMPEX staff in a reviewer interface.
+* Enable IMPEX staff to accept, reject, or escalate flagged items, maintaining the human-in-the-loop gate before documents proceed to Finance or back to the clearing agent.
+* Operate entirely on-premise at Nestlé's facility, with Nestlé retaining full control of document storage, editing, and data.
+3.2 Where AYADATA Intersects with the Workflow
+The system targets two primary automation points:
+Step
+	Workflow Step
+	AYADATA Automation
+	Human Gate
+
+
+	Step 2
+	IMPEX Pre-validation of Clearing Docs
+	OCR extraction of all fields from supporting docs + field completeness, consistency & format checks against validation checklist
+	IMPEX staff reviews AI-flagged issues before transmitting to clearing agent
+	Step 6
+	BOE Verification Against Supporting Docs
+	Field-level cross-check of BOE vs extracted supporting doc fields + discrepancy flagging with confidence scores + tolerance rule application
+	IMPEX staff reviews discrepancies; clean BOEs forwarded to Finance; errors returned to clearing agent
+	View the diagram [here]  
+
+
+3.3 Key System Capabilities
+The system targets two primary automation points:
+Capability
+	Detail
+	OCR Extraction
+	Handles PDF, scanned images (JPEG/PNG), handwritten docs; English and French.
+	Field Cross-Verification
+	BOE vs all supporting documents per shipment batch (up to 5 docs per BOE).
+	Discrepancy Flagging
+	Field-level mismatch detection with configurable tolerance rules (e.g. 'Limited' vs 'Ltd' treated as acceptable match).
+	Confidence Scoring
+	Per-field extraction confidence level displayed to human reviewer; low-confidence fields automatically escalated.
+	Human-in-Loop Review
+	Reviewer interface to inspect, approve, or reject flagged fields before any downstream action.
+	Bilingual Field Mapping
+	English ↔ French field equivalences mapped for common customs terms across documents.
+	Edge Case Handling
+	Exception rules for BOE fields not present in vendor documents (e.g. freight number); defined collaboratively with Nestlé.
+	Audit Trail
+	Full field-level validation log per shipment for compliance and audit purposes
+	
+
+
+
+3.4 Integration Model
+Nestlé has indicated that document storage and editing should remain within their own environment. Based on this, AYADATA is presenting two integration models for Nestlé's consideration, with a clear recommendation:
+
+
+	Option A — Validation Platform  (Recommended)
+	Option B — API Integration
+	What it is
+	A web-based validation portal deployed on-premise at Nestlé. IMPEX staff log in, receive BOEs and supporting docs from the clearing agent, run validation, review flagged discrepancies, and send structured error reports back to the agent — all within one purpose-built interface.
+	AYADATA provides the AI engine only. Nestlé's IT team integrates it into their own systems via API, builds a reviewer interface, and manages the agent workflow on their side.
+	Who uses it
+	IMPEX staff directly. No technical knowledge or IT dependency required for day-to-day use.
+	Requires Nestlé IT development resource to build and maintain the integration and reviewer workflow.
+	Data control
+	On-premise deployment. No data leaves Nestlé's environment. Nestlé owns all records and document storage.
+	Nestlé controls all data entirely, but carries the full integration and maintenance burden.
+	Agent workflow
+	Clearing agent submits BOE and supporting docs via the platform. Discrepancy reports are generated and returned to the agent through the same platform.
+	Agent-facing workflow must be designed and built separately by Nestlé IT.
+	Best suited for
+	Teams that want an operationally ready tool without internal development. Matches the workflow Nestlé described.
+	Organisations with existing internal systems they want to embed the AI capability into.
+	
+
+
+
+AYADATA recommends Option A — the Validation Platform — for the following reasons:
+* The workflow Nestlé described is a product workflow, not just an API call. An agent submits a BOE, IMPEX reviews it, errors get flagged and returned to the agent. A platform supports this end-to-end without Nestlé IT needing to build anything.
+* On-premise deployment fully addresses Nestlé's data control requirement. The platform runs inside Nestlé's environment — nothing is stored or processed on AYADATA infrastructure.
+* IMPEX staff can use it immediately. The 2-person team gains a purpose-built tool rather than a dependency on IT for every validation cycle.
+* It provides a stronger foundation for future phases — reporting, audit dashboards, and additional workflow steps can be added to the platform incrementally.
+If Nestlé's IT team has existing internal systems they wish to embed the validation capability into, AYADATA can support an API-based model instead. The preferred approach will be confirmed during the technical discovery session (see Section 8: Next Steps).
+________________
+
+
+4. Scope of Work — Phase 1
+4.1 In Scope
+* OCR extraction pipeline: multi-format document ingestion (PDF, JPEG, PNG), field extraction.
+* Validation checklist integration: configuring field checks against the checklists provided by Nestlé.
+* BOE cross-verification engine: field-level matching of BOE against all corresponding supporting documents.
+* Tolerance and exception rule configuration: building fuzzy match, abbreviation, and edge case rules collaboratively with Nestlé IMPEX team.
+* Discrepancy reporting: structured output of flagged fields, confidence scores, and suggested corrections.
+* Reviewer interface: on-premise validation platform or API integration, per agreed model (see Section 3.4).
+* On-premise deployment at Nestlé Ghana facility.
+* Model evaluation against historical correctly and incorrectly matched document cases.
+
+
+
+
+4.2 Out of Scope — Phase 1
+* Bilingual processing.
+* BOE auto-population or generation within ICOM.
+* Direct integration with ICOM (GRA customs platform).
+* Document storage, case management, or agent communication tools hosted by AYADATA.
+________________
+5. Implementation Options
+AI-Driven Document Validation Platform
+Component
+	Notes
+	LLM API
+	Document parsing, extraction and validation.
+	Storage
+	Bucket to store uploaded documents
+	Hosting
+	Cloud instance for the workflows.
+	Database
+	Secure storage and query handling.
+	Backend
+	Application logic and reasoning
+	Frontend
+	Web Application interface for system interactivity
+	
+
+
+
+6. Implementation Timeline
+Phase
+	Duration
+	Description
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	________________
+7. Cost Breakdown
+Model/API Cost Breakdown
+Component
+	What it Covers
+	Monthly Cost
+	Why It Matters
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+Total Cost Summary
+Item
+	Standalone AI App
+	Roles
+	
+
+	
+
+	
+
+	
+
+	
+
+	   * 	
+
+	
+
+	   * 	
+
+	
+
+	   * 	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+Contact

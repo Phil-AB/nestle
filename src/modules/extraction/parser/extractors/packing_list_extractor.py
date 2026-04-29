@@ -116,6 +116,28 @@ The container table has:
                     "Grand Total" — these show the ENTIRE SHIPMENT totals
 
 WEIGHTS & QUANTITIES — CRITICAL RULES:
+
+⚠️  SAP DELIVERY NOTE WARNING: Some packing lists are SAP Delivery Notes, not traditional
+packing lists. In SAP Delivery Notes the line-items table has columns like:
+  Line | Material Description | Quantity | UOM | Batch | EAN/SSCC | Net/Weight
+
+The "Net/Weight" column in SAP Delivery Notes contains the LINE ITEM MONETARY VALUE IN USD
+(e.g. 52,143.84), NOT a weight in KG. DO NOT use this column for gross_weight or net_weight.
+
+For SAP Delivery Notes, the ACTUAL WEIGHTS are in the document summary/footer, e.g.:
+  "Gross Weight: 15,123 TNE"   ← this is KG (TNE is a SAP unit code equivalent to KG here)
+  "Net Weight: 9.677"          ← this may be in tonnes; prefer the value labeled KG elsewhere
+  "PESO BRUTO: 12,897.024 KG"
+
+⚠️  NUMBER FORMAT: Commas in weight values are THOUSANDS SEPARATORS, not decimal points.
+  "15,123" means FIFTEEN THOUSAND ONE HUNDRED AND TWENTY-THREE (15123), not 15.123.
+  "12,897" means TWELVE THOUSAND EIGHT HUNDRED AND NINETY-SEVEN (12897), not 12.897.
+  Always output the numeric value WITHOUT the comma: "15,123 TNE" → gross_weight = 15123.
+
+The ACTUAL QUANTITY for SAP Delivery Notes is the sum of the "Quantity" column in the
+line-items table (integer cases/packages), NOT from the Net/Weight column.
+
+For TRADITIONAL packing lists:
 ALWAYS use the TOTALS ROW values, never per-container values.
 Look for:
   - A row where the first/label column says "TOTAL", "TOTALS", "Total sent Net weight", etc.
@@ -123,14 +145,21 @@ Look for:
   - "Total Gross Weight: 192,780.00 KG"
   - "Total Units: 7,560 BAGS" or similar
 
-- net_weight   = TOTAL shipment net weight (from TOTALS row or summary). Include unit.
-- gross_weight = TOTAL shipment gross weight (from TOTALS row or summary). Include unit.
-- quantity     = TOTAL shipment quantity (from TOTALS row). Do not use per-container qty.
-- unit_of_measure = unit (BAG, KG, MT, etc.)
+- net_weight   = TOTAL shipment net weight in KG. From TOTALS row, footer label, or "PESO NETO".
+                 If the only net weight found is in tonnes (clearly a small decimal when the
+                 gross weight is thousands of KG), convert: multiply by 1000.
+                 NEVER use a monetary USD value as net_weight.
+- gross_weight = TOTAL shipment gross weight in KG. From TOTALS row, footer "Gross Weight: X KG/TNE",
+                 or "PESO BRUTO". TNE in SAP context = KG — use the raw number.
+                 NEVER use a monetary USD value as gross_weight.
+- quantity     = TOTAL shipment quantity (integer packages/cases). From TOTALS row or sum of
+                 the Quantity column in the line-items table. Do NOT use per-container qty only.
+- unit_of_measure = unit (BAG, KG, CS, MT, etc.)
 - container_count   = total number of containers (integer). Count the data rows or look for
-                      "No. of Containers: 7" in a header field.
+                      "No. of Containers: 7" in a header field, or count "Container Num:" entries.
 - container_numbers = comma-separated container IDs (pattern: 4 uppercase letters + 7 digits).
-                      Collect ALL container IDs from the table.
+                      Collect ALL container IDs from the table AND from "Container Num:" header
+                      fields in SAP Delivery Notes.
 
 GOODS:
 - product_description = description of the goods from the "Description" column of the container

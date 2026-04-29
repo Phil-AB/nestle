@@ -17,8 +17,12 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import base64
+import json
+import os
 import time
 import logging
+from datetime import datetime, timezone
 from typing import Callable
 
 from src.api.v1.router import api_router
@@ -46,6 +50,7 @@ def create_application() -> FastAPI:
         docs_url="/docs" if settings.ENABLE_DOCS else None,
         redoc_url="/redoc" if settings.ENABLE_DOCS else None,
         openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
+        redirect_slashes=False,
     )
 
     # Configure CORS
@@ -85,17 +90,81 @@ def create_application() -> FastAPI:
     # Health check endpoint
     @app.get("/health", tags=["health"])
     async def health_check():
-        """
-        Health check endpoint.
-
-        Returns:
-            Health status of the API
-        """
-        return {
-            "status": "healthy",
+        """Health check: database connectivity + Bedrock token status."""
+        checks: dict = {
             "version": settings.API_VERSION,
-            "environment": settings.ENVIRONMENT
+            "environment": settings.ENVIRONMENT,
         }
+
+        # 1. Database
+        db_ok = False
+        try:
+            from src.database.connection import get_engine
+            from sqlalchemy import text
+            engine = get_engine()
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            db_ok = True
+            checks["db"] = "ok"
+        except Exception as exc:
+            checks["db"] = f"error: {exc}"
+
+        # 2. Bedrock bearer token — decode expiry without making a live API call.
+        #    The token is base64-encoded and contains a JSON or structured payload
+        #    that may include an expiry timestamp. We attempt a best-effort decode;
+        #    if the token is opaque we skip expiry checking.
+        bedrock_status = "ok"
+        bedrock_warning: str | None = None
+        token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "")
+        if not token:
+            bedrock_status = "missing"
+        else:
+            try:
+                # The token format is "ABSK<base64-payload>".
+                # Strip the leading "ABSK" prefix if present, then decode.
+                raw = token[4:] if token.startswith("ABSK") else token
+                # Add padding if needed
+                padding = 4 - len(raw) % 4
+                if padding != 4:
+                    raw += "=" * padding
+                decoded = base64.b64decode(raw).decode("utf-8", errors="ignore")
+                # The decoded payload contains "BedrockAPIKey-<id>:<expiry-epoch>:<secret>"
+                # or similar structured content. Try to find a Unix timestamp.
+                parts = decoded.replace("BedrockAPIKey-", "").split(":")
+                for part in parts:
+                    # Look for a 10-digit unix timestamp embedded in the key ID segment
+                    # e.g. "l5p4-at-1718253256" — the epoch is after "-at-"
+                    if "-at-" in part:
+                        epoch_str = part.split("-at-")[-1].split("-")[0]
+                        if epoch_str.isdigit() and len(epoch_str) == 10:
+                            expiry = datetime.fromtimestamp(int(epoch_str), tz=timezone.utc)
+                            now = datetime.now(tz=timezone.utc)
+                            days_remaining = (expiry - now).days
+                            if days_remaining < 0:
+                                bedrock_status = "expired"
+                                bedrock_warning = "Bearer token has expired — Bedrock calls will fail."
+                            elif days_remaining <= 14:
+                                bedrock_status = "expiring_soon"
+                                bedrock_warning = f"Bearer token expires in {days_remaining} day(s). Rotate now."
+                            checks["bedrock_token_expires_in_days"] = days_remaining
+                            break
+            except Exception:
+                pass  # Token format is opaque — skip expiry check, assume ok
+
+        checks["bedrock"] = bedrock_status
+        if bedrock_warning:
+            checks["bedrock_warning"] = bedrock_warning
+
+        # Overall status
+        if not db_ok or bedrock_status == "expired":
+            overall = "degraded"
+        elif bedrock_status == "expiring_soon":
+            overall = "warning"
+        else:
+            overall = "ok"
+
+        checks["status"] = overall
+        return checks
 
     # Root endpoint
     @app.get("/", tags=["root"])

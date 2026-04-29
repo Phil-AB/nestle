@@ -252,12 +252,37 @@ use_case:
         - "origin"
         - "origin_country"
 
+      vessel_name:
+        - "vessel_name"
+        - "vessel"
+        - "ocean_vessel"
+        - "v_l"
+        - "Vessel"
+        - "Ocean vessel"
+
+      voyage_number:
+        - "voyage_number"
+        - "voyage_no"
+        - "voyage"
+        - "voy"
+        - "Voyage No"
+        - "Voyage"
+
+      port_of_discharge:
+        - "port_of_discharge"
+        - "discharge_port"
+        - "pod"
+        - "destination_port"
+        - "Port of Discharge"
+        - "POD"
+
     units:
       weight:
         target: "KG"
         conversions:
           MT: 1000
           T: 1000
+          TNE: 1000
           TONS: 1000
           G: 0.001
           LBS: 0.453592
@@ -312,8 +337,6 @@ use_case:
               - "gross_weight"
               - "quantity"
               - "product_description"
-              - "order_number"
-              - "contract_number"
               - "po_number"
         on_failure: "flag_and_continue"
 
@@ -337,13 +360,10 @@ use_case:
             packing_list:
               - "consignee_name"
               - "consignee_address"
-              - "incoterm"
               - "net_weight"
               - "gross_weight"
               - "quantity"
               - "product_description"
-              - "order_number"
-              - "contract_number"
               - "po_number"
               - "container_count"
               - "container_numbers"
@@ -365,16 +385,11 @@ use_case:
           required_fields:
             bill_of_lading:
               - "bl_number"
-              - "shipper_name"
-              - "shipper_address"
               - "consignee_name"
               - "container_count"
               - "container_numbers"
-              - "net_weight"
               - "gross_weight"
               - "quantity"
-              - "order_number"
-              - "contract_number"
               - "po_number"
         on_failure: "flag_and_continue"
 
@@ -527,7 +542,7 @@ use_case:
       # BOL: no formal incoterm — excluded from this check.
       # Both invoice and packing list are required docs so require_all: true.
       - name: "incoterm_consistency"
-        description: "Incoterm must match between invoice and packing list"
+        description: "Incoterm must match between invoice and packing list when both carry the field"
         validators:
           - "n_way_matcher"
         config:
@@ -536,7 +551,7 @@ use_case:
             - "invoice"
             - "packing_list"
           match_type: "fuzzy"
-          require_all: true
+          require_all: false
         on_failure: "flag_and_continue"
 
       # ── 8. Incoterm freight and insurance rules ─────────────────────────────

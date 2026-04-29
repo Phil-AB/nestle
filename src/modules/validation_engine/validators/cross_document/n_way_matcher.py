@@ -489,6 +489,17 @@ class NWayMatcher(IValidator):
         Note: fuzzy matching does NOT use this method — it operates directly
         on the raw string values via _compare_fuzzy / _similarity.
         """
+        # Coerce numeric-like values to a canonical form so that 2, 2.0, and
+        # "2" all compare equal regardless of how different extractors typed them.
+        if isinstance(value, float) and value == int(value):
+            value = int(value)
+        elif isinstance(value, str):
+            try:
+                f = float(value)
+                value = int(f) if f == int(f) else f
+            except (ValueError, OverflowError):
+                pass
+
         if match_type == MatchType.EXACT:
             return value
 

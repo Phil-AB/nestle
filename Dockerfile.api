@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# System deps: libpq-dev + gcc for asyncpg/psycopg2, postgresql-client for pg_isready in entrypoint
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python deps first (layer-cached until requirements change)
+COPY requirements.docker.txt .
+RUN pip install --no-cache-dir -r requirements.docker.txt
+
+# Copy application source
+COPY src/ ./src/
+COPY alembic.ini .
+
+# Both the project root and src/ must be on PYTHONPATH:
+#   - root  → enables `from src.api...` imports
+#   - src/  → enables `from modules...` and `from shared...` imports (no src. prefix)
+ENV PYTHONPATH=/app:/app/src
+
+# Copy and wire up the entrypoint
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]

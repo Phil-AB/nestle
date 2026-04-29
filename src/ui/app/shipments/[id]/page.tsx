@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { apiClient, type ShipmentDetail, type ShipmentDocumentSummary, type ShipmentTokenUsageSummary, type DocumentResponse } from "@/lib/api-client"
+import { apiClient, type ShipmentDetail, type ShipmentDocumentSummary, type ShipmentTokenUsageSummary, type DocumentResponse, type BundleValidationResponse, type BundleSegmentMeta } from "@/lib/api-client"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,9 @@ import {
   Cpu,
   Eye,
   FileImage,
+  Upload,
+  Files,
+  Layers,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
@@ -328,13 +331,209 @@ function TokenUsageCard({ usage }: { usage: ShipmentTokenUsageSummary }) {
         <div className="mt-3 pt-3 border-t border-border/40 space-y-1">
           {usage.by_model.map((m, i) => (
             <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{m.provider}/{m.model}</span>
+              <span>{m.model}</span>
               <span>{m.total_tokens.toLocaleString()} tokens · {m.calls} calls</span>
             </div>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Bundle upload panel
+// ---------------------------------------------------------------------------
+
+const DOC_TYPE_COLORS: Record<string, string> = {
+  invoice: "bg-blue-50 text-blue-700 border-blue-200",
+  packing_list: "bg-purple-50 text-purple-700 border-purple-200",
+  bill_of_lading: "bg-teal-50 text-teal-700 border-teal-200",
+  certificate_of_origin: "bg-green-50 text-green-700 border-green-200",
+  sanitary_certificate: "bg-orange-50 text-orange-700 border-orange-200",
+  certificate_of_analysis: "bg-pink-50 text-pink-700 border-pink-200",
+  freight_manifest: "bg-indigo-50 text-indigo-700 border-indigo-200",
+}
+
+function SegmentBadge({ seg }: { seg: BundleSegmentMeta }) {
+  const cls = DOC_TYPE_COLORS[seg.document_type] ?? "bg-muted text-muted-foreground border-border"
+  const label = seg.document_type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+  return (
+    <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm ${cls}`}>
+      <span className="font-medium">{label}</span>
+      <div className="flex items-center gap-3 text-xs opacity-80">
+        <span>p{seg.pages[0]}–{seg.pages[seg.pages.length - 1]}</span>
+        <span>{Math.round(seg.confidence * 100)}% conf.</span>
+      </div>
+    </div>
+  )
+}
+
+function BundleUploadPanel({ shipmentId, onComplete }: { shipmentId: string; onComplete?: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<BundleValidationResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleSubmit() {
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await apiClient.validateBundle(shipmentId, file)
+      setResult(res)
+      onComplete?.()
+    } catch (e: any) {
+      setError(e.message ?? "Bundle validation failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const statusColor = result?.final_status === "passed"
+    ? "text-green-700 bg-green-50"
+    : result?.final_status === "requires_attention"
+      ? "text-amber-700 bg-amber-50"
+      : "text-red-700 bg-red-50"
+
+  return (
+    <Card className="border-border/60 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-muted/30 transition-colors text-left"
+      >
+        <div className="p-1.5 rounded-lg bg-muted">
+          <Layers className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">Upload Bundle PDF</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            All documents combined in one file — invoice, BOL, packing list, COO, COA, sanitary cert
+          </p>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-6 py-5 space-y-5">
+          {/* File picker */}
+          <div
+            onClick={() => inputRef.current?.click()}
+            className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-border/60 rounded-xl cursor-pointer hover:bg-muted/20 transition-colors"
+          >
+            <Files className="w-8 h-8 text-muted-foreground" />
+            {file ? (
+              <p className="text-sm font-medium text-foreground">{file.name}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Click to select a bundled PDF</p>
+            )}
+            <p className="text-xs text-muted-foreground">PDF only</p>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={!file || loading}
+            className="w-full"
+            style={{ background: BRAND }}
+          >
+            {loading ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Segmenting &amp; validating…</>
+            ) : (
+              <><Upload className="w-4 h-4 mr-2" />Validate Bundle</>
+            )}
+          </Button>
+
+          {error && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-4">
+              {/* Status */}
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold ${statusColor}`}>
+                {result.final_status === "passed"
+                  ? <CheckCircle2 className="w-4 h-4" />
+                  : <AlertTriangle className="w-4 h-4" />}
+                {result.final_status?.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+              </div>
+
+              {/* Detected segments */}
+              {result.bundle_segments && result.bundle_segments.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Detected segments ({result.bundle_segments.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {result.bundle_segments.map((seg, i) => (
+                      <SegmentBadge key={i} seg={seg} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Merged docs note */}
+              {result.merged_documents && Object.keys(result.merged_documents).length > 0 && (
+                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 space-y-0.5">
+                  {Object.entries(result.merged_documents).map(([type, info]) => (
+                    <p key={type}>
+                      <span className="font-medium capitalize">{type.replace(/_/g, " ")}</span>
+                      {" — merged "}{info.merged_count} documents
+                      {info.merged_from.length > 0 && ` (${info.merged_from.join(", ")})`}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* Summary */}
+              {result.summary && (
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Checks", val: result.summary.total_checks ?? 0 },
+                    { label: "Passed", val: result.summary.passed_checks ?? 0 },
+                    { label: "Discrepancies", val: result.summary.total_discrepancies ?? 0 },
+                  ].map(c => (
+                    <div key={c.label} className="text-center p-3 bg-muted/30 rounded-lg">
+                      <p className="text-lg font-bold">{c.val}</p>
+                      <p className="text-xs text-muted-foreground">{c.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Discrepancies */}
+              {result.discrepancies && result.discrepancies.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Discrepancies
+                  </p>
+                  <div className="space-y-2">
+                    {result.discrepancies.map((d: any, i: number) => (
+                      <div key={i} className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                        <p className="font-medium text-amber-800">{d.field ?? d.validator ?? "Issue"}</p>
+                        <p className="text-amber-700 text-xs mt-0.5">{d.message ?? d.description ?? JSON.stringify(d)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }
 
@@ -466,6 +665,7 @@ export default function ShipmentDetailPage() {
             { label: "Incoterm", value: shipment.incoterm },
             { label: "Transport Mode", value: shipment.transport_mode },
             { label: "BOE Number", value: shipment.boe_number ? <span className="font-mono">{shipment.boe_number}</span> : null },
+            { label: "BOE Version", value: (shipment.boe_version ?? 0) > 0 ? <span className="font-mono">v{shipment.boe_version}</span> : null },
             {
               label: "Last Updated",
               value: shipment.updated_at
@@ -501,6 +701,15 @@ export default function ShipmentDetailPage() {
           <DocumentSection key={doc.document_id} doc={doc} />
         ))}
       </Section>
+
+      {/* Bundle PDF upload (alternative to separate file upload) */}
+      <BundleUploadPanel
+        shipmentId={shipmentId}
+        onComplete={() => {
+          // Refresh shipment data after successful bundle validation
+          // (react-query will refetch on the next render cycle)
+        }}
+      />
 
       {/* Step 6 — Bill of Entry */}
       <Section

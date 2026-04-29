@@ -393,6 +393,7 @@ normalization:
         MG: 0.000001
         MT: 1000
         METRIC_TON: 1000
+        TNE: 1000
         TON: 1000
         TONS: 1000
         T: 1000

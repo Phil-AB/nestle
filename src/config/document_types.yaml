@@ -89,6 +89,24 @@ detection_rules:
     excluded_fields: []
     description: "Certificate of Origin detected by certificate number"
 
+  sanitary_certificate:
+    required_fields: ["reference_number"]
+    optional_fields: ["issuer", "product_description", "lot_number", "issue_date", "expiry_date"]
+    excluded_fields: []
+    description: "Sanitary Certificate detected by reference number and issuing authority"
+
+  certificate_of_analysis:
+    required_fields: ["reference_number"]
+    optional_fields: ["lot_number", "product_description", "issue_date", "issuer"]
+    excluded_fields: []
+    description: "Certificate of Analysis detected by reference number and lot/batch number"
+
+  coa:
+    required_fields: ["reference_number"]
+    optional_fields: ["lot_number", "product_description", "issue_date"]
+    excluded_fields: []
+    description: "Alias detection rule for certificate_of_analysis"
+
   freight:
     required_fields: ["freight_cost"]
     optional_fields: ["shipping_line", "port_of_loading", "port_of_discharge"]
@@ -234,6 +252,24 @@ document_types:
     description: "Certificate stating country of origin"
     category: "compliance"
     icon: "certificate"
+
+  sanitary_certificate:
+    display_name: "Sanitary Certificate"
+    description: "Government-issued certificate confirming goods meet health and safety standards"
+    category: "compliance"
+    icon: "shield-check"
+
+  certificate_of_analysis:
+    display_name: "Certificate of Analysis"
+    description: "Laboratory or manufacturer certificate confirming product quality parameters and batch composition"
+    category: "compliance"
+    icon: "flask"
+
+  coa:
+    display_name: "Certificate of Analysis"
+    description: "Alias for certificate_of_analysis"
+    category: "compliance"
+    icon: "flask"
 
   freight:
     display_name: "Freight Document"

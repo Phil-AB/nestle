@@ -198,3 +198,16 @@ Any company, any customs regime, any document set can be onboarded purely throug
 
 ## What to do when you see hardcoding
 Remove it. Move the value to the appropriate config file or database table. Wire the code to read it dynamically. If the change touches a SSOT file (`cpc_codes.yaml`, `master_concession.yaml`, etc.), verify the validator that reads it also handles the new shape correctly.
+
+---
+
+## Protected files — never modify under any circumstances
+
+The following files must **never** be edited by Claude — not to fix a bug, not to match a test, not to improve extraction, not for any reason:
+
+- `src/config/checklist.yaml` — the GRA import checklist; owned by the business, not the engineering team
+- `src/config/data/cpc_codes.yaml` — official customs procedure codes
+- `src/config/data/master_concession.yaml` — official duty concession reference data
+- `src/config/data/vat_deferment_list.yaml` — official VAT deferment reference data
+
+These are authoritative source-of-truth documents. If a validator or extractor produces an unexpected result against one of these files, investigate and fix the code — never alter the file to make the result fit.

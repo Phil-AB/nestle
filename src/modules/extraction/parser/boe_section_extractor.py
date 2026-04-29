@@ -933,11 +933,13 @@ class BOESectionExtractor:
     def _post_process(self, out: Dict[str, Any]) -> None:
         """Derive or clean up fields after the main scan."""
 
-        # Normalise HS code format (ensure XXXX.XX not raw digits)
+        # HS code is stored as the full numeric code (e.g. "1901902000").
+        # Strip any dots that may have been introduced by upstream parsing so
+        # the value always matches the 10-digit format used in the reference data.
         if "hs_code" in out:
-            hs = str(out["hs_code"])
+            hs = str(out["hs_code"]).replace(".", "")
             if re.fullmatch(r'\d{6,10}', hs):
-                out["hs_code"] = f"{hs[:4]}.{hs[4:6]}"
+                out["hs_code"] = hs
 
         # Ensure quantity is float
         if "quantity" in out and not isinstance(out["quantity"], float):

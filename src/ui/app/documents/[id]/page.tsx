@@ -1,14 +1,11 @@
 "use client"
 
-// API URL configuration - reads from environment or uses default
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://54.87.52.48:8000/api/v1"
-
 import { useEffect, useState, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { apiClient, type DocumentResponse } from "@/lib/api-client"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader, ArrowLeft, AlertCircle, CheckCircle, FileText, RefreshCw, Eye, EyeOff, FileImage, Download, Layers, GripVertical } from "lucide-react"
+import { Loader, ArrowLeft, AlertCircle, CheckCircle, FileText, RefreshCw, Eye, EyeOff, FileImage, Layers } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
     formatDocumentFields,
@@ -19,8 +16,6 @@ import {
 import { BlocksDocumentViewer } from "@/components/blocks-document-viewer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DocumentViewerWrapper } from "@/components/document-viewer-wrapper"
-import GenerationButton from "@/components/generation-button"
-import { BBoxDocumentRenderer } from "@/components/documents/BBoxDocumentRenderer"
 
 export default function DocumentRenderPage() {
     const params = useParams()
@@ -34,7 +29,6 @@ export default function DocumentRenderPage() {
     const [showEmpty, setShowEmpty] = useState(true) // Show empty by default to preserve structure
     const [pages, setPages] = useState<any[]>([])
     const [pagesLoading, setPagesLoading] = useState(false)
-    const [rawData, setRawData] = useState<any>(null) // For dynamic renderer
 
     const loadDocument = async () => {
         try {
@@ -44,21 +38,6 @@ export default function DocumentRenderPage() {
             })
             setDocument(doc)
             setError(null)
-
-            // Also fetch raw data for dynamic renderer
-            try {
-                const response = await fetch(
-                    `${API_BASE_URL}/documents/${documentId}?format=raw`,
-                    { headers: { 'X-API-Key': 'dev-key-12345' } }
-                )
-                if (response.ok) {
-                    const raw = await response.json()
-                    setRawData(raw)
-                }
-            } catch (rawError) {
-                console.warn("Failed to load raw data:", rawError)
-                // Continue without raw data
-            }
 
             if (doc.extraction_status === 'processing') {
                 setPolling(true)
@@ -140,9 +119,9 @@ export default function DocumentRenderPage() {
     if (error && !document) {
         return (
             <div className="p-8 max-w-6xl mx-auto">
-                <Button onClick={() => router.push('/documents')} variant="outline" className="mb-6">
+                <Button onClick={() => router.back()} variant="outline" className="mb-6">
                     <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Documents
+                    Back to Shipments
                 </Button>
                 <Card className="p-8 text-center">
                     <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
@@ -165,59 +144,11 @@ export default function DocumentRenderPage() {
         <div className="p-8 max-w-7xl mx-auto w-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <Button onClick={() => router.push('/documents')} variant="outline">
+                <Button onClick={() => router.back()} variant="outline">
                     <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back to Documents
+                    Back to Shipments
                 </Button>
                 <div className="flex gap-2">
-                    {isComplete && (
-                        <>
-                            <GenerationButton
-                                documentId={document.document_id}
-                                documentType={document.document_type}
-                            />
-                            <Button
-                                onClick={async () => {
-                                    try {
-                                        // Fetch raw Reducto format from API
-                                        const response = await fetch(
-                                            `${API_BASE_URL}/documents/${document.document_id}?format=raw`,
-                                            { headers: { 'X-API-Key': 'dev-key-12345' } }
-                                        )
-                                        const rawData = await response.json()
-                                        const jsonData = JSON.stringify(rawData, null, 2)
-                                        const blob = new Blob([jsonData], { type: 'application/json' })
-                                        const url = window.URL.createObjectURL(blob)
-                                        const a = window.document.createElement('a')
-                                        a.href = url
-                                        a.download = `${document.document_type}_${document.document_id}_raw.json`
-                                        window.document.body.appendChild(a)
-                                        a.click()
-                                        window.URL.revokeObjectURL(url)
-                                        window.document.body.removeChild(a)
-                                    } catch (error) {
-                                        console.error('Failed to download raw JSON:', error)
-                                        // Fallback to normalized format
-                                        const jsonData = JSON.stringify(document, null, 2)
-                                        const blob = new Blob([jsonData], { type: 'application/json' })
-                                        const url = window.URL.createObjectURL(blob)
-                                        const a = window.document.createElement('a')
-                                        a.href = url
-                                        a.download = `${document.document_type}_${document.document_id}.json`
-                                        window.document.body.appendChild(a)
-                                        a.click()
-                                        window.URL.revokeObjectURL(url)
-                                        window.document.body.removeChild(a)
-                                    }
-                                }}
-                                variant="outline"
-                                size="sm"
-                            >
-                                <Download className="w-4 h-4 mr-2" />
-                                Download Raw JSON
-                            </Button>
-                        </>
-                    )}
                     <Button onClick={loadDocument} variant="outline" size="sm" disabled={loading}>
                         <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
@@ -292,12 +223,8 @@ export default function DocumentRenderPage() {
 
             {/* Document Content - Tabbed Interface */}
             {isComplete && (
-                <Tabs defaultValue="dynamic" className="w-full">
-                    <TabsList className={`grid w-full mb-6 ${document.is_multi_page ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                        <TabsTrigger value="dynamic" className="flex items-center gap-2">
-                            <GripVertical className="w-4 h-4" />
-                            Dynamic View
-                        </TabsTrigger>
+                <Tabs defaultValue="extracted" className="w-full">
+                    <TabsList className={`grid w-full mb-6 ${document.is_multi_page ? 'grid-cols-3' : 'grid-cols-2'}`}>
                         <TabsTrigger value="original" className="flex items-center gap-2">
                             <FileImage className="w-4 h-4" />
                             Original Document
@@ -314,30 +241,7 @@ export default function DocumentRenderPage() {
                         )}
                     </TabsList>
 
-                    {/* Tab 1: Dynamic View - Uses raw bbox coordinates */}
-                    <TabsContent value="dynamic">
-                        {rawData ? (
-                            <BBoxDocumentRenderer
-                                rawData={rawData}
-                                documentId={documentId}
-                                className="h-[800px]"
-                            />
-                        ) : (
-                            <Card className="p-8 text-center">
-                                <GripVertical className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                                <h2 className="text-xl font-bold mb-2">Dynamic View Not Available</h2>
-                                <p className="text-muted-foreground mb-4">
-                                    Raw Reducto data is required for dynamic rendering. Make sure document has been processed with bbox-aware extraction.
-                                </p>
-                                <Button onClick={loadDocument} variant="outline">
-                                    <RefreshCw className="w-4 h-4 mr-2" />
-                                    Reload Document
-                                </Button>
-                            </Card>
-                        )}
-                    </TabsContent>
-
-                    {/* Tab 2: Original Document Viewer */}
+                    {/* Original Document Viewer */}
                     <TabsContent value="original">
                         <Card className="p-6">
                             <DocumentViewerWrapper
@@ -348,7 +252,7 @@ export default function DocumentRenderPage() {
                         </Card>
                     </TabsContent>
 
-                    {/* Tab 2: Extracted Data (existing content) */}
+                    {/* Extracted Data */}
                     <TabsContent value="extracted" className="w-full" style={{minWidth: '0'}}>
                         {document.blocks && document.blocks.length > 0 ? (
                             /* New: Blocks-based rendering (shows ALL content including titles, text) */
@@ -429,7 +333,7 @@ export default function DocumentRenderPage() {
                         ) : null}
                     </TabsContent>
 
-                    {/* Tab 3: Pages (for multi-page documents) */}
+                    {/* Pages (for multi-page documents) */}
                     {document.is_multi_page && (
                         <TabsContent value="pages">
                             <Card className="p-6">
@@ -585,10 +489,6 @@ export default function DocumentRenderPage() {
                 <Card className="p-6 mt-6">
                     <h2 className="text-xl font-bold mb-4">Extraction Metadata</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <p className="text-muted-foreground mb-1">Provider</p>
-                            <p className="font-medium capitalize">{document.metadata.provider}</p>
-                        </div>
                         {document.metadata.extraction_duration && (
                             <div>
                                 <p className="text-muted-foreground mb-1">Duration</p>

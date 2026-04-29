@@ -30,7 +30,7 @@ export function formatValue(v: any): string {
 /**
  * Derive a 0-1 confidence score from a raw field value.
  * - Fields wrapped with {source: "ai_enhancement"} → 0.92
- * - Direct plain values (from Claude open-mode pass) → 0.85
+ * - Direct plain values (extraction pass) → 0.85
  * - Fields with explicit confidence metadata → use that
  */
 export function deriveConfidence(v: any): number {
@@ -57,7 +57,7 @@ export function autoShipmentNumber(): string {
   return `SHP-${ymd}-${rand}`
 }
 
-/** Returns true when a raw field value carries Claude's redaction flag */
+/** Returns true when a raw field value carries a redaction flag */
 export function isRedacted(v: any): boolean {
   return typeof v === "object" && v !== null && !Array.isArray(v) && v.redacted === true
 }

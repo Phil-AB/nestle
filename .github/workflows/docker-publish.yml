@@ -1,0 +1,73 @@
+name: Build & Publish Docker Images
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # triggers on v1.0.0, v2.1.3, etc.
+
+env:
+  REGISTRY: ghcr.io
+  # Set this to your GitHub org/repo, e.g. ayadata/nestle-impex
+  IMAGE_BASE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version tag
+        id: meta
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── API image ──────────────────────────────────────────────────────────
+      - name: Build & push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}/api:${{ steps.meta.outputs.VERSION }}
+            ${{ env.IMAGE_BASE }}/api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── UI image ───────────────────────────────────────────────────────────
+      - name: Build & push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ui
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}/ui:${{ steps.meta.outputs.VERSION }}
+            ${{ env.IMAGE_BASE }}/ui:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "### Images published :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.IMAGE_BASE }}/api:${{ steps.meta.outputs.VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.IMAGE_BASE }}/ui:${{ steps.meta.outputs.VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To deploy on the client server:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "VERSION=${{ steps.meta.outputs.VERSION }} ./scripts/update.sh" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

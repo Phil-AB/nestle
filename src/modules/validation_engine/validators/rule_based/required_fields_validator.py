@@ -226,6 +226,17 @@ class RequiredFieldsValidator(IValidator):
                 return value["value"] if value["value"] is not None else value
             return value
 
+        # 3. Items fallback — field may live in the items array (item-level fields
+        #    like product_description are put in items[], not in the flat fields dict).
+        items = data.get("items")
+        if items and isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict) and field_name in item:
+                    val = item[field_name]
+                    if isinstance(val, dict) and "value" in val:
+                        return val["value"] if val["value"] is not None else val
+                    return val
+
         return None
 
     def _is_empty(self, value: Any) -> bool:

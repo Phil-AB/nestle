@@ -87,9 +87,16 @@ export function ShipmentSelector({
                 }`}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">
-                  {s.shipment_number}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-foreground truncate">
+                    {s.shipment_number}
+                  </p>
+                  {(s.boe_version ?? 0) > 0 && (
+                    <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">
+                      v{s.boe_version}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground truncate">
                   {s.supplier_name ?? "—"} → {s.consignee_name ?? "—"}
                 </p>

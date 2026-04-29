@@ -47,11 +47,12 @@ class Shipment(Base):
     )
     shipment_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     boe_number: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True, index=True)
+    boe_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     supplier_name: Mapped[str | None] = mapped_column(String(255))
     consignee_name: Mapped[str | None] = mapped_column(String(255))
-    incoterm: Mapped[str | None] = mapped_column(String(10))  # CFR, CIF, FCA
-    transport_mode: Mapped[str | None] = mapped_column(String(20))  # sea, air
-    status: Mapped[str] = mapped_column(String(50), default="pending", index=True)  # pending, validated, errors
+    incoterm: Mapped[str | None] = mapped_column(String(10))
+    transport_mode: Mapped[str | None] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(50), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -64,9 +65,31 @@ class Shipment(Base):
     validation_results: Mapped[List["ValidationResult"]] = relationship("ValidationResult", back_populates="shipment", cascade="all, delete-orphan")
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="shipment", cascade="all, delete-orphan")
     token_usages: Mapped[List["ShipmentTokenUsage"]] = relationship("ShipmentTokenUsage", back_populates="shipment", cascade="save-update, merge")
+    boe_history: Mapped[List["ShipmentBOEHistory"]] = relationship("ShipmentBOEHistory", back_populates="shipment", cascade="all, delete-orphan", order_by="ShipmentBOEHistory.version")
 
     def __repr__(self) -> str:
         return f"<Shipment(id={self.id}, number={self.shipment_number}, status={self.status})>"
+
+
+class ShipmentBOEHistory(Base):
+    """Immutable audit log of every BOE validation run for a shipment."""
+
+    __tablename__ = "shipment_boe_history"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    shipment_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("shipments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    boe_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    validated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    extracted_fields: Mapped[dict | None] = mapped_column(JSONB)
+
+    shipment: Mapped["Shipment"] = relationship("Shipment", back_populates="boe_history")
+
+    __table_args__ = (
+        Index("ix_shipment_boe_history_shipment_version", "shipment_id", "version", unique=True),
+    )
 
 
 class Invoice(Base):

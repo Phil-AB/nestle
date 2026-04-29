@@ -513,6 +513,7 @@ export interface ShipmentDetail {
   shipment_id: string
   shipment_number: string
   boe_number: string | null
+  boe_version: number
   supplier_name: string | null
   consignee_name: string | null
   incoterm: string | null
@@ -587,6 +588,28 @@ export interface BOEValidationResponse {
   critical_discrepancies?: ValidationDiscrepancy[]
   validation_results?: any[]
   extracted_boe?: ExtractedDocumentMeta
+}
+
+export interface BundleSegmentMeta {
+  document_type: string
+  pages: number[]
+  confidence: number
+  source_filename: string
+  extraction_status: string
+}
+
+export interface BundleValidationResponse {
+  session_id?: string
+  shipment_id?: string
+  workflow_status: "completed" | "awaiting_user" | "failed" | "running"
+  final_status?: "passed" | "failed" | "requires_attention"
+  summary?: Record<string, any>
+  discrepancies?: ValidationDiscrepancy[]
+  validation_results?: any[]
+  token_usage?: Record<string, any>
+  bundle_segments?: BundleSegmentMeta[]
+  merged_documents?: Record<string, { merged_count: number; merged_from: string[] }>
+  extracted_documents?: Record<string, ExtractedDocumentMeta>
 }
 
 // ============================================================================
@@ -1307,7 +1330,7 @@ class APIClient {
     params.append("page_size", String(options?.pageSize || 50))
 
     return this.request<PaginatedResponse<DocumentResponse>>(
-      `/documents/?${params.toString()}`
+      `/documents?${params.toString()}`
     )
   }
 
@@ -2470,6 +2493,40 @@ class APIClient {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new Error("Request timed out.")
+      }
+      throw error
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  /**
+   * Bundle PDF validation — single PDF containing multiple document types.
+   */
+  async validateBundle(
+    shipmentId: string,
+    bundleFile: File
+  ): Promise<BundleValidationResponse> {
+    const form = new FormData()
+    form.append("bundle_file", bundleFile)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 600_000)
+    try {
+      const response = await fetch(`${API_V2_BASE_URL}/validation/shipments/${shipmentId}/validate-bundle`, {
+        method: "POST",
+        headers: { "X-API-Key": API_KEY },
+        body: form,
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }))
+        throw new Error(err.detail || err.message || `HTTP ${response.status}`)
+      }
+      return response.json()
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Request timed out. Bundle extraction is taking too long.")
       }
       throw error
     } finally {

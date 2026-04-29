@@ -43,6 +43,12 @@ export default function VendorValidationForm() {
       {/* Upload */}
       {v.step === "upload" && (
         <UploadStep
+          uploadMode={v.uploadMode}
+          setUploadMode={v.setUploadMode}
+          bundleFile={v.bundleFile}
+          setBundleFile={v.setBundleFile}
+          bundleRequiredFilled={v.bundleRequiredFilled}
+          onBundleValidate={v.handleBundleValidate}
           showShipmentDetails={v.showShipmentDetails}
           setShowShipmentDetails={v.setShowShipmentDetails}
           shipmentNumber={v.shipmentNumber}

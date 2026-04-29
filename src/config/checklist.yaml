@@ -230,7 +230,7 @@ checklist:
     source_documents: [invoice, packing_list, bill_of_lading, boe]
     extraction_hints:
       invoice: "Extract the total net weight and total gross weight for the entire shipment. These are shipment-level grand totals, not per-line-item weights."
-      packing_list: "Extract the total net weight and total gross weight for the entire shipment. These are the grand totals across all containers and line items, not per-container subtotals."
+      packing_list: "Extract the total net weight and total gross weight for the entire shipment. Net weight is the physical weight of the goods themselves excluding all packaging. Gross weight includes all packaging. Both must be expressed in weight units (KG, TNE, MT, LBS) — never in monetary units. If a field labeled 'Net' contains a currency value (USD, EUR, etc.) or matches the invoice total, it is a monetary amount and must be ignored. Use only the grand-total summary line for the entire shipment, not per-line-item or per-pallet subtotals."
       bill_of_lading: "Extract the total net weight and total gross weight for the entire shipment from the shipment summary."
       boe: "Extract the gross mass or gross weight declared for this customs entry."
     fields:
