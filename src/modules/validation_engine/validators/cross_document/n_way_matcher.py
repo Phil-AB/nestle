@@ -186,10 +186,18 @@ class NWayMatcher(IValidator):
 
         For fuzzy matching, every pair of documents is compared individually
         and the check passes only when ALL pairs meet the similarity threshold.
+        For any_in_list, the check passes when at least one token is common
+        across all documents' comma-separated value lists.
         For all other match types, normalised values are compared for equality.
         """
         if self.match_type == MatchType.FUZZY:
             return self._compare_fuzzy(field_values)
+
+        if self.match_type == MatchType.ANY_IN_LIST:
+            return self._compare_any_in_list(field_values)
+
+        if self.match_type == MatchType.HS_PREFIX:
+            return self._compare_hs_codes(field_values)
 
         # Deterministic normalisation + equality
         normalized: Dict[str, Any] = {
@@ -260,8 +268,10 @@ class NWayMatcher(IValidator):
         for i in range(len(docs)):
             for j in range(i + 1, len(docs)):
                 doc_a, doc_b = docs[i], docs[j]
-                val_a = str(field_values[doc_a]).strip().lower()
-                val_b = str(field_values[doc_b]).strip().lower()
+                # Pre-sort comma-separated lists (e.g. container IDs) so that
+                # order differences don't deflate the similarity score.
+                val_a = self._normalize_value(str(field_values[doc_a]), "normalized").lower()
+                val_b = self._normalize_value(str(field_values[doc_b]), "normalized").lower()
 
                 score = _similarity(val_a, val_b)
                 passed = score >= self.fuzzy_threshold
@@ -324,6 +334,142 @@ class NWayMatcher(IValidator):
                 "fuzzy_threshold": self.fuzzy_threshold,
                 "failing_pairs": failing,
                 "all_pairs": pairs_checked,
+            },
+        )]
+
+    def _compare_any_in_list(
+        self, field_values: Dict[str, Any]
+    ) -> List[ValidationResult]:
+        """
+        Pass if at least one value token is shared across all documents.
+
+        Each document's value is treated as a comma-separated list of tokens.
+        The check passes when the intersection of all token sets is non-empty,
+        meaning every document's list contains at least one common value.
+
+        Designed for invoice_number checks where the merged invoice document
+        holds a union of export permit numbers (e.g. "9949832373, 9949960404")
+        while the BOE references a single number ("9949960404").
+        """
+        token_sets: Dict[str, set] = {}
+        for doc, val in field_values.items():
+            tokens = {t.strip() for t in str(val).split(",") if t.strip()}
+            token_sets[doc] = tokens
+
+        common = set.intersection(*token_sets.values()) if token_sets else set()
+
+        if common:
+            return [ValidationResult(
+                validator_name=self.validator_name,
+                validator_type=self.validator_type,
+                field_name=self.field_name,
+                source_value=field_values,
+                target_value=None,
+                passed=True,
+                confidence=1.0,
+                severity=Severity.INFO,
+                message=(
+                    f"'{self.field_name}' matches across "
+                    f"{', '.join(field_values.keys())} "
+                    f"(common value: {', '.join(sorted(common))})"
+                ),
+                metadata={
+                    "match_type": "any_in_list",
+                    "common_values": sorted(common),
+                    "documents": list(field_values.keys()),
+                },
+            )]
+
+        return [ValidationResult(
+            validator_name=self.validator_name,
+            validator_type=self.validator_type,
+            field_name=self.field_name,
+            source_value=field_values,
+            target_value=None,
+            passed=False,
+            confidence=0.9,
+            severity=self.get_severity({}),
+            message=(
+                f"'{self.field_name}' no common value found across documents — "
+                f"{len(field_values)} distinct value sets."
+            ),
+            discrepancy={
+                "field_name": self.field_name,
+                "match_type": "any_in_list",
+                "documents": list(field_values.keys()),
+                "values": field_values,
+                "token_sets": {d: sorted(ts) for d, ts in token_sets.items()},
+            },
+        )]
+
+    def _compare_hs_codes(
+        self, field_values: Dict[str, Any]
+    ) -> List[ValidationResult]:
+        """
+        HS-code prefix comparison across N documents.
+
+        Strip non-digit characters from each value and check that every pair
+        agrees on the shared leading digits — i.e. the shorter code must be a
+        prefix of the longer code.  This handles documents that use different
+        specificity levels of the same HS sub-heading (e.g. BOE 10-digit
+        national code vs BL 8-digit international code).
+        """
+        import re as _re
+
+        def _digits(v: Any) -> str:
+            return _re.sub(r'\D', '', str(v))
+
+        digit_map = {doc: _digits(val) for doc, val in field_values.items()}
+        docs = list(digit_map.keys())
+
+        failing_pairs: List[Dict[str, Any]] = []
+        for i in range(len(docs)):
+            for j in range(i + 1, len(docs)):
+                a, b = docs[i], docs[j]
+                da, db = digit_map[a], digit_map[b]
+                shorter, longer = (da, db) if len(da) <= len(db) else (db, da)
+                if not longer.startswith(shorter):
+                    failing_pairs.append({
+                        "doc_a": a, "value_a": field_values[a],
+                        "doc_b": b, "value_b": field_values[b],
+                    })
+
+        if not failing_pairs:
+            return [ValidationResult(
+                validator_name=self.validator_name,
+                validator_type=self.validator_type,
+                field_name=self.field_name,
+                source_value=field_values,
+                target_value=None,
+                passed=True,
+                confidence=1.0,
+                severity=Severity.INFO,
+                message=(
+                    f"'{self.field_name}' HS codes are consistent across "
+                    f"{', '.join(docs)} (prefix match)"
+                ),
+                metadata={"match_type": "hs_prefix", "documents": docs, "digit_values": digit_map},
+            )]
+
+        return [ValidationResult(
+            validator_name=self.validator_name,
+            validator_type=self.validator_type,
+            field_name=self.field_name,
+            source_value=field_values,
+            target_value=None,
+            passed=False,
+            confidence=0.9,
+            severity=self.get_severity({}),
+            message=(
+                f"'{self.field_name}' HS code prefix mismatch — "
+                f"{len(failing_pairs)} pair(s) failed."
+            ),
+            discrepancy={
+                "field_name": self.field_name,
+                "match_type": "hs_prefix",
+                "documents": docs,
+                "values": field_values,
+                "failing_pairs": failing_pairs,
             },
         )]
 
@@ -404,18 +550,24 @@ class NWayMatcher(IValidator):
             comparable = {d: v for d, v in field_values.items() if v is not None}
 
             if len(comparable) < 2:
+                # When require_all is false, missing item-level data is not a failure —
+                # skip gracefully so documents that legitimately omit HS codes at the
+                # item level (e.g. CFDI invoices with SAT codes instead of HS codes)
+                # don't generate spurious discrepancies.
+                passed = not self.require_all
                 results.append(ValidationResult(
                     validator_name=self.validator_name,
                     validator_type=self.validator_type,
                     field_name=self.field_name,
                     source_value=ref_value,
                     target_value=None,
-                    passed=False,
+                    passed=passed,
                     confidence=0.5,
-                    severity=Severity.MINOR,
+                    severity=Severity.INFO if passed else Severity.MINOR,
                     message=(
                         f"Item {idx + 1} (HS: {ref_hs or 'unknown'}): "
-                        f"'{self.field_name}' found in fewer than 2 documents"
+                        f"'{self.field_name}' found in fewer than 2 documents — "
+                        f"{'skipping' if passed else 'flagging'}"
                     ),
                     metadata={"item_index": idx, "hs_code": ref_hs},
                 ))
@@ -479,6 +631,9 @@ class NWayMatcher(IValidator):
             items = doc_data.get("items") or []
             if items and isinstance(items[0], dict):
                 value = items[0].get(field_name)
+        # Unwrap Reducto/confidence envelopes that survive normalization
+        if isinstance(value, dict) and "value" in value and not value.get("redacted"):
+            value = value.get("value")
         return value
 
     @staticmethod
@@ -513,10 +668,12 @@ class NWayMatcher(IValidator):
             # Normalise whitespace and case.
             # For comma-separated lists (e.g. container IDs), sort tokens so
             # order differences don't cause false-positive mismatches.
+            # Internal whitespace within each token is also removed so that
+            # "UETU 7236480" and "UETU7236480" compare as equal.
             stripped = value.strip()
             if "," in stripped:
                 tokens = sorted(
-                    t.strip().upper() for t in stripped.split(",") if t.strip()
+                    "".join(t.split()).upper() for t in stripped.split(",") if t.strip()
                 )
                 return ",".join(tokens)
             return " ".join(value.lower().split())

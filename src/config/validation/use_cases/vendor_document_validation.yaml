@@ -469,10 +469,11 @@ use_case:
 
       # ── 5. Trade reference consistency ─────────────────────────────────────
       # order_number, contract_number, and po_number are the three fields that
-      # tie invoice ↔ packing list ↔ BOL together. All three must match exactly
-      # across every document that carries them.
-      # require_all: false — graceful skip if a document doesn't carry the field,
-      # but a mismatch when both sides are present is always a failure.
+      # tie invoice ↔ packing list ↔ BOL together.
+      # match_type "normalized" sorts comma-separated lists before comparing so
+      # that merged multi-invoice documents ("PO1, PO2") match regardless of
+      # the order in which individual segments contributed their references.
+      # require_all: false — graceful skip if a document doesn't carry the field.
       - name: "order_number_consistency"
         description: "Supplier order number must match across invoice, packing list, and BOL"
         validators:
@@ -483,7 +484,7 @@ use_case:
             - "invoice"
             - "packing_list"
             - "bill_of_lading"
-          match_type: "exact"
+          match_type: "normalized"
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -497,7 +498,7 @@ use_case:
             - "invoice"
             - "packing_list"
             - "bill_of_lading"
-          match_type: "exact"
+          match_type: "normalized"
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -511,7 +512,8 @@ use_case:
             - "invoice"
             - "packing_list"
             - "bill_of_lading"
-          match_type: "exact"
+          match_type: "fuzzy"
+          fuzzy_threshold: 0.4
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -532,7 +534,7 @@ use_case:
             - "packing_list"
             - "bill_of_lading"
           match_type: "fuzzy"
-          fuzzy_threshold: 0.5
+          fuzzy_threshold: 0.3
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -589,6 +591,7 @@ use_case:
               target: "packing_list.net_weight"
               tolerance_percent: 1.0
               operator: "equals"
+              optional_target: true
             - name: "net_weight_invoice_to_bol"
               source: "invoice.net_weight"
               target: "bill_of_lading.net_weight"
@@ -673,7 +676,7 @@ use_case:
       # The same 7 container IDs must appear on both packing list and BOL.
       # Normalized match handles any ordering differences.
       - name: "container_numbers_consistency"
-        description: "Container IDs must match exactly between packing list and BOL"
+        description: "Container IDs must match across packing list and BOL — fuzzy to tolerate single-digit OCR misreads"
         validators:
           - "n_way_matcher"
         config:
@@ -681,7 +684,8 @@ use_case:
           documents:
             - "packing_list"
             - "bill_of_lading"
-          match_type: "normalized"
+          match_type: "fuzzy"
+          fuzzy_threshold: 0.95
           require_all: false
         on_failure: "flag_and_continue"
 

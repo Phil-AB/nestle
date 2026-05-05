@@ -784,11 +784,24 @@ async def validate_boe(
                 limit=20,
             )
 
-        vendor_docs = {
-            d.document_type: {**d.fields, "items": d.items or []}
-            for d in vendor_docs_raw
-            if d.document_type in vendor_doc_types
-        }
+        from collections import defaultdict
+        from src.api.services.bundle_segmentation_service import DocumentMerger
+
+        # Group all current vendor docs by type, then merge each group.
+        # DocumentMerger sums numeric fields (FOB, weights), unions identifiers
+        # (invoice_number), and concatenates line items — correct for any N docs
+        # of the same type (2 invoices, 3 packing lists, etc.).
+        by_type: dict = defaultdict(list)
+        for d in vendor_docs_raw:
+            if d.document_type in vendor_doc_types:
+                by_type[d.document_type].append(d)
+
+        merger = DocumentMerger()
+        vendor_docs: dict = {}
+        for doc_type, docs in by_type.items():
+            raw_dicts = [{**d.fields, "items": d.items or []} for d in docs]
+            merged, _ = merger.merge(doc_type, raw_dicts)
+            vendor_docs[doc_type] = merged
 
         if "invoice" not in vendor_docs:
             raise HTTPException(

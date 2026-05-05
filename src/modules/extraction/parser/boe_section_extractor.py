@@ -458,7 +458,21 @@ class BOESectionExtractor:
           commodity_code, gross_wt_kg, net_wt_kg, quantity_unit,
           customs_value, freight_ncy, insurance_ncy, cpc,
           cty_org_dest, fob_fcy_cc, description_of_goods
+
+        Fields that are distributed across items (net_weight, customs_value,
+        freight_value, insurance_value, quantity) are summed across all items.
+        Fields that are identical on every item (hs_code, customs_code,
+        country_of_origin) use first-item-wins.
+        gross_weight is already set from the BOE header (gross_mass_kg) before
+        this method runs, so it is left untouched here.
         """
+        # Accumulators for per-item fields that must be summed across all goods lines.
+        _net_weight: float = 0.0
+        _customs_value: float = 0.0
+        _freight_value: float = 0.0
+        _insurance_value: float = 0.0
+        _quantity: float = 0.0
+
         for item in items:
             # Unwrap confidence envelopes
             item = {
@@ -483,60 +497,55 @@ class BOESectionExtractor:
                         pass
                 return None
 
-            # ── HS Code ──────────────────────────────────────────────────────
+            # ── HS Code (first-item-wins — identical on every item) ───────────
             if "hs_code" not in out:
                 raw_hs = _raw("commodity_code").replace(",", "")
                 if raw_hs and re.fullmatch(r'\d{6,10}', raw_hs):
                     out["hs_code"] = raw_hs
 
-            # ── Gross weight ─────────────────────────────────────────────────
+            # ── Gross weight (first-item-wins — header gross_mass_kg is authoritative) ──
             if "gross_weight" not in out:
                 v = _num("gross_wt_kg")
                 if v is not None:
                     out["gross_weight"] = v
 
-            # ── Net weight ───────────────────────────────────────────────────
-            if "net_weight" not in out:
-                v = _num("net_wt_kg")
-                if v is not None:
-                    out["net_weight"] = v
+            # ── Net weight (accumulate across items) ─────────────────────────
+            v = _num("net_wt_kg")
+            if v is not None:
+                _net_weight += v
 
-            # ── Quantity (numeric) ───────────────────────────────────────────
+            # ── Quantity (accumulate across items) ───────────────────────────
             # Value: "7,560 BG" → 7560.0
-            if "quantity" not in out:
-                raw_qty = _raw("quantity_unit")
-                m = re.match(r'^([\d,\.]+)', raw_qty)
-                if m:
-                    try:
-                        out["quantity"] = float(m.group(1).replace(",", ""))
-                    except ValueError:
-                        pass
+            raw_qty = _raw("quantity_unit")
+            m = re.match(r'^([\d,\.]+)', raw_qty)
+            if m:
+                try:
+                    _quantity += float(m.group(1).replace(",", ""))
+                except ValueError:
+                    pass
 
-            # ── Customs value ────────────────────────────────────────────────
-            if "customs_value" not in out:
-                v = _num("customs_value")
-                if v is not None:
-                    out["customs_value"] = v
+            # ── Customs value (accumulate across items) ──────────────────────
+            v = _num("customs_value")
+            if v is not None:
+                _customs_value += v
 
-            # ── Freight value ────────────────────────────────────────────────
-            if "freight_value" not in out:
-                v = _num("freight_ncy")
-                if v is not None:
-                    out["freight_value"] = v
+            # ── Freight value (accumulate across items) ──────────────────────
+            v = _num("freight_ncy")
+            if v is not None:
+                _freight_value += v
 
-            # ── Insurance value ──────────────────────────────────────────────
-            if "insurance_value" not in out:
-                v = _num("insurance_ncy")
-                if v is not None:
-                    out["insurance_value"] = v
+            # ── Insurance value (accumulate across items) ────────────────────
+            v = _num("insurance_ncy")
+            if v is not None:
+                _insurance_value += v
 
-            # ── CPC / Customs procedure code ─────────────────────────────────
+            # ── CPC / Customs procedure code (first-item-wins — identical on every item) ──
             if "customs_code" not in out:
                 raw = _raw("cpc")
                 if raw and re.match(r'40[A-Z]\d{2,3}', raw):
                     out["customs_code"] = raw
 
-            # ── Country of origin ────────────────────────────────────────────
+            # ── Country of origin (first-item-wins — identical on every item) ─
             if "country_of_origin" not in out:
                 raw = _raw("cty_org_dest")
                 if raw and re.fullmatch(r'[A-Z]{2,3}', raw):
@@ -570,6 +579,20 @@ class BOESectionExtractor:
                 raw = _raw("description_of_goods")
                 if raw:
                     out["product_description"] = raw
+
+        # ── Apply accumulated sums ────────────────────────────────────────────
+        # Only write if the header path did not already populate the field and
+        # at least one item contributed a non-zero value.
+        if _net_weight > 0 and "net_weight" not in out:
+            out["net_weight"] = _net_weight
+        if _customs_value > 0 and "customs_value" not in out:
+            out["customs_value"] = _customs_value
+        if _freight_value > 0 and "freight_value" not in out:
+            out["freight_value"] = _freight_value
+        if _insurance_value > 0 and "insurance_value" not in out:
+            out["insurance_value"] = _insurance_value
+        if _quantity > 0 and "quantity" not in out:
+            out["quantity"] = _quantity
 
     # ─── Tax table extraction from blocks (Claude path) ──────────────────────
 

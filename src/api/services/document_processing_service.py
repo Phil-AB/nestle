@@ -420,10 +420,15 @@ class DocumentProcessingService:
                     cleaned = re.sub(pattern, replacement, cleaned).strip()
 
             if cleaned != val_str:
+                # An empty result means the entire value was erased by the cleanup
+                # rules (e.g. a BOL order_number that was just an invoice reference).
+                # Treat it as absent so downstream validators skip it rather than
+                # comparing an empty string against real values.
+                final: Any = None if cleaned == "" else cleaned
                 if wrapper is not None:
-                    wrapper["value"] = cleaned
+                    wrapper["value"] = final
                 else:
-                    fields[field_name] = cleaned
+                    fields[field_name] = final
                 logger.info(
                     f"Value cleanup ({document_type}): cleaned {field_name} "
                     f"[{len(val_str)} → {len(cleaned)} chars]"
@@ -482,8 +487,39 @@ class DocumentProcessingService:
             if not addr_key:
                 continue
 
+            import re as _re
             raw_addr = str(_val(fields[addr_key])).strip()
             first_line = raw_addr.split("\n")[0].strip()
+            # Skip derivation if the first line looks like a street address
+            # rather than a company name.  Two-signal rule: recognised street-type
+            # word AND a number, OR starts with a multi-digit house number.
+            # Requiring both signals avoids false positives on company names like
+            # "Avenue Capital Group" (street word, no number).
+            _STREET_TYPES = _re.compile(
+                r'\b(boulevard|blvd|avenue|ave|street|road|drive|lane|way|'
+                r'place|court|rue|via|calle|avenida|paseo|strasse|allee|straat|'
+                r'alley|close|crescent|terrace|square|broadway)\b',
+                _re.IGNORECASE,
+            )
+            _STREET_PREFIX = _re.compile(
+                r'^(boulevard|blvd|avenue|ave|street|road|drive|lane|way|'
+                r'place|court|rue|via|calle|avenida|paseo|strasse|allee|straat|'
+                r'alley|close|crescent|terrace|square|broadway)\b',
+                _re.IGNORECASE,
+            )
+            _HAS_NUMBER = _re.compile(r'\b\d{2,}\b')
+            _line_lower = first_line.lower()
+            _is_address = (
+                bool(_re.match(r'^\d{2,}', first_line.strip()))
+                or bool(_STREET_PREFIX.match(first_line.strip()))
+                or (bool(_STREET_TYPES.search(_line_lower)) and bool(_HAS_NUMBER.search(_line_lower)))
+            )
+            if _is_address:
+                logger.debug(
+                    f"Party name fallback skipped for {role}: "
+                    f"first address line looks like a street address ({first_line!r})"
+                )
+                continue
             if first_line:
                 # Write back to the SAME key Claude used for the name, or
                 # fall back to the first name variant if no name key exists.

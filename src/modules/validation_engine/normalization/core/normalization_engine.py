@@ -114,6 +114,22 @@ class NormalizationEngine:
         # Step 2: Normalize field values
         normalized = await self._normalize_field_values(normalized, document_type)
 
+        # Step 3: Weight sanity — net weight can never exceed gross weight.
+        # If it does, the extraction mixed up a monetary value or a sub-total with
+        # the physical weight. Null it out so the cross-document validator skips
+        # rather than firing a false discrepancy against the correct invoice value.
+        net = normalized.get("net_weight")
+        gross = normalized.get("gross_weight")
+        if isinstance(net, (int, float)) and isinstance(gross, (int, float)) and gross > 0:
+            if net > gross * 1.05:
+                logger.warning(
+                    "net_weight (%s) exceeds gross_weight (%s) by more than 5%% — "
+                    "extraction error (likely a monetary value was read as weight); "
+                    "nulling net_weight to prevent false cross-document discrepancy",
+                    net, gross,
+                )
+                normalized["net_weight"] = None
+
         return normalized
 
     async def _normalize_field_values(

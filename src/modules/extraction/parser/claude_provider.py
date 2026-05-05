@@ -767,6 +767,88 @@ class ClaudeProvider(IParserProvider):
                 "extract it as null, NOT as a number from an adjacent field.\n"
             )
 
+        if dt == "packing_list":
+            base += (
+                "\nPACKING LIST / DELIVERY NOTE RULES:\n"
+                "BATCH SUB-ROWS:\n"
+                "- Some delivery notes (e.g. SAP) show a parent item row then sub-rows that break "
+                "that item's quantity into batches or lots. Sub-rows are identified by a batch/lot "
+                "identifier appended to the product description — e.g. 'Product Name (batch 12345)' "
+                "or 'Product Name / Lot 99'. These sub-rows are subdivisions of the parent, not "
+                "additional items. When extracting the total quantity, use ONLY parent item rows; "
+                "do NOT add batch sub-rows. The sub-rows sum to exactly the parent's quantity, so "
+                "adding them doubles the count.\n"
+                "NET WEIGHT vs MONETARY 'NET' (CRITICAL — read carefully):\n"
+                "SAP delivery note footers contain THREE rows that include the word 'Net':\n"
+                "  (A) 'Net [amount] [CURRENCY]' — e.g. 'Net 52,143.84 USD' or 'Net 55,177.92 USD'. "
+                "This is the monetary invoice value. The currency code (USD/EUR/GBP) is the "
+                "definitive signal. SKIP this row — do NOT extract it as net_weight.\n"
+                "  (B) 'Gross Weight: [number] [unit]' — e.g. 'Gross Weight: 15,123 TNE'. "
+                "Extract ONLY the numeric part as gross_weight (e.g. 15123). "
+                "The value is already in KG. Do NOT extract the unit label (TNE/KG) separately "
+                "as weight_unit — it would cause incorrect conversion downstream.\n"
+                "  (C) 'Net Weight: [number]' — e.g. 'Net Weight: 11,290'. "
+                "This row has NO currency code and NO unit label after the number. "
+                "Extract the numeric value as net_weight (e.g. 11290). This is in KG. "
+                "THIS ROW IS MANDATORY — always scan the full footer to find it.\n"
+                "Summary rule: 'Net' + currency → skip. "
+                "'Gross Weight:' → gross_weight numeric only. "
+                "'Net Weight:' → net_weight numeric only.\n"
+                "- Do NOT set weight_unit from footer rows. Leave weight_unit null.\n"
+                "- The footer rows appear after the line-item table, before the signature block.\n"
+                "ORDER NUMBER:\n"
+                "- The delivery note document number (the number printed in the document header "
+                "as the document's own identifier, e.g. 'Delivery Note 8512733054') is NOT an "
+                "order_number. It is a self-referential document ID. Return null for order_number "
+                "unless the document contains a field explicitly labeled with a term meaning "
+                "'Order No', 'Order Number', 'Our Order Number', 'Supplier Order', or equivalent.\n"
+            )
+
+        if dt == "invoice":
+            base += (
+                "\nINVOICE-SPECIFIC RULES:\n"
+                "ORDER NUMBER:\n"
+                "- Do not extract party master-data identifiers as order_number. Fields that "
+                "identify a standing relationship between buyer and seller — such as a customer "
+                "number, client code, account number, buyer ID, or vendor code — are NOT "
+                "order references. An order_number is a transaction-level reference that is "
+                "unique to this specific shipment or purchase order. Return null for order_number "
+                "if no field labeled with a variant of 'Order No', 'Our Order Number', or "
+                "'Delivery No' is present on the document.\n"
+                "INVOICE NUMBER (CFDI / Mexican fiscal invoices):\n"
+                "- CFDI documents show a header table with columns: No. CLIENTE, FECHA EXPEDICION, "
+                "FACTURA/INVOICE DOCUMENTO, No. DOCUMENTO, and No. EXPORTACION. "
+                "The 'No. EXPORTACION' column holds the export permit number (e.g. 9949960404). "
+                "Extract this value as invoice_number.\n"
+                "- CRITICAL: 'LUGAR DE EXPEDICION' is the ZIP/postal code of the place of "
+                "expedition (e.g. 47820 for a Mexico City ZIP code). It is NOT an invoice number. "
+                "Never use the LUGAR DE EXPEDICION value as invoice_number.\n"
+                "- If 'No. EXPORTACION' is absent or null, fall back to the CFDI folio: the "
+                "document reference under 'FACTURA / INVOICE DOCUMENTO' (e.g. FNCD559363).\n"
+                "SHIPPER NAME (CFDI / Mexican fiscal invoices):\n"
+                "- On CFDI documents the formal 'DATOS DEL EMISOR' or 'EMISOR' section "
+                "contains the legal entity's RFC tax ID and their official legal name "
+                "(denominación or razón social). Extract this full legal name as shipper_name.\n"
+                "- Do NOT extract a marketing brand, letterhead text, or an internal "
+                "office/division name (e.g. 'OFICINAS GENERALES') as shipper_name.\n"
+                "- If the document header shows 'BrandName (DIVISION)' or 'BrandName DIVISION', "
+                "locate the formal EMISOR section and extract the legal entity name from there.\n"
+                "HS CODE:\n"
+                "- Return null for hs_code if the document only contains fiscal/tax product "
+                "classification codes from a national tax system — for example SAT CÓDIGO SAT, "
+                "Clave Prod/Serv, Clave SAT, or any slash-separated compound code "
+                "(e.g. '1/19011002', '43232609'). These are domestic tax codes, NOT HS codes. "
+                "Only extract hs_code if the document has a field explicitly labeled 'HS Code', "
+                "'HS', 'Tariff Code', 'HTS Code', or 'Commodity Code' with a 6–10 digit "
+                "internationally recognised customs code.\n"
+                "FOB VALUE:\n"
+                "- When computing total_fob_value, include ONLY charges for physical goods. "
+                "Exclude any line items labeled 'GASTOS EXPORTACION', 'Gastos de Exportación', "
+                "'export expenses', 'export handling', 'freight charges', or any service/handling "
+                "fee that is NOT a physical good being shipped. These are ancillary charges that "
+                "the customs authority excludes from the declared FOB value.\n"
+            )
+
         return base
 
     def _build_extract_user_message(
@@ -814,7 +896,10 @@ class ClaudeProvider(IParserProvider):
                 "Do NOT duplicate the same value under multiple key names. "
                 "For name fields (shipper_name, consignee_name, bill_to_name), extract ONLY the company "
                 "name — no street address, phone, fax, or email. Those go in the corresponding address "
-                "field. For product descriptions, extract ONLY the product/goods text — strip container "
+                "field. If a party block contains only postal or street address text with no company or "
+                "organisation name present, return null for the name field and place the address text in "
+                "the address field. "
+                "For product descriptions, extract ONLY the product/goods text — strip container "
                 "preamble boilerplate like 'X ft. CONTAINER SAID TO CONTAIN N BAGS'. "
                 "For currency values, include the currency code once: 'EUR 467,775.00', not 'EUR 467,775.00 EUR'. "
                 "For weight fields, extract the GRAND TOTAL, not per-container subtotals.\n"
@@ -937,30 +1022,72 @@ class ClaudeProvider(IParserProvider):
             ) from exc
 
     @staticmethod
+    def _find_last_close_brace(text: str) -> int:
+        """Return the index of the last ``}`` that is *not* inside a JSON string."""
+        in_string = False
+        last = -1
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if in_string:
+                if ch == '\\':
+                    i += 2
+                    continue
+                if ch == '"':
+                    in_string = False
+            else:
+                if ch == '"':
+                    in_string = True
+                elif ch == '}':
+                    last = i
+            i += 1
+        return last
+
+    @staticmethod
+    def _count_unclosed_brackets(text: str) -> tuple[int, int]:
+        """Count unclosed ``{`` and ``[``, ignoring characters inside JSON strings."""
+        in_string = False
+        depth_brace = 0
+        depth_bracket = 0
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if in_string:
+                if ch == '\\':
+                    i += 2
+                    continue
+                if ch == '"':
+                    in_string = False
+            else:
+                if ch == '"':
+                    in_string = True
+                elif ch == '{':
+                    depth_brace += 1
+                elif ch == '}':
+                    depth_brace -= 1
+                elif ch == '[':
+                    depth_bracket += 1
+                elif ch == ']':
+                    depth_bracket -= 1
+            i += 1
+        return max(depth_brace, 0), max(depth_bracket, 0)
+
+    @staticmethod
     def _recover_truncated_json(text: str) -> Optional[Dict[str, Any]]:
         """
         Attempt to recover a JSON object truncated mid-stream (e.g. hit max_tokens).
 
-        Finds the last fully-closed field entry (`},`), trims there, and closes
-        all open brace/bracket pairs so the result is valid JSON.
+        Finds the last ``}`` outside a string, trims there, and closes remaining
+        open brace/bracket pairs so the result is valid JSON.
         """
-        # Find the last position that ends a complete object value: `},` or `}`
-        # followed only by whitespace/newlines up to the truncation point.
-        last_complete = -1
-        for marker in ('},\n', '},', '}'):
-            pos = text.rfind(marker)
-            if pos > last_complete:
-                last_complete = pos + len(marker.rstrip(','))  # keep the closing `}`
-
-        if last_complete <= 0:
+        last_pos = ClaudeProvider._find_last_close_brace(text)
+        if last_pos <= 0:
             return None
 
-        truncated = text[:last_complete]
+        truncated = text[: last_pos + 1]
 
-        # Count and close open braces/brackets
-        opens = truncated.count('{') - truncated.count('}')
-        closes = truncated.count('[') - truncated.count(']')
-        truncated += (']' * max(closes, 0)) + ('}' * max(opens, 0))
+        opens, closes = ClaudeProvider._count_unclosed_brackets(truncated)
+        truncated += (']' * closes) + ('}' * opens)
 
         try:
             return json.loads(truncated)

@@ -200,7 +200,7 @@ checklist:
     label: "Insurance"
     status: "Correct"
     which_doc: "Check freight and insurance on the invoice for CIF incoterm. For CFR, check invoice for freight."
-    notes: "CIF: use insurance value on invoice. CFR/FCA: apply 0.875% for Sea & Road, 1% for Air on C&F"
+    notes: "For CIF: use insurance value on invoice. For CFR/FCA: apply 0.875% for Sea & Road, 1% for Air on C&F"
     source_documents: [invoice, boe]
     extraction_hints:
       invoice: "Extract the insurance value if charged on the invoice. If the incoterm is FCA or FOB, insurance is the buyer's responsibility and will not appear — return null in that case."

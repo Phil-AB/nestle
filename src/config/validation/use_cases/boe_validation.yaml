@@ -252,6 +252,11 @@ use_case:
                 bill_of_lading: "shipper_address"
               match_type: "fuzzy"
               fuzzy_threshold: 0.65
+              # Shipper addresses frequently differ in detail across documents:
+              # BOE uses a short form the customs agent knows; BL may omit the
+              # street type prefix used on the invoice.  0.3 still catches
+              # completely unrelated addresses while tolerating partial matches.
+              address_threshold: 0.3
               check_address: true
 
             - name: "consignee"
@@ -306,10 +311,14 @@ use_case:
               - "gross_weight"
         on_failure: "flag_and_continue"
 
-      # Step 2: HS Code must match exactly across all documents
-      # Note: commercial invoices and packing lists often do not contain HS codes —
-      # those are declared by the customs broker.  require_all: false means the check
-      # only runs when the field is present in at least 2 documents.
+      # Step 2: HS Code must match across all documents that carry one.
+      # BOE uses Ghana's full 10-digit national tariff code; BL/AWB typically
+      # carries the shorter 6-8 digit international HS sub-heading.  Both
+      # represent the same good — match_type "hs_prefix" passes when the shorter
+      # code is a leading-digit prefix of the longer one.
+      # Commercial invoices and packing lists often omit HS codes (e.g. CFDI
+      # invoices use SAT domestic codes instead); require_all: false skips
+      # gracefully when fewer than 2 documents carry an HS code.
       - name: "hs_code_3way_matching"
         description: "HS Code must match across BOE, Invoice, Packing List, and BOL (when present)"
         validators:
@@ -321,7 +330,7 @@ use_case:
             - "invoice"
             - "packing_list"
             - "bill_of_lading"
-          match_type: "exact"
+          match_type: "hs_prefix"
           require_all: false
         on_failure: "flag_and_continue"
 
@@ -374,30 +383,38 @@ use_case:
               tolerance_percent: 1.0
               operator: "equals"
 
+            # BL is the optional target: some carriers omit net_weight or redact it
+            # on the issued BL copy.  When present it must match; when absent, skip.
+            # Source/target are swapped vs. the original so the existing
+            # optional_target flag covers the BL-absent case without code changes.
             - name: "gross_weight_bol_to_invoice"
-              source: "bill_of_lading.gross_weight"
-              target: "invoice.gross_weight"
+              source: "invoice.gross_weight"
+              target: "bill_of_lading.gross_weight"
               tolerance_percent: 1.0
               operator: "equals"
+              optional_target: true
 
             - name: "net_weight_bol_to_invoice"
-              source: "bill_of_lading.net_weight"
-              target: "invoice.net_weight"
+              source: "invoice.net_weight"
+              target: "bill_of_lading.net_weight"
               tolerance_percent: 1.0
               operator: "equals"
+              optional_target: true
 
-            # Checklist: "Packing list & Bill of lading weights should align"
+            # Checklist item 14: "Packing list & Bill of lading weights should align"
             - name: "gross_weight_bol_to_packing"
-              source: "bill_of_lading.gross_weight"
-              target: "packing_list.gross_weight"
+              source: "packing_list.gross_weight"
+              target: "bill_of_lading.gross_weight"
               tolerance_percent: 1.0
               operator: "equals"
+              optional_target: true
 
             - name: "net_weight_bol_to_packing"
-              source: "bill_of_lading.net_weight"
-              target: "packing_list.net_weight"
+              source: "packing_list.net_weight"
+              target: "bill_of_lading.net_weight"
               tolerance_percent: 1.0
               operator: "equals"
+              optional_target: true
         on_failure: "flag_and_continue"
 
       # Step 4: Quantity matching
@@ -568,7 +585,11 @@ use_case:
               operator: "equals"
         on_failure: "flag_and_continue"
 
-      # Step 14b: Invoice number on BOE must match invoice number on commercial invoice
+      # Step 14b: Invoice number on BOE must match the commercial invoice number.
+      # The BOE references the export permit number (No. EXPORTACION) while the
+      # merged invoice document holds a union of all export permit numbers across
+      # all uploaded invoices. any_in_list passes when the BOE's single value
+      # appears in the invoice union list.
       - name: "invoice_number_crosscheck"
         description: "Invoice number declared on BOE must match the commercial invoice number"
         validators:
@@ -578,23 +599,19 @@ use_case:
           documents:
             - "bill_of_entry"
             - "invoice"
-          match_type: "exact"
-          require_all: true
-        on_failure: "flag_and_continue"
-
-      # Step 15: Incoterm must match between BOE and invoice
-      - name: "incoterm_cross_doc"
-        description: "Incoterm on BOE must match incoterm on invoice"
-        validators:
-          - "n_way_matcher"
-        config:
-          field_name: "incoterm"
-          documents:
-            - "bill_of_entry"
-            - "invoice"
-          match_type: "incoterm"  # extracts 3-letter code only (e.g. "FCA TEMA" → "FCA")
+          match_type: "any_in_list"
           require_all: false
         on_failure: "flag_and_continue"
+
+      # Step 15: incoterm_cross_doc intentionally removed.
+      # BOE Field 12 is always "CIF TEMA" — this is Ghana GRA's duty valuation
+      # basis, not the commercial trade term. The commercial incoterm (e.g. FCA,
+      # FOB) on the invoice describes risk/cost transfer between the parties.
+      # These two fields are structurally different concepts and will always
+      # disagree on any non-CIF commercial shipment, making this check a
+      # guaranteed false positive. The CIF arithmetic is already validated by
+      # cif_calculation_check and insurance_rate_check. The commercial incoterm
+      # rule compliance is validated by incoterm_validation.
 
       # Step 16: Currency must match between BOE and invoice
       - name: "currency_consistency"

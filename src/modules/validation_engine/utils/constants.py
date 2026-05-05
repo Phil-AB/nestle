@@ -114,6 +114,8 @@ class MatchType:
     CASE_INSENSITIVE = "case_insensitive"
     SEMANTIC = "semantic"
     TOLERANCE = "tolerance"
+    ANY_IN_LIST = "any_in_list"
+    HS_PREFIX = "hs_prefix"  # shorter code must be a leading-digit prefix of the longer
 
 
 # Document roles

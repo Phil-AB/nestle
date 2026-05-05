@@ -30,6 +30,9 @@ Any company, any customs regime, any document set can be onboarded purely throug
 - Accepts any document type: PDF, image (JPG, PNG, TIFF), structured (CSV, XLSX).
 - Extraction is schema-driven from `checklist.yaml` extraction hints — not hardcoded per supplier or format.
 - Field names are normalized through synonym mappings defined in the use case YAML, not in code.
+- The system must work for **any shipment, any supplier, any carrier, any country**. A document from a Ghanaian importer, a Mexican exporter, a French shipper, or a Dutch dairy company must all process correctly through the same pipeline.
+- Heuristics written in Python code (e.g. address detection, name normalization) must use **language-agnostic, universally applicable** signals. Do not embed locale-specific terms (administrative divisions, postal code formats, country-specific form labels) in code — put them in config if they are needed at all.
+- When testing against a specific shipment document, fixes must be verified to be general: ask "would this break for a document from a different country or carrier?" before committing.
 
 ---
 

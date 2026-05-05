@@ -120,6 +120,8 @@ normalization:
         - "Country of Origin"
         - "origin"
         - "country_of_origin"
+        - "lugar_y_fecha"                          # Spanish COO: "place and date", value = "MÉXICO, DD/MM/YYYY"
+        - "Lugar y Fecha"
 
       destination:
         - "Destination"
@@ -257,6 +259,8 @@ normalization:
         - "supplier"
         - "supplier_name"
         - "shipper"              # BOL single field
+        - "nombre_y_domicilio_del_exportador"      # Spanish COO: exporter name/address
+        - "Nombre y Domicilio del Exportador"
 
       shipper_address:
         - "shipper_address"
@@ -271,6 +275,8 @@ normalization:
         - "Buyer"
         - "buyer"
         - "bill_to_name"
+        - "nombre_y_domicilio_del_importador"      # Spanish COO: importer name/address
+        - "Nombre y Domicilio del Importador"
 
       consignee_address:
         - "consignee_address"
@@ -346,6 +352,13 @@ normalization:
 
     rules:
       bill_of_lading:
+        # Null out order_number values that are invoice cross-references, not order numbers.
+        # Pattern: "INVOICE: FNCD...", "INV: ...", "INV# ..." — these appear when the BOL
+        # lists referenced invoices in a free-text field that the extractor misidentifies
+        # as an order number.
+        order_number:
+          - pattern: '(?i)^(?:invoice|inv)[.#:\s].*$'
+            replacement: ""
         # Strip container preamble from product description values
         product_description:
           - pattern: '(?i)^\d+\s*(?:ft\.?|foot|feet)?\s*(?:high\s+cube|standard|open\s+top)?\s*container\s+(?:said\s+to\s+contain\s+)?\d+\s*(?:bags?|packages?|units?|cartons?|pallets?)\s*'
@@ -361,7 +374,30 @@ normalization:
           - pattern: '\s*,?\s*(?:Tel[.:]?|Phone[.:]?|Fax[.:]?|E?-?mail[.:]?)\s*[.:]?\s*.*$'
             replacement: ""
 
+      certificate_of_origin:
+        # Strip place-and-date suffix from country_of_origin mapped from lugar_y_fecha.
+        # Input: "MÉXICO, 04/09/2025" → Output: "MÉXICO"
+        country_of_origin:
+          - pattern: ',\s*\d{2}/\d{2}/\d{4}.*$'
+            replacement: ""
+
       invoice:
+        # Strip contact details, RFC tax ID, and fiscal-regime lines from CFDI shipper_address.
+        # CFDI format: "...Ciudad de México, DIF. TEL: 5262-50-00. NME980506LPA. 601-General..."
+        # Output: "...Ciudad de México, DIF"
+        # Rule order matters: TEL strip removes everything from TEL onwards in one pass.
+        # (?i) makes the pattern case-insensitive so uppercase TEL:/PHONE: are also stripped.
+        shipper_address:
+          - pattern: '(?i)\s*[.,]?\s*(?:Tel[.:]?|Phone[.:]?|Fax[.:]?|E?-?mail[.:]?)\s*[.:]?\s*.*$'
+            replacement: ""
+          - pattern: '\s*[.,]\s*R\.?F\.?C\.?\s*[A-Z]{3,4}\d{6}[A-Z0-9]{3,4}.*$'
+            replacement: ""
+          - pattern: '\s*[.,]\s*[A-Z]{3,4}\d{6}[A-Z0-9]{3,4}(?:[.,].*)?$'
+            replacement: ""
+          - pattern: '\s*[.,]\s*R[eé]gimen\s+Fiscal.*$'
+            replacement: ""
+          - pattern: '\s*[.,]\s*Uso\s+CFDI.*$'
+            replacement: ""
         # Currency dedup: "EUR 467,775.00 EUR" -> "EUR 467,775.00"
         total_excl_vat:
           - pattern: '^([A-Z]{3})\s+([\d,.]+(?:\.\d+)?)\s+\1$'
@@ -369,7 +405,7 @@ normalization:
         total_incl_vat:
           - pattern: '^([A-Z]{3})\s+([\d,.]+(?:\.\d+)?)\s+\1$'
             replacement: "\\1 \\2"
-        # Strip address from shipper_name if it contains one
+        # Strip additional lines after the first — company name is always on line 1.
         shipper_name:
           - pattern: '\n.*'
             replacement: ""

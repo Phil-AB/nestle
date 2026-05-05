@@ -25,6 +25,7 @@ SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 SESSION_TOKEN = os.getenv("AWS_SESSION_TOKEN")  # Required if using temporary credentials
 BEARER_TOKEN = os.getenv("AWS_BEARER_TOKEN_BEDROCK")  # The 'ABSK...' token from Bedrock console
 
+
 # Validate required credentials
 if not ACCESS_KEY or not SECRET_KEY:
     print("❌ Error: AWS credentials not found in .env file!")

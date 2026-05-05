@@ -4,8 +4,11 @@ full vendor document validation workflow against it.
 
 This is an additive alternative to validate_vendor_docs: the existing
 separate-file upload flow is unchanged.  Use this endpoint when the clearing
-agent has bundled all documents (Invoice, BOL, Packing List, COO, etc.) into
-one PDF file.
+agent has bundled invoices, packing lists (or SAP delivery notes), and a bill
+of lading into one PDF file.
+
+Only invoice, packing_list, and bill_of_lading pages are extracted and
+processed. All other page types (COO, COA, sanitary cert, etc.) are ignored.
 
 Flow:
     1. Save the uploaded bundle to disk.
@@ -31,16 +34,14 @@ from shared.utils.logger import get_logger
 router = APIRouter(prefix="/validation", tags=["bundle"])
 logger = get_logger(__name__)
 
-# Document types that the validation workflow can act on.
-# Types outside this set (sanitary_certificate, coa, etc.) are extracted and
-# stored but are not passed as primary/supporting docs to the workflow — the
-# workflow doesn't yet have rules for them.
+# Only invoice, packing_list, and bill_of_lading are passed to the validation
+# workflow. All other document types (COO, COA, sanitary cert, freight manifest,
+# etc.) are not extracted or processed — the segmentator marks them "unknown"
+# and they are dropped before reaching this point.
 _WORKFLOW_DOC_TYPES = frozenset({
     "invoice",
     "packing_list",
     "bill_of_lading",
-    "freight_manifest",
-    "certificate_of_origin",
 })
 
 
@@ -52,9 +53,12 @@ async def validate_bundle(
     """
     Bundle PDF validation — Step 2 variant for multi-document bundles.
 
-    Accepts a single PDF containing multiple document types (Invoice, BOL,
-    Packing List, COO, Sanitary Certificate, COA, etc.) and runs the vendor
-    document validation workflow.
+    Accepts a single PDF containing invoices, packing lists (including SAP
+    delivery notes), and/or a bill of lading bundled together, and runs the
+    vendor document validation workflow.
+
+    Only these three document types are extracted. Any other pages (COO,
+    COA, sanitary certificates, customs declarations, etc.) are ignored.
 
     Multiple instances of the same document type (e.g. two invoices covering
     different product lines) are merged into a single aggregated document
@@ -144,6 +148,18 @@ async def validate_bundle(
         raw_segment_meta: List[Dict[str, Any]] = []
         # first document_id saved per type — used as the field-review handle
         first_doc_id: Dict[str, str] = {}
+
+        # Delete existing vendor docs for this shipment before saving the fresh
+        # extraction so the DB always holds exactly one current set per shipment.
+        from sqlalchemy import delete as sa_delete
+        async with get_db_session() as db:
+            await db.execute(
+                sa_delete(APIDocument).where(
+                    APIDocument.shipment_id == shipment_id,
+                    APIDocument.document_type.in_(list(_WORKFLOW_DOC_TYPES)),
+                )
+            )
+            await db.commit()
 
         async with get_db_session() as db:
             for (doc_type, result, file_path), seg in zip(extraction_results, segments):
@@ -256,6 +272,32 @@ async def validate_bundle(
                 "Bundle ancillary docs (not passed to workflow): %s",
                 list(ancillary_docs.keys()),
             )
+
+        # ── 5b. Derive shipment_number from BL number ─────────────────────────
+        if "bill_of_lading" in extracted_docs:
+            bol_fields = extracted_docs["bill_of_lading"]
+            bl_number = bol_fields.get("bl_number") or bol_fields.get("bill_of_lading_number")
+            if isinstance(bl_number, dict):
+                bl_number = bl_number.get("value")
+            if bl_number:
+                from sqlalchemy.exc import IntegrityError
+                from src.database.schema import Shipment
+                async with get_db_session() as db:
+                    from sqlalchemy import select as sa_select
+                    stmt = sa_select(Shipment).where(Shipment.id == shipment_id)
+                    row = await db.execute(stmt)
+                    shipment = row.scalar_one_or_none()
+                    if shipment and not shipment.boe_number:
+                        shipment.shipment_number = str(bl_number)
+                        try:
+                            await db.commit()
+                            logger.info("Updated shipment %s number to BL: %s", shipment_id, bl_number)
+                        except IntegrityError:
+                            await db.rollback()
+                            logger.warning(
+                                "BL number %s already exists on another shipment — skipping rename for shipment %s",
+                                bl_number, shipment_id,
+                            )
 
         # ── 6. Run validation workflow ────────────────────────────────────────
         from modules.validation_engine.core.session_manager import get_session_manager

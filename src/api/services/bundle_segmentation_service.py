@@ -22,10 +22,7 @@ KNOWN_DOCUMENT_TYPES = frozenset({
     "invoice",
     "packing_list",
     "bill_of_lading",
-    "certificate_of_origin",
-    "freight_manifest",
-    "sanitary_certificate",
-    "certificate_of_analysis",
+    "delivery_note",
 })
 
 
@@ -69,22 +66,21 @@ class BundleSegmentationService:
             "It is a bundled file containing multiple shipping documents combined into one.\n\n"
             "Identify the document boundaries — which pages belong to which document type — "
             "and return a structured JSON response.\n\n"
-            "KNOWN DOCUMENT TYPES (use these exact string keys):\n"
-            "- invoice\n"
-            "- packing_list\n"
-            "- bill_of_lading\n"
-            "- certificate_of_origin\n"
-            "- freight_manifest\n"
-            "- sanitary_certificate\n"
-            "- certificate_of_analysis\n\n"
+            "RECOGNISED DOCUMENT TYPES (use these exact string keys):\n"
+            "- invoice         (commercial invoice or fiscal invoice / CFDI)\n"
+            "- packing_list    (packing list)\n"
+            "- bill_of_lading  (bill of lading or sea waybill)\n"
+            "- delivery_note   (SAP delivery note, despatch note, or outbound delivery document)\n\n"
             "RULES:\n"
             "1. Each contiguous group of pages belonging to the SAME SINGLE document instance is ONE segment.\n"
             "2. If the same document type appears more than once, create a SEPARATE segment for EACH instance.\n"
             "   This includes adjacent pages: two invoices on consecutive pages are TWO segments, not one.\n"
             "   Key signals that a new document instance starts: a new Invoice Number / FOLIO FISCAL, "
-            "   a new Delivery Note number, a new Certificate Number, or a fresh header/letterhead.\n"
+            "   a new Delivery Note number, or a fresh header/letterhead.\n"
             "3. Assign confidence >= 0.85 for pages you are certain about.\n"
-            "4. If a page cannot be identified, assign document_type \"unknown\".\n"
+            "4. If a page is not one of the four recognised types above (e.g. certificate of origin, "
+            "   sanitary certificate, certificate of analysis, customs declaration), "
+            "   assign document_type \"unknown\" — do NOT force it into a recognised type.\n"
             "5. Page numbers are 1-indexed.\n"
             "6. Every page must appear in exactly one segment — do not skip pages.\n\n"
             "Return ONLY valid JSON — no markdown fences, no explanation:\n"
@@ -171,6 +167,8 @@ class BundleSegmentationService:
 
         for seg in raw_segments:
             doc_type: str = seg.get("document_type", "unknown")
+            if doc_type == "delivery_note":
+                doc_type = "packing_list"
             pages: List[int] = seg.get("pages", [])
             confidence: float = float(seg.get("confidence", 0.0))
 
@@ -252,7 +250,9 @@ class DocumentMerger:
         }),
         "packing_list": frozenset({
             "currency", "shipper_name", "consignee_name",
-            "port_of_loading", "port_of_discharge", "bl_number", "container_count",
+            "port_of_loading", "port_of_discharge", "bl_number",
+            # container_count is SUMMABLE for packing_list: each delivery note covers
+            # its own containers, so totals must be summed, not asserted equal.
         }),
         "bill_of_lading": frozenset({
             "shipper_name", "consignee_name", "port_of_loading",
@@ -271,6 +271,7 @@ class DocumentMerger:
         "packing_list": frozenset({
             "gross_weight", "net_weight", "quantity",
             "number_of_packages", "total_packages", "total_quantity",
+            "container_count",
         }),
         "bill_of_lading": frozenset({
             "gross_weight", "net_weight", "quantity",
@@ -278,8 +279,8 @@ class DocumentMerger:
     }
 
     _UNION_FIELDS: Dict[str, frozenset] = {
-        "invoice": frozenset({"invoice_number", "order_number", "po_number", "document_number"}),
-        "packing_list": frozenset({"reference_number", "document_number"}),
+        "invoice": frozenset({"invoice_number", "order_number", "po_number", "document_number", "product_description"}),
+        "packing_list": frozenset({"reference_number", "document_number", "container_numbers", "po_number", "order_number"}),
         "bill_of_lading": frozenset({"container_numbers"}),
     }
 
@@ -359,6 +360,18 @@ class DocumentMerger:
                     seen.append(t)
             if seen:
                 merged[field] = ", ".join(seen)
+
+        # Derive product_description from line items when absent from header.
+        # Invoices and packing lists often carry description only at the item level.
+        # Building a header-level summary enables cross-document fuzzy matching.
+        if not merged.get("product_description"):
+            item_descs: List[str] = []
+            for item in all_items:
+                token = self._scalar_str(item.get("product_description"))
+                if token and token not in item_descs:
+                    item_descs.append(token)
+            if item_descs:
+                merged["product_description"] = "; ".join(item_descs)
 
         logger.info(
             "DocumentMerger: merged %d %s docs (from=%s items=%d issues=%d)",

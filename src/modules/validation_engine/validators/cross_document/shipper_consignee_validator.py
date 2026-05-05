@@ -156,10 +156,22 @@ class ShipperConsigneeValidator(IValidator):
 
                 if value:
                     normalized_value = self._normalize_name(str(value))
-                    party_values[doc_type] = {
-                        "original": value,
-                        "normalized": normalized_value
-                    }
+                    if not normalized_value:
+                        logger.debug(
+                            f"{party_name} in {doc_type} normalized to empty — treating as absent"
+                        )
+                    elif self._looks_like_address(normalized_value):
+                        # Party block has only postal/street address text — no company name.
+                        # Treat as absent so it doesn't cause a spurious mismatch against a
+                        # document that correctly carries the company name.
+                        logger.debug(
+                            f"{party_name} in {doc_type} looks like a street address — treating as absent"
+                        )
+                    else:
+                        party_values[doc_type] = {
+                            "original": value,
+                            "normalized": normalized_value
+                        }
                 else:
                     logger.debug(f"{party_name} not found in {doc_type}")
 
@@ -354,6 +366,44 @@ class ShipperConsigneeValidator(IValidator):
                     "min_similarity": min_similarity
                 }
             )
+
+    @staticmethod
+    def _looks_like_address(text: str) -> bool:
+        """
+        Return True when the (already-normalised) text looks like a postal or
+        street address rather than a company name.
+
+        Two-signal rule (both must fire, or the text starts with a house number):
+          1. Contains a recognised street-type word (language-agnostic list).
+          2. Contains a multi-digit number (house/building number or postal code).
+
+        Requiring both signals avoids false positives for company names that
+        contain a street word (e.g. "Avenue Capital Group") or a number alone
+        (e.g. "3M Company").  Starts-with-number is kept as a standalone strong
+        signal because house-number-first formats ("301 Main St") are unambiguous.
+        """
+        _STREET_TYPES = re.compile(
+            r'\b(boulevard|blvd|avenue|ave|street|road|drive|lane|way|'
+            r'place|court|rue|via|calle|avenida|paseo|strasse|allee|straat|'
+            r'alley|close|crescent|terrace|square|broadway)\b',
+            re.IGNORECASE,
+        )
+        _STREET_PREFIX = re.compile(
+            r'^(boulevard|blvd|avenue|ave|street|road|drive|lane|way|'
+            r'place|court|rue|via|calle|avenida|paseo|strasse|allee|straat|'
+            r'alley|close|crescent|terrace|square|broadway)\b',
+            re.IGNORECASE,
+        )
+        _HAS_NUMBER = re.compile(r'\b\d{2,}\b')
+
+        has_street_word = bool(_STREET_TYPES.search(text))
+        has_number = bool(_HAS_NUMBER.search(text))
+        starts_with_number = bool(re.match(r'^\d{2,}', text.strip()))
+        # A string that STARTS with a street-type keyword is almost certainly
+        # a street name, not a company name — even without a house number.
+        starts_with_street = bool(_STREET_PREFIX.match(text.strip()))
+
+        return starts_with_number or starts_with_street or (has_street_word and has_number)
 
     def _normalize_name(self, name: str) -> str:
         """
